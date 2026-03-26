@@ -88,6 +88,9 @@ export function HistoryPage({ user, onNavigateStudy, onNavigateSettings }: Props
   const [search, setSearch]     = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHovered, setSidebarHovered] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 640
+  );
   const isExpanded = sidebarOpen || sidebarHovered;
 
 
@@ -96,6 +99,12 @@ export function HistoryPage({ user, onNavigateStudy, onNavigateSettings }: Props
       .then(({ sessions: s }) => setSessions(s))
       .catch(() => {})
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   const handleSignOut = async () => {
@@ -150,7 +159,7 @@ export function HistoryPage({ user, onNavigateStudy, onNavigateSettings }: Props
         transition={{ duration: 0.25, ease: 'easeInOut' }}
         onMouseEnter={() => setSidebarHovered(true)}
         onMouseLeave={() => setSidebarHovered(false)}
-        className="fixed left-0 h-full z-40 bg-surface-container-low flex flex-col pt-20 pb-6 text-sm font-medium overflow-hidden"
+        className="fixed left-0 h-full z-40 bg-surface-container-low hidden sm:flex flex-col pt-20 pb-6 text-sm font-medium overflow-hidden"
         style={{ width: isExpanded ? 256 : 64 }}
       >
         <div className={`mb-8 overflow-hidden transition-all duration-200 ${isExpanded ? 'px-6' : 'px-0 flex justify-center'}`}>
@@ -218,7 +227,7 @@ export function HistoryPage({ user, onNavigateStudy, onNavigateSettings }: Props
         transition={{ duration: 0.25, ease: 'easeInOut' }}
         onClick={() => setSidebarOpen(o => !o)}
         title={sidebarOpen ? 'Unpin sidebar' : 'Pin sidebar open'}
-        className="fixed top-[72px] z-50 w-6 h-6 rounded-full bg-surface-container-highest border border-outline-variant/40 flex items-center justify-center text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors shadow-md"
+        className="fixed top-[72px] z-50 w-6 h-6 rounded-full bg-surface-container-highest border border-outline-variant/40 hidden sm:flex items-center justify-center text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors shadow-md"
       >
         <motion.div animate={{ rotate: sidebarOpen ? 0 : 180 }} transition={{ duration: 0.25 }}>
           <ChevronLeft className="w-3.5 h-3.5" />
@@ -227,7 +236,7 @@ export function HistoryPage({ user, onNavigateStudy, onNavigateSettings }: Props
 
       {/* ── Main ──────────────────────────────────────────────────────────── */}
       <motion.main
-        animate={{ paddingLeft: isExpanded ? 256 : 64 }}
+        animate={{ paddingLeft: isMobile ? 0 : (isExpanded ? 256 : 64) }}
         transition={{ duration: 0.25, ease: 'easeInOut' }}
         className="pt-24 pb-24 px-6 min-h-screen relative z-10"
       >

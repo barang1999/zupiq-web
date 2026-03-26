@@ -175,7 +175,7 @@ export function SettingsPage({ user, onUserUpdate, onSignOut, onBack }: Props) {
       <AppHeader user={user} />
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <aside className="fixed left-0 top-14 h-[calc(100vh-56px)] w-64 bg-surface-container-low hidden md:flex flex-col py-8 px-4 gap-2">
+      <aside className="fixed left-0 top-14 h-[calc(100vh-56px)] w-64 bg-surface-container-low hidden sm:flex flex-col py-8 px-4 gap-2">
         <div className="mb-6 px-4">
           <h2 className="text-xl font-headline font-bold text-on-surface">Settings</h2>
           <p className="text-xs text-on-surface-variant opacity-70 mt-1">Manage your AI tutor</p>
@@ -215,7 +215,7 @@ export function SettingsPage({ user, onUserUpdate, onSignOut, onBack }: Props) {
       </aside>
 
       {/* ── Main Content ────────────────────────────────────────────────── */}
-      <main className="md:ml-64 pt-24 pb-12 px-6 lg:px-12 max-w-7xl mx-auto">
+      <main className="sm:ml-64 pt-24 pb-24 sm:pb-12 px-6 lg:px-12 max-w-7xl mx-auto">
         <header className="mb-12">
           <button
             onClick={onBack}
@@ -230,6 +230,13 @@ export function SettingsPage({ user, onUserUpdate, onSignOut, onBack }: Props) {
           <p className="text-on-surface-variant max-w-2xl">
             Calibrate your neural learning environment. Every change here informs how the Zupiq AI interacts with your cognitive profile.
           </p>
+          <button
+            onClick={onSignOut}
+            className="sm:hidden mt-6 inline-flex items-center gap-2 rounded-full bg-surface-container-highest px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface border border-outline-variant/30 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Log Out
+          </button>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

@@ -14,9 +14,15 @@ import {
   Share2, 
   Rocket,
   Menu,
-  X
+  X,
+  User as UserIcon,
+  LogOut,
+  GitFork,
+  History as HistoryIcon,
+  Archive as ArchiveIcon,
+  Play,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { supabase } from "./lib/supabase";
 import { api, tokenStorage } from "./lib/api";
 import { firebaseSignOut } from "./lib/firebase";
@@ -27,7 +33,8 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
-import { User as UserIcon, LogOut } from "lucide-react";
+
+type AppShellPage = 'study' | 'history' | 'settings' | 'privacy' | 'terms';
 
 // --- Components ---
 
@@ -521,6 +528,56 @@ const Footer = () => {
   );
 };
 
+const MobileBottomNav = ({
+  page,
+  onNavigate,
+}: {
+  page: AppShellPage;
+  onNavigate: (next: AppShellPage) => void;
+}) => {
+  const [activeItem, setActiveItem] = useState<'study' | 'history' | 'archive' | 'play'>(
+    page === 'history' ? 'history' : 'study'
+  );
+
+  useEffect(() => {
+    if (page === 'history') {
+      setActiveItem('history');
+    } else if (page === 'study' && activeItem === 'history') {
+      setActiveItem('study');
+    }
+  }, [page, activeItem]);
+
+  const navItems = [
+    { id: 'study' as const, page: 'study' as const, label: 'Study', Icon: GitFork },
+    { id: 'history' as const, page: 'history' as const, label: 'History', Icon: HistoryIcon },
+    { id: 'archive' as const, page: 'study' as const, label: 'Archive', Icon: ArchiveIcon },
+    { id: 'play' as const, page: 'study' as const, label: 'Play', Icon: Play },
+  ];
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 flex sm:hidden bg-surface-container-low/95 backdrop-blur-md border-t border-outline-variant/20">
+      {navItems.map(({ id, page: targetPage, label, Icon }) => {
+        const isActive = activeItem === id;
+        return (
+          <button
+            key={id}
+            onClick={() => {
+              setActiveItem(id);
+              onNavigate(targetPage);
+            }}
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 transition-colors ${
+              isActive ? 'text-primary' : 'text-on-surface-variant'
+            }`}
+          >
+            <Icon className="w-5 h-5" />
+            <span className="text-[10px] font-medium leading-none">{label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
@@ -530,9 +587,8 @@ export default function App() {
     const u = tokenStorage.getUser();
     return !!u && !u.preferences?.onboarding_completed;
   });
-  type Page = 'study' | 'history' | 'settings' | 'privacy' | 'terms';
 
-  const pathToPage = (path: string): Page => {
+  const pathToPage = (path: string): AppShellPage => {
     if (path === '/history') return 'history';
     if (path === '/settings') return 'settings';
     if (path === '/privacy') return 'privacy';
@@ -540,10 +596,10 @@ export default function App() {
     return 'study';
   };
 
-  const [page, setPageState] = useState<Page>(() => pathToPage(window.location.pathname));
+  const [page, setPageState] = useState<AppShellPage>(() => pathToPage(window.location.pathname));
   const [initialBreakdown, setInitialBreakdown] = useState<any>(null);
 
-  const setPage = (next: Page) => {
+  const setPage = (next: AppShellPage) => {
     const url = next === 'study' ? '/' : `/${next}`;
     window.history.pushState({ page: next }, '', url);
     setPageState(next);
@@ -602,8 +658,10 @@ export default function App() {
   };
 
   if (currentUser && currentUser.preferences?.onboarding_completed) {
+    let authenticatedPage: ReactNode;
+
     if (page === 'settings') {
-      return (
+      authenticatedPage = (
         <SettingsPage
           user={currentUser}
           onUserUpdate={(u) => {
@@ -618,24 +676,31 @@ export default function App() {
           onBack={() => setPage('study')}
         />
       );
-    }
-    if (page === 'history') {
-      return (
+    } else if (page === 'history') {
+      authenticatedPage = (
         <HistoryPage
           user={currentUser}
           onNavigateStudy={(bd) => { setInitialBreakdown(bd ?? null); setPage('study'); }}
           onNavigateSettings={() => setPage('settings')}
         />
       );
+    } else {
+      authenticatedPage = (
+        <StudySpacePage
+          user={currentUser}
+          onNavigateHistory={() => setPage('history')}
+          onNavigateSettings={() => setPage('settings')}
+          initialBreakdown={initialBreakdown}
+          onBreakdownConsumed={() => setInitialBreakdown(null)}
+        />
+      );
     }
+
     return (
-      <StudySpacePage
-        user={currentUser}
-        onNavigateHistory={() => setPage('history')}
-        onNavigateSettings={() => setPage('settings')}
-        initialBreakdown={initialBreakdown}
-        onBreakdownConsumed={() => setInitialBreakdown(null)}
-      />
+      <>
+        {authenticatedPage}
+        <MobileBottomNav page={page} onNavigate={setPage} />
+      </>
     );
   }
 

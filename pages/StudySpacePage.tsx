@@ -52,6 +52,70 @@ interface NodePos { x: number; y: number }
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
 const NODE_MIN_DIST = 240; // min px between node centers
+const VIEWPORT_STORAGE_KEY = 'zupiq_study_viewport_v1';
+const WORKSPACE_STORAGE_KEY = 'zupiq_study_workspace_v1';
+const STUDY_DEBUG_PREFIX = '[StudySpaceDebug]';
+const STUDY_DEBUG_TRACE_KEY = 'zupiq_study_debug_trace_v1';
+const studyDebugLastEventAt: Record<string, number> = {};
+
+function debugStudy(event: string, payload?: Record<string, unknown>) {
+  const stamp = new Date().toISOString();
+  const now = Date.now();
+  // Reduce noise from high-frequency events while keeping meaningful traces.
+  if (event === 'viewport:persist') {
+    const last = studyDebugLastEventAt[event] ?? 0;
+    if (now - last < 1200) return;
+    studyDebugLastEventAt[event] = now;
+  }
+
+  const entry: StudyDebugEntry = { stamp, event, payload: payload ?? null };
+
+  // Use console.log so it always shows in default console levels.
+  if (payload) {
+    console.log(STUDY_DEBUG_PREFIX, stamp, event, payload);
+  } else {
+    console.log(STUDY_DEBUG_PREFIX, stamp, event);
+  }
+
+  if (typeof window === 'undefined') return;
+  try {
+    const existingRaw = localStorage.getItem(STUDY_DEBUG_TRACE_KEY);
+    const existing = existingRaw ? (JSON.parse(existingRaw) as StudyDebugEntry[]) : [];
+    existing.push(entry);
+    if (existing.length > 250) {
+      existing.splice(0, existing.length - 250);
+    }
+    localStorage.setItem(STUDY_DEBUG_TRACE_KEY, JSON.stringify(existing));
+    (window as unknown as { __ZUPIQ_STUDY_DEBUG__?: unknown }).__ZUPIQ_STUDY_DEBUG__ = existing;
+    window.dispatchEvent(new CustomEvent('zupiq-study-debug', { detail: entry }));
+  } catch {
+    // Ignore storage failures
+  }
+}
+
+interface StoredWorkspaceSnapshot {
+  breakdown: ProblemBreakdown;
+  sessionId: string | null;
+  positions: Record<string, NodePos>;
+  nodeInsights: Record<string, NodeInsight>;
+  nodeConversations: Record<string, NodeConversationMessage[]>;
+  selectedNodeId: string | null;
+  activeTab: string;
+}
+
+interface StudyDebugEntry {
+  stamp: string;
+  event: string;
+  payload: Record<string, unknown> | null;
+}
+
+interface StoredViewportState {
+  scale: number;
+  scrollLeft: number;
+  scrollTop: number;
+  anchorX?: number;
+  anchorY?: number;
+}
 
 function debugClip(text: string, max = 120): string {
   const t = (text ?? '').replace(/\s+/g, ' ').trim();
@@ -209,13 +273,144 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   const [sidebarOpen,    setSidebarOpen]    = useState(false);
   const [sidebarHovered, setSidebarHovered] = useState(false);
   const [scale,          setScale]          = useState(1);
+  const [isMobile,       setIsMobile]       = useState(() => typeof window !== 'undefined' ? window.innerWidth < 640 : false);
+  const [isViewportReady, setIsViewportReady] = useState(false);
+  const [showDebugOverlay] = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugStudy') === '1'
+  );
+  const [debugEntries, setDebugEntries] = useState<StudyDebugEntry[]>([]);
   const isExpanded = sidebarOpen || sidebarHovered;
+
+  useEffect(() => {
+    const win = window as unknown as {
+      __dumpStudyDebugTrace__?: () => unknown;
+      __clearStudyDebugTrace__?: () => void;
+    };
+    win.__dumpStudyDebugTrace__ = () => {
+      const raw = localStorage.getItem(STUDY_DEBUG_TRACE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    };
+    win.__clearStudyDebugTrace__ = () => {
+      localStorage.removeItem(STUDY_DEBUG_TRACE_KEY);
+    };
+
+    debugStudy('mount', {
+      hasInitialBreakdown: !!initialBreakdown,
+      userId: user?.id ?? null,
+      traceKey: STUDY_DEBUG_TRACE_KEY,
+      dumpFn: 'window.__dumpStudyDebugTrace__()',
+      clearFn: 'window.__clearStudyDebugTrace__()',
+    });
+    return () => {
+      debugStudy('unmount');
+    };
+  }, [initialBreakdown, user?.id]);
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
+  useEffect(() => {
+    if (!showDebugOverlay) return;
+    try {
+      const raw = localStorage.getItem(STUDY_DEBUG_TRACE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as StudyDebugEntry[];
+      setDebugEntries(parsed.slice(-80));
+    } catch {
+      // Ignore malformed debug payload
+    }
+  }, [showDebugOverlay]);
+
+  useEffect(() => {
+    if (!showDebugOverlay) return;
+    const onDebugEvent = (e: Event) => {
+      const detail = (e as CustomEvent<StudyDebugEntry>).detail;
+      if (!detail) return;
+      setDebugEntries(prev => [...prev, detail].slice(-80));
+    };
+    window.addEventListener('zupiq-study-debug', onDebugEvent);
+    return () => window.removeEventListener('zupiq-study-debug', onDebugEvent);
+  }, [showDebugOverlay]);
 
   const dragState  = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
   const inputRef   = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const pendingViewportRestoreRef = useRef<{
+    left: number;
+    top: number;
+    anchorX?: number;
+    anchorY?: number;
+    tries: number;
+  } | null>(null);
+  const isRestoringViewportRef = useRef(false);
+  const viewportReadyRef = useRef(false);
   const scaleRef   = useRef(1);
   useEffect(() => { scaleRef.current = scale; }, [scale]);
+  useEffect(() => { viewportReadyRef.current = isViewportReady; }, [isViewportReady]);
+
+  const persistViewport = useCallback(() => {
+    if (!viewportReadyRef.current) return;
+    if (isRestoringViewportRef.current) return;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const s = Math.max(0.25, Math.min(2, scaleRef.current || 1));
+    const payload: StoredViewportState = {
+      scale: scaleRef.current,
+      scrollLeft: scroller.scrollLeft,
+      scrollTop: scroller.scrollTop,
+      anchorX: (scroller.scrollLeft + scroller.clientWidth / 2) / s,
+      anchorY: (scroller.scrollTop + scroller.clientHeight / 2) / s,
+    };
+    localStorage.setItem(VIEWPORT_STORAGE_KEY, JSON.stringify(payload));
+    debugStudy('viewport:persist', {
+      scale: payload.scale,
+      scrollLeft: Math.round(payload.scrollLeft),
+      scrollTop: Math.round(payload.scrollTop),
+      anchorX: Math.round(payload.anchorX ?? 0),
+      anchorY: Math.round(payload.anchorY ?? 0),
+    });
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(VIEWPORT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<StoredViewportState>;
+      const nextScale = Number(parsed.scale);
+      if (Number.isFinite(nextScale)) {
+        setScale(Math.max(0.25, Math.min(2, nextScale)));
+      }
+      const left = Number(parsed.scrollLeft);
+      const top = Number(parsed.scrollTop);
+      const anchorX = Number(parsed.anchorX);
+      const anchorY = Number(parsed.anchorY);
+      if (Number.isFinite(left) && Number.isFinite(top)) {
+        pendingViewportRestoreRef.current = {
+          left,
+          top,
+          anchorX: Number.isFinite(anchorX) ? anchorX : undefined,
+          anchorY: Number.isFinite(anchorY) ? anchorY : undefined,
+          tries: 0,
+        };
+      }
+      debugStudy('viewport:restore:found', {
+        scale: nextScale,
+        scrollLeft: left,
+        scrollTop: top,
+        anchorX,
+        anchorY,
+      });
+    } catch {
+      // Ignore malformed local storage payload
+      debugStudy('viewport:restore:malformed');
+    } finally {
+      // Enable viewport persistence only after initial restore pass has run.
+      setIsViewportReady(true);
+    }
+  }, []);
 
   // Non-passive wheel listener on window so preventDefault() fires before the browser
   // processes pinch-to-zoom. Only intercepts when the pointer is over the canvas scroller.
@@ -297,6 +492,41 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     setShowInput(false);
     setComposerInput('');
     if (bd.id) localStorage.setItem('zupiq_lastSessionId', bd.id);
+    debugStudy('hydrate:breakdown', {
+      source: 'session-or-initial',
+      sessionId: bd.id ?? null,
+      nodes: bd.nodes.length,
+      hasSavedPositions,
+    });
+  }, []);
+
+  const hydrateWorkspaceSnapshot = useCallback((snapshot: StoredWorkspaceSnapshot) => {
+    const bd = snapshot.breakdown;
+    setBreakdown(bd);
+    setSessionId(snapshot.sessionId ?? bd.id ?? null);
+    setNodeInsights(snapshot.nodeInsights ?? {});
+    setNodeConversations(snapshot.nodeConversations ?? {});
+
+    const restoredPositions = Object.keys(snapshot.positions ?? {}).length > 0
+      ? snapshot.positions
+      : (bd.nodePositions ?? {});
+    setPositions(restoredPositions);
+
+    const selected = snapshot.selectedNodeId
+      ? bd.nodes.find((n: BreakdownNode) => n.id === snapshot.selectedNodeId) ?? null
+      : null;
+    setSelectedNode(selected ?? bd.nodes.find((n: BreakdownNode) => n.type === 'root') ?? null);
+    setActiveTab(snapshot.activeTab || 'map');
+    setShowInput(false);
+    setComposerInput('');
+    if (bd.id) localStorage.setItem('zupiq_lastSessionId', bd.id);
+    debugStudy('hydrate:workspaceSnapshot', {
+      sessionId: snapshot.sessionId ?? bd.id ?? null,
+      nodes: bd.nodes.length,
+      selectedNodeId: snapshot.selectedNodeId,
+      activeTab: snapshot.activeTab,
+      positions: Object.keys(restoredPositions).length,
+    });
   }, []);
 
   const persistBreakdownData = useCallback((
@@ -324,37 +554,73 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     persistBreakdownData(nodeInsights, nextNodeConversations);
   }, [nodeInsights, persistBreakdownData]);
 
-  // Load from navigation payload first; otherwise restore most recent saved session.
+  // Load from navigation payload first; then local snapshot; otherwise restore most recent saved session.
   // Use a ref so clearing initialBreakdown after consuming it doesn't re-trigger the fallback.
   const initialBreakdownRef = useRef(initialBreakdown);
   useEffect(() => {
     const bd = initialBreakdownRef.current;
     if (bd) {
+      debugStudy('boot:usingInitialBreakdown', {
+        sessionId: bd.id ?? null,
+        nodes: bd.nodes?.length ?? 0,
+      });
       hydrateBreakdown(bd);
       onBreakdownConsumed?.();
       return;
     }
 
+    try {
+      const rawSnapshot = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+      if (rawSnapshot) {
+        const snapshot = JSON.parse(rawSnapshot) as StoredWorkspaceSnapshot;
+        if (snapshot?.breakdown?.nodes?.length) {
+          debugStudy('boot:usingWorkspaceSnapshot', {
+            sessionId: snapshot.sessionId ?? snapshot.breakdown.id ?? null,
+            nodes: snapshot.breakdown.nodes.length,
+          });
+          hydrateWorkspaceSnapshot(snapshot);
+          return;
+        }
+      }
+      debugStudy('boot:workspaceSnapshot:notFound');
+    } catch {
+      // Ignore malformed local storage payload
+      debugStudy('boot:workspaceSnapshot:malformed');
+    }
+
     let cancelled = false;
+    debugStudy('boot:fetchSessions:start');
     api.get<{ sessions: Array<{ id: string; breakdown_json: string }> }>('/api/sessions')
       .then(({ sessions }) => {
         if (cancelled || !sessions?.length) return;
         const lastId = localStorage.getItem('zupiq_lastSessionId');
         const target = (lastId && sessions.find(s => s.id === lastId)) || sessions[0];
+        debugStudy('boot:fetchSessions:success', {
+          sessionsCount: sessions.length,
+          preferredSessionId: lastId,
+          targetSessionId: target?.id ?? null,
+        });
         try {
           const parsed = JSON.parse(target.breakdown_json) as ProblemBreakdown;
           parsed.id = target.id;
           hydrateBreakdown(parsed);
         } catch {
           // Ignore malformed historical payloads
+          debugStudy('boot:fetchSessions:targetMalformed', {
+            targetSessionId: target?.id ?? null,
+          });
         }
       })
       .catch(() => {
         // Non-blocking restore failure
+        debugStudy('boot:fetchSessions:error');
       });
 
-    return () => { cancelled = true; };
-  }, [hydrateBreakdown]);
+    return () => {
+      cancelled = true;
+      debugStudy('boot:fetchSessions:cancelled');
+    };
+  }, [hydrateBreakdown, hydrateWorkspaceSnapshot, onBreakdownConsumed]);
 
   // Canvas dimensions + offsets derived from all node positions.
   // offsetX/offsetY shift every node so nothing ever goes above/left of a safe padding zone.
@@ -378,6 +644,155 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       offsetY: oy,
     };
   }, [positions]);
+
+  // Restore viewport only after canvas dimensions are ready.
+  useEffect(() => {
+    if (!isViewportReady) return;
+    const pending = pendingViewportRestoreRef.current;
+    const scroller = scrollerRef.current;
+    if (!pending || !scroller) return;
+    let cancelled = false;
+    let raf = 0;
+    isRestoringViewportRef.current = true;
+
+    const applyAttempt = () => {
+      if (cancelled) return;
+      const currentScale = Math.max(0.25, Math.min(2, scaleRef.current || 1));
+      const targetLeftRaw = Number.isFinite(pending.anchorX ?? NaN)
+        ? (pending.anchorX! * currentScale) - (scroller.clientWidth / 2)
+        : pending.left;
+      const targetTopRaw = Number.isFinite(pending.anchorY ?? NaN)
+        ? (pending.anchorY! * currentScale) - (scroller.clientHeight / 2)
+        : pending.top;
+
+      const maxLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+      const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      const targetLeft = Math.max(0, Math.min(maxLeft, targetLeftRaw));
+      const targetTop = Math.max(0, Math.min(maxTop, targetTopRaw));
+
+      scroller.scrollLeft = targetLeft;
+      scroller.scrollTop = targetTop;
+
+      raf = window.requestAnimationFrame(() => {
+        if (cancelled) return;
+        const actualLeft = scroller.scrollLeft;
+        const actualTop = scroller.scrollTop;
+        const leftDelta = Math.abs(actualLeft - targetLeft);
+        const topDelta = Math.abs(actualTop - targetTop);
+
+        debugStudy('viewport:restore:attempt', {
+          try: pending.tries + 1,
+          targetLeft: Math.round(targetLeft),
+          targetTop: Math.round(targetTop),
+          actualLeft: Math.round(actualLeft),
+          actualTop: Math.round(actualTop),
+          maxLeft: Math.round(maxLeft),
+          maxTop: Math.round(maxTop),
+        });
+
+        if ((leftDelta > 2 || topDelta > 2) && pending.tries < 10) {
+          pending.tries += 1;
+          applyAttempt();
+          return;
+        }
+
+        pendingViewportRestoreRef.current = null;
+        isRestoringViewportRef.current = false;
+        debugStudy('viewport:restore:applied', {
+          scrollLeft: Math.round(actualLeft),
+          scrollTop: Math.round(actualTop),
+        });
+        // Persist the restored viewport immediately so future mounts use this value.
+        persistViewport();
+      });
+    };
+
+    applyAttempt();
+    return () => {
+      cancelled = true;
+      isRestoringViewportRef.current = false;
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [isViewportReady, canvasW, canvasH, breakdown?.id, selectedNode?.id, persistViewport]);
+
+  // Persist viewport while user pans.
+  useEffect(() => {
+    if (!isViewportReady) return;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    let raf: number | null = null;
+    const onScroll = () => {
+      if (raf !== null) return;
+      raf = window.requestAnimationFrame(() => {
+        raf = null;
+        if (isRestoringViewportRef.current) return;
+        persistViewport();
+      });
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      if (raf !== null) window.cancelAnimationFrame(raf);
+    };
+  }, [isViewportReady, persistViewport]);
+
+  // Persist viewport when zoom changes and before page/tab is backgrounded.
+  useEffect(() => {
+    if (!isViewportReady) return;
+    persistViewport();
+  }, [isViewportReady, scale, persistViewport]);
+
+  useEffect(() => {
+    const onBeforeUnload = () => persistViewport();
+    const onVisibilityChange = () => {
+      if (document.hidden) persistViewport();
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [persistViewport]);
+
+  // Persist full study workspace so page switches don't reset the current session state.
+  useEffect(() => {
+    if (!breakdown || Object.keys(positions).length === 0) return;
+    const timer = window.setTimeout(() => {
+      const payload: StoredWorkspaceSnapshot = {
+        breakdown: {
+          ...breakdown,
+          nodeInsights,
+          nodeConversations,
+          nodePositions: positions,
+        },
+        sessionId,
+        positions,
+        nodeInsights,
+        nodeConversations,
+        selectedNodeId: selectedNode?.id ?? null,
+        activeTab,
+      };
+      localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(payload));
+      debugStudy('workspace:persist', {
+        sessionId: payload.sessionId,
+        nodes: payload.breakdown.nodes.length,
+        positions: Object.keys(payload.positions).length,
+        selectedNodeId: payload.selectedNodeId,
+        activeTab: payload.activeTab,
+      });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    breakdown,
+    sessionId,
+    positions,
+    nodeInsights,
+    nodeConversations,
+    selectedNode?.id,
+    activeTab,
+  ]);
 
   // Global drag handlers
   useEffect(() => {
@@ -540,6 +955,11 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   const handleSubmit = async () => {
     if (!problemInput.trim()) return;
     const trimmedProblem = problemInput.trim();
+    debugStudy('submit:start', {
+      problemLength: trimmedProblem.length,
+      hadExistingBreakdown: !!breakdownRef.current,
+      previousSessionId: sessionIdRef.current,
+    });
     setLoading(true);
     setError(null);
     setSessionId(null);
@@ -586,8 +1006,13 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       setShowInput(false);
       setProblemInput('');
       setComposerInput('');
+      debugStudy('submit:success', {
+        newSessionId,
+        nodes: bd.nodes.length,
+      });
     } catch (err: any) {
       setError(err.message ?? 'Failed to break down problem');
+      debugStudy('submit:error', { message: err?.message ?? 'unknown' });
     } finally {
       setLoading(false);
     }
@@ -875,7 +1300,7 @@ Do not repeat content already given.`;
         transition={{ duration: 0.25, ease: 'easeInOut' }}
         onMouseEnter={() => setSidebarHovered(true)}
         onMouseLeave={() => setSidebarHovered(false)}
-        className="fixed left-0 h-full z-40 bg-surface-container-low flex flex-col pt-20 pb-6 text-sm font-medium overflow-hidden"
+        className="fixed left-0 h-full z-40 bg-surface-container-low hidden sm:flex flex-col pt-20 pb-6 text-sm font-medium overflow-hidden"
         style={{ width: isExpanded ? 256 : 64 }}
       >
         {/* Brand */}
@@ -981,7 +1406,7 @@ Do not repeat content already given.`;
         transition={{ duration: 0.25, ease: 'easeInOut' }}
         onClick={() => setSidebarOpen(o => !o)}
         title={sidebarOpen ? 'Unpin sidebar' : 'Pin sidebar open'}
-        className="fixed top-[72px] z-50 w-6 h-6 rounded-full bg-surface-container-highest border border-outline-variant/40 flex items-center justify-center text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors shadow-md"
+        className="fixed top-[72px] z-50 w-6 h-6 rounded-full bg-surface-container-highest border border-outline-variant/40 hidden sm:flex items-center justify-center text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors shadow-md"
       >
         <motion.div animate={{ rotate: sidebarOpen ? 0 : 180 }} transition={{ duration: 0.25 }}>
           <ChevronLeft className="w-3.5 h-3.5" />
@@ -990,9 +1415,9 @@ Do not repeat content already given.`;
 
       {/* ── Main Canvas ─────────────────────────────────────────────────── */}
       <motion.main
-        animate={{ paddingLeft: isExpanded ? 256 : 64 }}
+        animate={{ paddingLeft: isMobile ? 0 : (isExpanded ? 256 : 64) }}
         transition={{ duration: 0.25, ease: 'easeInOut' }}
-        className="pt-14 h-screen flex relative overflow-hidden"
+        className="pt-14 h-screen flex relative overflow-hidden pb-14 sm:pb-0"
       >
 
         {/* Problem Map */}
@@ -1543,6 +1968,41 @@ Do not repeat content already given.`;
           </div></>}
         </motion.aside>
       </motion.main>
+
+      {showDebugOverlay && (
+        <div className="fixed left-2 right-2 bottom-16 sm:left-auto sm:right-4 sm:w-[520px] z-[70] bg-black/85 border border-white/20 rounded-xl p-3 text-[11px] text-white backdrop-blur-md">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-bold tracking-wide">Study Debug Trace</span>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.removeItem(STUDY_DEBUG_TRACE_KEY);
+                setDebugEntries([]);
+              }}
+              className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="max-h-44 overflow-auto space-y-1 font-mono">
+            {debugEntries.length === 0 && (
+              <div className="text-white/60">No events yet...</div>
+            )}
+            {debugEntries.map((entry, idx) => (
+              <div key={`${entry.stamp}_${entry.event}_${idx}`} className="border-b border-white/10 pb-1">
+                <div className="text-white/80">
+                  {entry.stamp} | {entry.event}
+                </div>
+                {entry.payload && (
+                  <pre className="text-white/60 whitespace-pre-wrap break-words">
+                    {JSON.stringify(entry.payload)}
+                  </pre>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
