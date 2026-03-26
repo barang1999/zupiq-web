@@ -25,6 +25,8 @@ import { OnboardingPage } from "./pages/OnboardingPage";
 import { StudySpacePage } from "./pages/StudySpacePage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { PrivacyPage } from "./pages/PrivacyPage";
+import { TermsPage } from "./pages/TermsPage";
 import { User as UserIcon, LogOut } from "lucide-react";
 
 // --- Components ---
@@ -495,8 +497,8 @@ const Footer = () => {
             </div>
             <div className="flex flex-col gap-4">
               <div className="text-sm font-bold uppercase tracking-widest text-on-surface">Legal</div>
-              <a href="#" className="text-on-surface-variant hover:text-on-surface transition-colors">Privacy</a>
-              <a href="#" className="text-on-surface-variant hover:text-on-surface transition-colors">Terms</a>
+              <a href="/privacy" className="text-on-surface-variant hover:text-on-surface transition-colors">Privacy</a>
+              <a href="/terms" className="text-on-surface-variant hover:text-on-surface transition-colors">Terms</a>
             </div>
           </div>
         </div>
@@ -528,11 +530,13 @@ export default function App() {
     const u = tokenStorage.getUser();
     return !!u && !u.preferences?.onboarding_completed;
   });
-  type Page = 'study' | 'history' | 'settings';
+  type Page = 'study' | 'history' | 'settings' | 'privacy' | 'terms';
 
   const pathToPage = (path: string): Page => {
     if (path === '/history') return 'history';
     if (path === '/settings') return 'settings';
+    if (path === '/privacy') return 'privacy';
+    if (path === '/terms') return 'terms';
     return 'study';
   };
 
@@ -540,7 +544,7 @@ export default function App() {
   const [initialBreakdown, setInitialBreakdown] = useState<any>(null);
 
   const setPage = (next: Page) => {
-    const url = next === 'study' ? '/study' : `/${next}`;
+    const url = next === 'study' ? '/' : `/${next}`;
     window.history.pushState({ page: next }, '', url);
     setPageState(next);
   };
@@ -625,6 +629,14 @@ export default function App() {
         onBreakdownConsumed={() => setInitialBreakdown(null)}
       />
     );
+  }
+
+  if (page === 'privacy') {
+    return <PrivacyPage onBack={() => setPage('study')} />;
+  }
+
+  if (page === 'terms') {
+    return <TermsPage onBack={() => setPage('study')} />;
   }
 
   return (
