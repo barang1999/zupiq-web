@@ -231,6 +231,38 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     return () => window.removeEventListener('wheel', onWheel);
   }, []);
 
+  // Pinch-to-zoom for touch devices
+  const pinchRef = useRef<{ dist: number; scale: number } | null>(null);
+  useEffect(() => {
+    const getDistance = (t: TouchList) =>
+      Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      if (!scrollerRef.current?.contains(e.target as Node)) return;
+      pinchRef.current = { dist: getDistance(e.touches), scale: scaleRef.current };
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || !pinchRef.current) return;
+      if (!scrollerRef.current?.contains(e.target as Node)) return;
+      e.preventDefault();
+      const ratio = getDistance(e.touches) / pinchRef.current.dist;
+      setScale(Math.min(2, Math.max(0.25, pinchRef.current.scale * ratio)));
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinchRef.current = null;
+    };
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, []);
+
   // Always-current refs used by save callbacks to avoid stale closures
   const positionsRef      = useRef<Record<string, NodePos>>({});
   const nodeInsightsRef   = useRef<Record<string, NodeInsight>>({});
