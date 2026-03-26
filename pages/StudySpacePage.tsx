@@ -361,9 +361,34 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       setDraggingId(null);
       setPositions(prev => resolveCollisions(prev, id));
     };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!dragState.current) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const { id, startX, startY, origX, origY } = dragState.current;
+      const s = scaleRef.current;
+      setPositions(prev => ({
+        ...prev,
+        [id]: { x: origX + (touch.clientX - startX) / s, y: origY + (touch.clientY - startY) / s },
+      }));
+    };
+    const onTouchEnd = () => {
+      if (!dragState.current) return;
+      const id = dragState.current.id;
+      dragState.current = null;
+      setDraggingId(null);
+      setPositions(prev => resolveCollisions(prev, id));
+    };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
   }, []);
 
   // Save positions to the session whenever a drag ends
@@ -454,6 +479,19 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       id,
       startX: e.clientX,
       startY: e.clientY,
+      origX: positions[id]?.x ?? 0,
+      origY: positions[id]?.y ?? 0,
+    };
+    setDraggingId(id);
+  }, [positions]);
+
+  const startTouchDrag = useCallback((e: React.TouchEvent, id: string) => {
+    e.stopPropagation();
+    const touch = e.touches[0];
+    dragState.current = {
+      id,
+      startX: touch.clientX,
+      startY: touch.clientY,
       origX: positions[id]?.x ?? 0,
       origY: positions[id]?.y ?? 0,
     };
@@ -1103,6 +1141,7 @@ Do not repeat content already given.`;
                         userSelect: 'none',
                       }}
                       onMouseDown={e => startDrag(e, node.id)}
+                      onTouchStart={e => startTouchDrag(e, node.id)}
                       onClick={() => setSelectedNode(node)}
                     >
                       {/* ── Root node ─── */}
