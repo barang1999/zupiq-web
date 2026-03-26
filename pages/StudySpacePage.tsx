@@ -263,6 +263,10 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     };
   }, []);
 
+  // Swipe-to-close for the node insight panel
+  const insightSwipeStartX = useRef<number | null>(null);
+  const insightSwipeStartY = useRef<number | null>(null);
+
   // Always-current refs used by save callbacks to avoid stale closures
   const positionsRef      = useRef<Record<string, NodePos>>({});
   const nodeInsightsRef   = useRef<Record<string, NodeInsight>>({});
@@ -690,7 +694,7 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   };
 
   const handleAskDeepDive = async () => {
-    if (!selectedNode || !breakdown || selectedNode.type !== 'branch') return;
+    if (!selectedNode || !breakdown) return;
     const question = composerInput.trim();
     if (!question || composerLoading) return;
 
@@ -712,18 +716,18 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       const contextPrompt = `Deep dive context:
 Main problem: ${breakdown.title}
 Subject: ${breakdown.subject}
-Selected branch: ${selectedNode.label}
-Branch description: ${selectedNode.description}
-Branch expression: ${selectedNode.mathContent || selectedNode.label}
+Selected node: ${selectedNode.label} (${selectedNode.type})
+Node description: ${selectedNode.description}
+Node expression: ${selectedNode.mathContent || selectedNode.label}
 
 Instructions:
-- Focus specifically on this selected branch.
+- Focus specifically on this selected node.
 - Explain reasoning and edge cases clearly.
 - Use concise but concrete math details when relevant.
 - Do not use $...$ or $$...$$ wrappers. Write math in plain text (example: a < 0).`;
 
-      // Always inject branch context into user turns so the model stays anchored
-      // to the currently selected branch across multi-turn conversation.
+      // Always inject node context into user turns so the model stays anchored
+      // to the currently selected node across multi-turn conversation.
       const messages: Array<{ role: 'user' | 'model'; content: string }> = nextMessages.map(m => {
         if (m.role === 'user') {
           return {
@@ -805,8 +809,8 @@ Do not repeat content already given.`;
     { id: 'archives',    label: 'Archives',      Icon: Archive },
   ];
 
-  const isBranchSelected = !!selectedNode && selectedNode.type === 'branch';
-  const activeBranchConversation = isBranchSelected && selectedNode
+  const isBranchSelected = !!selectedNode;
+  const activeBranchConversation = selectedNode
     ? (nodeConversations[selectedNode.id] ?? [])
     : [];
   useEffect(() => {
@@ -830,9 +834,9 @@ Do not repeat content already given.`;
     });
   }, [nodeInsights, selectedNode]);
 
-  const composerPlaceholder = isBranchSelected && selectedNode
-    ? `Ask Zupiq to breakdown ${selectedNode.label}...`
-    : 'Select a branch node to start deep dive...';
+  const composerPlaceholder = selectedNode
+    ? `Ask Zupiq about ${selectedNode.label}...`
+    : 'Select a node to start deep dive...';
 
   return (
     <div className="min-h-screen bg-background text-on-surface overflow-hidden">
@@ -1031,9 +1035,9 @@ Do not repeat content already given.`;
 
           {/* Title bar (when breakdown loaded) */}
           {breakdown && !loading && (
-            <div className="px-10 pt-6 pb-0 shrink-0">
+            <div className="px-4 sm:px-6 md:px-10 pt-3 sm:pt-4 md:pt-6 pb-0 shrink-0">
               <span className="text-tertiary text-xs font-bold tracking-[0.2em] uppercase">Active Analysis</span>
-              <h1 className="font-headline text-3xl font-bold text-on-surface mt-1 tracking-tighter">
+              <h1 className="font-headline text-xl sm:text-2xl md:text-3xl font-bold text-on-surface mt-1 tracking-tighter">
                 {breakdown.title.split(' ').slice(0, -1).join(' ')}{' '}
                 <span className="text-secondary">{breakdown.title.split(' ').slice(-1)}</span>
               </h1>
@@ -1311,12 +1315,39 @@ Do not repeat content already given.`;
           </div>{/* end canvas area */}
         </section>
 
+        {/* ── Click-outside overlay ───────────────────────────────────────── */}
+        {selectedNode && (
+          <div
+            className="absolute inset-0 z-10"
+            onClick={() => setSelectedNode(null)}
+          />
+        )}
+
         {/* ── Right Panel ─────────────────────────────────────────────────── */}
         <motion.aside
           animate={{ width: selectedNode ? 384 : 0, opacity: selectedNode ? 1 : 0 }}
           transition={{ duration: 0.25, ease: 'easeInOut' }}
-          className="h-full bg-surface-container-low/80 backdrop-blur-md border-l border-outline-variant/10 shrink-0 relative overflow-hidden"
+          className="h-full bg-surface-container-low/80 backdrop-blur-md border-l border-outline-variant/10 shrink-0 relative overflow-hidden z-20"
         >
+          {/* Invisible swipe handle on the left edge — sits above scroll content to capture rightward swipes */}
+          {selectedNode && (
+            <div
+              className="absolute left-0 top-0 h-full w-8 z-20 pointer-events-auto"
+              style={{ touchAction: 'pan-y' }}
+              onTouchStart={(e) => {
+                insightSwipeStartX.current = e.touches[0].clientX;
+                insightSwipeStartY.current = e.touches[0].clientY;
+              }}
+              onTouchEnd={(e) => {
+                if (insightSwipeStartX.current === null || insightSwipeStartY.current === null) return;
+                const dx = e.changedTouches[0].clientX - insightSwipeStartX.current;
+                const dy = Math.abs(e.changedTouches[0].clientY - insightSwipeStartY.current);
+                if (dx > 60 && dy < 80) setSelectedNode(null);
+                insightSwipeStartX.current = null;
+                insightSwipeStartY.current = null;
+              }}
+            />
+          )}
           {selectedNode && <><div className="h-full overflow-y-auto p-8 pb-[200px]" style={{ width: 384 }}>
             <div className="flex items-center justify-between mb-8">
               <h2 className="font-headline font-bold text-xl">Node Insights</h2>
@@ -1417,47 +1448,39 @@ Do not repeat content already given.`;
                   </button>
                 </div>
 
-                {selectedNode.type === 'branch' ? (
-                  <div>
-                    <label className="text-[10px] font-bold text-primary uppercase tracking-widest mb-3 block">
-                      Branch Deep Dive
-                    </label>
-                    <div className="space-y-3">
-                      {activeBranchConversation.length === 0 && !composerLoading && (
-                        <p className="text-xs text-on-surface-variant">
-                          Use the floating composer below to ask follow-up questions for this branch.
-                        </p>
-                      )}
-                      {activeBranchConversation.map((message, idx) => (
-                        <div
-                          key={`${selectedNode.id}_${idx}`}
-                          className={`rounded-xl px-4 py-3 text-xs leading-relaxed ${
-                            message.role === 'user'
-                              ? 'bg-primary/10 border border-primary/20 text-on-surface'
-                              : 'bg-transparent text-on-surface-variant'
-                          }`}
-                        >
-                          {message.role === 'user'
-                            ? <span>{message.content}</span>
-                            : <RichText className="text-xs leading-relaxed">{message.content}</RichText>
-                          }
-                        </div>
-                      ))}
-                      {composerLoading && (
-                        <div className="flex items-center gap-2 text-on-surface-variant text-xs px-2">
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          <span>Generating deep dive response…</span>
-                        </div>
-                      )}
-                    </div>
+                <div>
+                  <label className="text-[10px] font-bold text-primary uppercase tracking-widest mb-3 block">
+                    Deep Dive
+                  </label>
+                  <div className="space-y-3">
+                    {activeBranchConversation.length === 0 && !composerLoading && (
+                      <p className="text-xs text-on-surface-variant">
+                        Use the floating composer below to ask follow-up questions.
+                      </p>
+                    )}
+                    {activeBranchConversation.map((message, idx) => (
+                      <div
+                        key={`${selectedNode.id}_${idx}`}
+                        className={`rounded-xl px-4 py-3 text-xs leading-relaxed ${
+                          message.role === 'user'
+                            ? 'bg-primary/10 border border-primary/20 text-on-surface'
+                            : 'bg-transparent text-on-surface-variant'
+                        }`}
+                      >
+                        {message.role === 'user'
+                          ? <span>{message.content}</span>
+                          : <RichText className="text-xs leading-relaxed">{message.content}</RichText>
+                        }
+                      </div>
+                    ))}
+                    {composerLoading && (
+                      <div className="flex items-center gap-2 text-on-surface-variant text-xs px-2">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Generating response…</span>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="bg-surface-container rounded-xl p-3 border border-outline-variant/20">
-                    <p className="text-xs text-on-surface-variant">
-                      Deep dive composer is available when a branch node is selected.
-                    </p>
-                  </div>
-                )}
+                </div>
 
                 <div className="flex items-center gap-2 pt-1">
                   <span className="text-xs text-on-surface-variant">Subject:</span>
