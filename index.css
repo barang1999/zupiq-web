@@ -1,0 +1,89 @@
+/*
+ * Noto Sans — Google's universal type family.
+ * Each variant only downloads for the script actually on screen (unicode-range).
+ * Covers all app languages: en fr es de pt (Latin) · ar · zh · hi · ja · ko · km
+ */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Noto+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Noto+Sans+Khmer:wght@300;400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Sans+Devanagari:wght@300;400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-headline: "Space Grotesk", "Noto Sans", sans-serif;
+  /*
+   * Font stack: Space Grotesk for Latin headlines, Noto Sans for everything else.
+   * Script-specific Noto fonts act as fallbacks for their unicode ranges.
+   */
+  --font-sans: "Noto Sans", "Noto Sans Khmer", "Noto Sans Arabic", "Noto Sans SC",
+               "Noto Sans JP", "Noto Sans KR", "Noto Sans Devanagari", sans-serif;
+
+  --color-background: #060e20;
+  --color-primary: #a1faff;
+  --color-on-primary: #006165;
+  --color-primary-container: #00f4fe;
+  --color-secondary: #ff51fa;
+  --color-secondary-container: #a900a9;
+  --color-tertiary: #f3ffca;
+  --color-surface: #060e20;
+  --color-surface-dim: #060e20;
+  --color-surface-container-low: #091328;
+  --color-surface-container: #0f1930;
+  --color-surface-container-high: #141f38;
+  --color-surface-container-highest: #192540;
+  --color-on-surface: #dee5ff;
+  --color-on-surface-variant: #a3aac4;
+  --color-outline-variant: #40485d;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-surface font-sans antialiased selection:bg-primary selection:text-on-primary;
+    overflow-x: hidden;
+    /* Improves rendering for Khmer, Arabic, CJK and other complex scripts */
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-surface-container-highest/40 backdrop-blur-xl border border-white/5;
+  }
+
+  .glow-corner {
+    background: radial-gradient(circle at top right, rgba(243, 255, 202, 0.1), transparent 70%);
+  }
+
+  .btn-primary {
+    @apply px-8 py-4 bg-gradient-to-r from-primary to-secondary text-on-primary font-bold rounded-full shadow-lg shadow-primary/20 hover:scale-105 transition-transform active:scale-95;
+  }
+
+  .btn-glass {
+    @apply px-8 py-4 bg-surface-container-highest/40 backdrop-blur-xl border border-white/5 text-on-surface font-medium rounded-full hover:bg-surface-container-highest/60 transition-colors active:scale-95;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-background;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-surface-container-highest rounded-full hover:bg-outline-variant;
+}
+
+/* Thin scrollbar inside dropdowns */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  @apply bg-outline-variant/50 rounded-full hover:bg-outline-variant;
+}
