@@ -27,6 +27,7 @@ const LANGUAGES = [
   { value: 'fr', label: '🇫🇷 Français' },
   { value: 'de', label: '🇩🇪 Deutsch' },
   { value: 'ja', label: '🇯🇵 日本語' },
+  { value: 'km', label: '🇰🇭 ភាសាខ្មែរ' },
 ];
 
 const EDUCATION_LEVELS = [
