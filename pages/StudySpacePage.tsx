@@ -7,6 +7,7 @@ import {
   ChevronLeft, ZoomIn, ZoomOut, Maximize2,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
+import { ProblemComposer } from '../components/ai/ProblemComposer';
 import { api } from '../lib/api';
 import { MathText } from '../components/ui/MathText';
 import { RichText } from '../components/ui/RichText';
@@ -336,7 +337,6 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   }, [showDebugOverlay]);
 
   const dragState  = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
-  const inputRef   = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const pendingViewportRestoreRef = useRef<{
     left: number;
@@ -949,7 +949,6 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     setDraggingId(id);
   }, [positions]);
 
-  useEffect(() => { if (showInput) inputRef.current?.focus(); }, [showInput]);
   useEffect(() => { setComposerInput(''); setComposerError(null); }, [selectedNode?.id]);
 
   const handleSubmit = async () => {
@@ -1423,46 +1422,11 @@ Do not repeat content already given.`;
         {/* Problem Map */}
         <section className="flex-1 relative flex flex-col overflow-hidden">
 
-          {/* Problem input bar */}
-          <AnimatePresence>
-            {showInput && (
-              <motion.div
-                initial={{ opacity: 0, y: -16 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -16 }}
-                className="relative z-30 px-10 pt-6 pb-2 shrink-0"
-              >
-                <div className="flex items-center gap-3 bg-surface-container rounded-2xl px-5 py-4 border border-primary/30 shadow-[0_0_30px_rgba(161,250,255,0.1)]">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={problemInput}
-                    onChange={e => setProblemInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                    placeholder="Enter a problem, equation, or concept to break down…"
-                    className="flex-1 bg-transparent outline-none text-on-surface placeholder:text-on-surface-variant text-base"
-                  />
-                  <button
-                    onClick={handleSubmit}
-                    disabled={loading || !problemInput.trim()}
-                    className="bg-gradient-to-r from-primary to-secondary text-on-primary px-5 py-2 rounded-full font-bold text-sm flex items-center gap-2 disabled:opacity-50 hover:scale-105 transition-transform"
-                  >
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><ArrowRight className="w-4 h-4" />Analyze</>}
-                  </button>
-                  <button onClick={() => setShowInput(false)} className="text-on-surface-variant hover:text-on-surface p-1">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                {error && <p className="mt-2 text-sm text-error px-2">{error}</p>}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {/* Title bar (when breakdown loaded) */}
           {breakdown && !loading && (
-            <div className="px-4 sm:px-6 md:px-10 pt-3 sm:pt-4 md:pt-6 pb-0 shrink-0">
-              <span className="text-tertiary text-xs font-bold tracking-[0.2em] uppercase">Active Analysis</span>
-              <h1 className="font-headline text-xl sm:text-2xl md:text-3xl font-bold text-on-surface mt-1 tracking-tighter">
+            <div className="px-3 sm:px-6 md:px-10 pt-2 sm:pt-4 md:pt-6 pb-0 shrink-0">
+              <span className="text-tertiary text-[10px] sm:text-xs font-bold tracking-[0.14em] sm:tracking-[0.2em] uppercase">Active Analysis</span>
+              <h1 className="font-headline text-base sm:text-2xl md:text-3xl font-bold text-on-surface mt-0.5 sm:mt-1 tracking-tight sm:tracking-tighter leading-snug">
                 {breakdown.title.split(' ').slice(0, -1).join(' ')}{' '}
                 <span className="text-secondary">{breakdown.title.split(' ').slice(-1)}</span>
               </h1>
@@ -1471,6 +1435,18 @@ Do not repeat content already given.`;
 
           {/* Canvas area */}
           <div className="flex-1 relative overflow-hidden">
+          <ProblemComposer
+            open={showInput}
+            value={problemInput}
+            loading={loading}
+            error={error}
+            onChange={(next) => {
+              setProblemInput(next);
+              if (error) setError(null);
+            }}
+            onSubmit={handleSubmit}
+            onClose={() => setShowInput(false)}
+          />
 
           {/* Zoom controls overlay */}
           <div className="absolute bottom-6 right-6 z-30 flex flex-col gap-1.5">
