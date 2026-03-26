@@ -570,6 +570,14 @@ export default function App() {
     };
   }, []);
 
+  if (page === 'privacy') {
+    return <PrivacyPage onBack={() => setPage('study')} />;
+  }
+
+  if (page === 'terms') {
+    return <TermsPage onBack={() => setPage('study')} />;
+  }
+
   if (showOnboarding && currentUser) {
     return (
       <OnboardingPage
@@ -629,14 +637,6 @@ export default function App() {
         onBreakdownConsumed={() => setInitialBreakdown(null)}
       />
     );
-  }
-
-  if (page === 'privacy') {
-    return <PrivacyPage onBack={() => setPage('study')} />;
-  }
-
-  if (page === 'terms') {
-    return <TermsPage onBack={() => setPage('study')} />;
   }
 
   return (
