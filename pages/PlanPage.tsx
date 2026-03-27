@@ -3,19 +3,11 @@ import { motion } from 'motion/react';
 import {
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
-  GitFork,
-  HelpCircle,
-  History,
-  Layers,
   Loader2,
-  LogOut,
-  Sparkles,
-  Users,
 } from 'lucide-react';
-import { AppHeader } from '../components/layout/AppHeader';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
+import { PublicHeader } from '../components/layout/PublicHeader';
 import {
   cancelSubscription,
   getBillingCatalog,
@@ -74,19 +66,14 @@ const PLAN_MARKETING: Record<PlanKey, PlanMarketingCopy> = {
   },
 };
 
-export default function PlanPage({
-  user,
-  onNavigateStudy,
-  onNavigateHistory,
-  onNavigateFlashcards,
-  onNavigateSettings,
-  showInstallAppButton,
-  onInstallApp,
-  onRequireAuth,
-}: Props) {
+export default function PlanPage(props: Props) {
+  const {
+    user,
+    onNavigateStudy,
+    onRequireAuth,
+  } = props;
+
   const isAuthenticated = Boolean(user?.id || user?.email);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarHovered, setSidebarHovered] = useState(false);
   const [annualBilling, setAnnualBilling] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number>(0);
   const [catalog, setCatalog] = useState<PlanCatalogItem[]>([]);
@@ -95,7 +82,6 @@ export default function PlanPage({
   const [pricingLoading, setPricingLoading] = useState(true);
   const [pricingError, setPricingError] = useState<string | null>(null);
   const [actionPlanKey, setActionPlanKey] = useState<PlanKey | null>(null);
-  const isExpanded = sidebarOpen || sidebarHovered;
 
   const loadBilling = async () => {
     setPricingLoading(true);
@@ -137,12 +123,13 @@ export default function PlanPage({
         .slice()
         .sort((a, b) => a.rank - b.rank)
         .map((tier) => ({
-        ...tier,
-        marketing: PLAN_MARKETING[tier.planKey as PlanKey] ?? PLAN_MARKETING.free,
-        price: annualBilling && typeof tier.pricing.annual === 'number'
-          ? tier.pricing.annual
-          : tier.pricing.monthly,
-      })),
+          ...tier,
+          marketing: PLAN_MARKETING[tier.planKey as PlanKey] ?? PLAN_MARKETING.free,
+          price:
+            annualBilling && typeof tier.pricing.annual === 'number'
+              ? tier.pricing.annual
+              : tier.pricing.monthly,
+        })),
     [annualBilling, catalog]
   );
 
@@ -189,14 +176,6 @@ export default function PlanPage({
     await firebaseSignOut();
   };
 
-  const NAV_ITEMS = [
-    { id: 'study', label: 'Study Space', Icon: GitFork, action: () => onNavigateStudy?.() },
-    { id: 'history', label: 'Learning History', Icon: History, action: () => onNavigateHistory?.() },
-    { id: 'flashcards', label: 'Flashcards', Icon: Layers, action: () => onNavigateFlashcards?.() },
-    { id: 'plans', label: 'Neural Plans', Icon: Sparkles, action: () => {} },
-    { id: 'collab', label: 'Collaborate', Icon: Users, action: () => {} },
-  ];
-
   const faqs = [
     {
       q: 'Can I upgrade mid-cycle?',
@@ -217,104 +196,15 @@ export default function PlanPage({
       <div className="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary-container/5 blur-[120px] rounded-full pointer-events-none" />
       <div className="fixed bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-secondary-container/5 blur-[120px] rounded-full pointer-events-none" />
 
-      <AppHeader
+      <PublicHeader
         user={user}
-        onSettingsClick={onNavigateSettings}
+        onAuthClick={() => onRequireAuth?.()}
         onSignOut={isAuthenticated ? handleSignOut : undefined}
-        onNavigateStudy={onNavigateStudy}
-        onNavigateHistory={onNavigateHistory}
-        onNavigateFlashcards={onNavigateFlashcards}
-        activeMobileMenu={null}
-        showInstallAppButton={showInstallAppButton}
-        onInstallAppClick={onInstallApp}
+        onNavigateHome={onNavigateStudy ? () => onNavigateStudy() : undefined}
+        activePage="plan"
       />
 
-      <motion.aside
-        animate={{ width: isExpanded ? 256 : 64 }}
-        transition={{ duration: 0.25, ease: 'easeInOut' }}
-        onMouseEnter={() => setSidebarHovered(true)}
-        onMouseLeave={() => setSidebarHovered(false)}
-        className="fixed left-0 h-full z-40 bg-surface-container-low hidden sm:flex flex-col pt-20 pb-6 text-sm font-medium overflow-hidden"
-        style={{ width: isExpanded ? 256 : 64 }}
-      >
-        <div className={`mb-8 overflow-hidden transition-all duration-200 ${isExpanded ? 'px-6' : 'px-0 flex justify-center'}`}>
-          {isExpanded ? (
-            <div>
-              <h2 className="font-headline font-bold text-lg text-secondary leading-tight whitespace-nowrap">Neural Tiers</h2>
-              <p className="text-on-surface-variant text-xs uppercase tracking-widest opacity-70 mt-1 whitespace-nowrap">Pricing Matrix</p>
-            </div>
-          ) : (
-            <Sparkles className="w-5 h-5 text-secondary" />
-          )}
-        </div>
-
-        <nav className="flex-1 space-y-0.5 px-2">
-          {NAV_ITEMS.map(({ id, label, Icon, action }) => {
-            const isActive = id === 'plans';
-            return (
-              <button
-                key={id}
-                onClick={action}
-                title={!isExpanded ? label : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-3 transition-all duration-200 text-left ${
-                  isActive
-                    ? isExpanded
-                      ? 'rounded-r-full bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-4 border-primary'
-                      : 'rounded-xl bg-primary/15 text-primary'
-                    : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface rounded-xl'
-                } ${!isExpanded ? 'justify-center' : ''}`}
-              >
-                <Icon className="w-5 h-5 shrink-0" />
-                {isExpanded && <span className="overflow-hidden whitespace-nowrap">{label}</span>}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="mt-auto space-y-4 px-2">
-          {isExpanded && (
-            <button
-              onClick={() => onNavigateStudy?.()}
-              className="w-full py-3 px-4 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-opacity whitespace-nowrap overflow-hidden"
-            >
-              Back To Study
-            </button>
-          )}
-          <div className={`pt-4 border-t border-outline-variant/20 flex flex-col gap-2 ${!isExpanded ? 'items-center' : ''}`}>
-            <a href="#" className={`flex items-center gap-3 text-on-surface-variant hover:text-on-surface transition-colors ${!isExpanded ? 'justify-center p-2 rounded-xl hover:bg-surface-container' : 'px-1'}`}>
-              <HelpCircle className="w-4 h-4 shrink-0" />
-              {isExpanded && <span className="text-xs whitespace-nowrap">Support</span>}
-            </a>
-            {isAuthenticated && (
-              <button
-                onClick={handleSignOut}
-                className={`flex items-center gap-3 text-on-surface-variant hover:text-error transition-colors ${!isExpanded ? 'justify-center p-2 rounded-xl hover:bg-surface-container' : 'px-1'}`}
-              >
-                <LogOut className="w-4 h-4 shrink-0" />
-                {isExpanded && <span className="text-xs whitespace-nowrap">Sign Out</span>}
-              </button>
-            )}
-          </div>
-        </div>
-      </motion.aside>
-
-      <motion.button
-        animate={{ left: isExpanded ? 244 : 52 }}
-        transition={{ duration: 0.25, ease: 'easeInOut' }}
-        onClick={() => setSidebarOpen((open) => !open)}
-        title={sidebarOpen ? 'Unpin sidebar' : 'Pin sidebar open'}
-        className="fixed top-[72px] z-50 w-6 h-6 rounded-full bg-surface-container-highest border border-outline-variant/40 hidden sm:flex items-center justify-center text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors shadow-md"
-      >
-        <motion.div animate={{ rotate: sidebarOpen ? 0 : 180 }} transition={{ duration: 0.25 }}>
-          <ChevronLeft className="w-3.5 h-3.5" />
-        </motion.div>
-      </motion.button>
-
-      <motion.main
-        animate={{ paddingLeft: isExpanded ? 256 : 64 }}
-        transition={{ duration: 0.25, ease: 'easeInOut' }}
-        className="pt-24 pb-28 px-6 min-h-screen relative z-10"
-      >
+      <main className="pt-28 pb-28 px-4 sm:px-6 min-h-screen relative z-10">
         <div className="max-w-7xl mx-auto">
           <section className="text-center mb-14 relative">
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[780px] h-[420px] bg-secondary-container/10 blur-[120px] rounded-full pointer-events-none" />
@@ -379,82 +269,47 @@ export default function PlanPage({
                   : marketing.cta;
 
               return (
-              <article
-                key={tier.planKey}
-                className={`rounded-3xl p-8 border backdrop-blur-xl transition-all ${
-                  marketing.highlight
-                    ? 'bg-surface-container-highest/65 border-primary shadow-[0_0_50px_rgba(161,250,255,0.15)] md:-translate-y-3'
-                    : 'bg-surface-container/45 border-outline-variant/20'
-                }`}
-              >
-                {marketing.highlight && (
-                  <div className="mb-4 inline-flex px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-gradient-to-r from-primary to-secondary text-on-primary">
-                    Recommended
-                  </div>
-                )}
-                <h3 className="font-headline text-2xl font-bold mb-2">{tier.displayName}</h3>
-                <div className="flex items-end gap-1 mb-4">
-                  <span className="text-4xl font-bold">${formatPrice(tier.price)}</span>
-                  <span className="text-on-surface-variant text-sm">/mo</span>
-                </div>
-                <p className="text-on-surface-variant text-sm mb-6 leading-relaxed">{marketing.description}</p>
-                <ul className="space-y-3 mb-7">
-                  {marketing.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={() => handlePlanSelection(tier.planKey as PlanKey)}
-                  disabled={(isAuthenticated && isCurrent) || isActioning}
-                  className={`w-full py-3.5 rounded-full font-bold transition-transform active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed ${
+                <article
+                  key={tier.planKey}
+                  className={`rounded-3xl p-8 border backdrop-blur-xl transition-all ${
                     marketing.highlight
-                      ? 'bg-gradient-to-r from-primary to-secondary text-on-primary'
-                      : 'border border-outline-variant/40 bg-surface-container-highest text-on-surface'
+                      ? 'bg-surface-container-highest/65 border-primary shadow-[0_0_50px_rgba(161,250,255,0.15)] md:-translate-y-3'
+                      : 'bg-surface-container/45 border-outline-variant/20'
                   }`}
                 >
-                  {isActioning ? 'Applying...' : ctaLabel}
-                </button>
-              </article>
+                  {marketing.highlight && (
+                    <div className="mb-4 inline-flex px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-gradient-to-r from-primary to-secondary text-on-primary">
+                      Recommended
+                    </div>
+                  )}
+                  <h3 className="font-headline text-2xl font-bold mb-2">{tier.displayName}</h3>
+                  <div className="flex items-end gap-1 mb-4">
+                    <span className="text-4xl font-bold">${formatPrice(tier.price)}</span>
+                    <span className="text-on-surface-variant text-sm">/mo</span>
+                  </div>
+                  <p className="text-on-surface-variant text-sm mb-6 leading-relaxed">{marketing.description}</p>
+                  <ul className="space-y-3 mb-7">
+                    {marketing.features.map((feature) => (
+                      <li key={feature} className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    onClick={() => handlePlanSelection(tier.planKey as PlanKey)}
+                    disabled={(isAuthenticated && isCurrent) || isActioning}
+                    className={`w-full py-3.5 rounded-full font-bold transition-transform active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed ${
+                      marketing.highlight
+                        ? 'bg-gradient-to-r from-primary to-secondary text-on-primary'
+                        : 'border border-outline-variant/40 bg-surface-container-highest text-on-surface'
+                    }`}
+                  >
+                    {isActioning ? 'Applying...' : ctaLabel}
+                  </button>
+                </article>
               );
             })}
-          </section>
-
-          <section className="mb-16 overflow-hidden rounded-3xl bg-surface-container-low border border-outline-variant/15">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left">
-                <thead>
-                  <tr className="bg-surface-container">
-                    <th className="px-6 py-5 text-on-surface-variant font-medium text-sm">Metric</th>
-                    <th className="px-6 py-5 font-headline font-bold">Scholar</th>
-                    <th className="px-6 py-5 font-headline font-bold text-primary">Builder</th>
-                    <th className="px-6 py-5 font-headline font-bold text-secondary">Architect</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/10 text-sm">
-                  <tr>
-                    <td className="px-6 py-4 font-medium">Daily Deep Dive</td>
-                    <td className="px-6 py-4">3 / Day</td>
-                    <td className="px-6 py-4 font-semibold">Unlimited</td>
-                    <td className="px-6 py-4 font-semibold">Unlimited</td>
-                  </tr>
-                  <tr className="bg-surface-container/30">
-                    <td className="px-6 py-4 font-medium">Neural Map Exports</td>
-                    <td className="px-6 py-4">No</td>
-                    <td className="px-6 py-4">No</td>
-                    <td className="px-6 py-4 font-semibold">Yes</td>
-                  </tr>
-                  <tr>
-                    <td className="px-6 py-4 font-medium">AI Logic Processing</td>
-                    <td className="px-6 py-4">Standard</td>
-                    <td className="px-6 py-4">Faster</td>
-                    <td className="px-6 py-4 font-semibold">Priority</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
           </section>
 
           <section className="max-w-3xl mx-auto mb-16">
@@ -478,20 +333,34 @@ export default function PlanPage({
             </div>
           </section>
 
-          <section className="text-center rounded-[2.4rem] p-10 bg-surface-container-high border border-outline-variant/15 relative overflow-hidden">
+          <motion.section
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="text-center rounded-[2.4rem] p-10 bg-surface-container-high border border-outline-variant/15 relative overflow-hidden"
+          >
             <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-secondary/10 pointer-events-none" />
             <div className="relative z-10">
               <h2 className="font-headline text-4xl font-bold mb-4">Ready to expand your Cognitive Horizon?</h2>
               <p className="text-on-surface-variant text-lg mb-8 max-w-2xl mx-auto">
                 Join thousands of learners building the future of intelligence with Zupiq.
               </p>
-              <button className="px-10 py-4 rounded-full bg-primary text-on-primary font-bold shadow-[0_0_24px_rgba(161,250,255,0.35)]">
+              <button
+                onClick={() => {
+                  if (isAuthenticated) {
+                    onNavigateStudy?.();
+                  } else {
+                    onRequireAuth?.();
+                  }
+                }}
+                className="px-10 py-4 rounded-full bg-primary text-on-primary font-bold shadow-[0_0_24px_rgba(161,250,255,0.35)]"
+              >
                 Start Your Journey
               </button>
             </div>
-          </section>
+          </motion.section>
         </div>
-      </motion.main>
+      </main>
     </div>
   );
 }

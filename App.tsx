@@ -13,10 +13,6 @@ import {
   Network, 
   Share2, 
   Rocket,
-  Menu,
-  X,
-  User as UserIcon,
-  LogOut,
   GitFork,
   History as HistoryIcon,
   Play,
@@ -37,6 +33,7 @@ import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
 import FlashcardSubjectSelectionPage from "./pages/FlashcardSubjectSelectionPage";
 import FlashcardSessionPage from "./pages/FlashcardSessionPage";
+import { PublicHeader } from "./components/layout/PublicHeader";
 
 type AppShellPage = 'study' | 'history' | 'archive' | 'plan' | 'flashcards' | 'flashcards-session' | 'settings' | 'privacy' | 'terms';
 type IOSNavigator = Navigator & { standalone?: boolean };
@@ -46,125 +43,6 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 // --- Components ---
-
-const Navbar = ({ onAuthClick }: { onAuthClick: () => void }) => {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
-
-  useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
-    
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    await firebaseSignOut();
-  };
-
-  return (
-    <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled ? "bg-background/80 backdrop-blur-xl py-4 shadow-2xl" : "bg-transparent py-6"}`}>
-      <div className="max-w-7xl mx-auto px-8 flex justify-between items-center">
-        <div className="text-2xl font-headline font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
-          Zupiq
-        </div>
-        
-        <div className="hidden md:flex gap-8 items-center font-headline font-medium">
-          <a href="#" className="text-primary border-b-2 border-primary pb-1">Features</a>
-          <a href="#" className="text-on-surface-variant hover:text-on-surface transition-colors">How it Works</a>
-          <a href="#" className="text-on-surface-variant hover:text-on-surface transition-colors">Pricing</a>
-          <a href="#" className="text-on-surface-variant hover:text-on-surface transition-colors">Community</a>
-        </div>
-
-        <div className="hidden md:flex gap-4 items-center">
-          {user ? (
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-on-surface-variant">
-                <UserIcon className="w-5 h-5" />
-                <span className="text-sm font-medium">{user.full_name || user.email}</span>
-              </div>
-              <button 
-                onClick={handleSignOut}
-                className="text-on-surface-variant hover:text-secondary transition-colors p-2"
-                title="Sign Out"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            </div>
-          ) : (
-            <>
-              <button 
-                onClick={onAuthClick}
-                className="text-on-surface-variant hover:text-on-surface transition-colors px-4 py-2"
-              >
-                Log In
-              </button>
-              <button 
-                onClick={onAuthClick}
-                className="bg-gradient-to-r from-primary to-secondary text-on-primary font-bold px-6 py-2 rounded-full hover:opacity-90 transition-opacity"
-              >
-                Get Started
-              </button>
-            </>
-          )}
-        </div>
-
-        <button className="md:hidden text-on-surface" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-          {isMobileMenuOpen ? <X /> : <Menu />}
-        </button>
-      </div>
-
-      {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="md:hidden absolute top-full left-0 w-full bg-surface-container-highest border-t border-white/5 p-8 flex flex-col gap-6"
-        >
-          <a href="#" className="text-primary font-headline font-bold">Features</a>
-          <a href="#" className="text-on-surface-variant">How it Works</a>
-          <a href="#" className="text-on-surface-variant">Pricing</a>
-          <a href="#" className="text-on-surface-variant">Community</a>
-          <hr className="border-white/5" />
-          {user ? (
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-2 text-on-surface">
-                <UserIcon className="w-5 h-5" />
-                <span>{user.full_name || user.email}</span>
-              </div>
-              <button onClick={handleSignOut} className="text-secondary text-left">Sign Out</button>
-            </div>
-          ) : (
-            <>
-              <button onClick={onAuthClick} className="text-on-surface-variant text-left">Log In</button>
-              <button 
-                onClick={onAuthClick}
-                className="bg-gradient-to-r from-primary to-secondary text-on-primary font-bold px-6 py-3 rounded-full text-center"
-              >
-                Get Started
-              </button>
-            </>
-          )}
-        </motion.div>
-      )}
-    </nav>
-  );
-};
 
 const Hero = ({ onAuthClick }: { onAuthClick: () => void }) => {
   const [user, setUser] = useState<any>(null);
@@ -875,7 +753,7 @@ export default function App() {
     return (
       <>
         {authenticatedPage}
-        <MobileBottomNav page={page} onNavigate={setPage} />
+        {page !== 'plan' && <MobileBottomNav page={page} onNavigate={setPage} />}
       </>
     );
   }
@@ -906,7 +784,13 @@ export default function App() {
       <div className="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary-container/5 blur-[120px] rounded-full pointer-events-none"></div>
       <div className="fixed bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-secondary-container/5 blur-[120px] rounded-full pointer-events-none"></div>
 
-      <Navbar onAuthClick={() => setShowAuth(true)} />
+      <PublicHeader
+        user={currentUser}
+        onAuthClick={() => setShowAuth(true)}
+        onNavigateHome={() => setPage("study")}
+        onNavigatePlan={() => setPage("plan")}
+        activePage="home"
+      />
       <main>
         <Hero onAuthClick={() => setShowAuth(true)} />
         <Stats />
