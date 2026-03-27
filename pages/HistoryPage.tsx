@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import {
-  GitFork, History, BookOpen, Users, Archive,
+  GitFork, History, Users,
   Search, ArrowRight, Zap, ChevronLeft,
   HelpCircle, LogOut, Brain, FlaskConical, Layers,
 } from 'lucide-react';
@@ -135,9 +135,7 @@ export function HistoryPage({
   const NAV_ITEMS = [
     { id: 'study',   label: 'Study Space',       Icon: GitFork,  action: () => onNavigateStudy?.() },
     { id: 'history', label: 'Learning History',  Icon: History,  action: () => {} },
-    { id: 'concepts',label: 'Base Concepts',     Icon: BookOpen, action: () => {} },
     { id: 'collab',  label: 'Collaborate',        Icon: Users,    action: () => {} },
-    { id: 'archive', label: 'Archives',           Icon: Archive,  action: () => {} },
   ];
 
   return (

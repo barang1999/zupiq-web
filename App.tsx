@@ -19,7 +19,6 @@ import {
   LogOut,
   GitFork,
   History as HistoryIcon,
-  Archive as ArchiveIcon,
   Play,
 } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
@@ -31,13 +30,14 @@ import { OnboardingPage } from "./pages/OnboardingPage";
 import { StudySpacePage } from "./pages/StudySpacePage";
 import { HistoryPage } from "./pages/HistoryPage";
 import MobileHistoryPage from "./pages/MobileHistoryPage";
+import ArchivePage from "./pages/ArchivePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
 import FlashcardSubjectSelectionPage from "./pages/FlashcardSubjectSelectionPage";
 import FlashcardSessionPage from "./pages/FlashcardSessionPage";
 
-type AppShellPage = 'study' | 'history' | 'flashcards' | 'flashcards-session' | 'settings' | 'privacy' | 'terms';
+type AppShellPage = 'study' | 'history' | 'archive' | 'flashcards' | 'flashcards-session' | 'settings' | 'privacy' | 'terms';
 type IOSNavigator = Navigator & { standalone?: boolean };
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -545,13 +545,13 @@ const MobileBottomNav = ({
 }) => {
   const activeItemForPage = (
     currentPage: AppShellPage
-  ): "study" | "history" | "archive" | "play" => {
+  ): "study" | "history" | "play" => {
     if (currentPage === "history") return "history";
     if (currentPage === "flashcards" || currentPage === "flashcards-session") return "play";
     return "study";
   };
 
-  const [activeItem, setActiveItem] = useState<'study' | 'history' | 'archive' | 'play'>(
+  const [activeItem, setActiveItem] = useState<'study' | 'history' | 'play'>(
     activeItemForPage(page)
   );
 
@@ -562,7 +562,6 @@ const MobileBottomNav = ({
   const navItems = [
     { id: 'study' as const, page: 'study' as const, label: 'Study', Icon: GitFork },
     { id: 'history' as const, page: 'history' as const, label: 'History', Icon: HistoryIcon },
-    { id: 'archive' as const, page: 'study' as const, label: 'Archive', Icon: ArchiveIcon },
     { id: 'play' as const, page: 'flashcards' as const, label: 'Play', Icon: Play },
   ];
 
@@ -610,6 +609,7 @@ export default function App() {
 
   const pathToPage = (path: string): AppShellPage => {
     if (path === '/history') return 'history';
+    if (path === '/archive') return 'archive';
     if (path === '/flashcards/session') return 'flashcards-session';
     if (path === '/flashcards') return 'flashcards';
     if (path === '/settings') return 'settings';
@@ -629,6 +629,8 @@ export default function App() {
     let url: string;
     if (next === "study") {
       url = "/";
+    } else if (next === "archive") {
+      url = "/archive";
     } else if (next === "flashcards") {
       url = "/flashcards";
     } else if (next === "flashcards-session") {
@@ -783,6 +785,18 @@ export default function App() {
         <HistoryPage
           user={currentUser}
           onNavigateStudy={(bd) => { setInitialBreakdown(bd ?? null); setPage('study'); }}
+          onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
+        />
+      );
+    } else if (page === 'archive') {
+      authenticatedPage = (
+        <ArchivePage
+          user={currentUser}
+          onNavigateStudy={() => setPage('study')}
+          onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
           onNavigateSettings={() => setPage('settings')}
           showInstallAppButton={showInstallButton}

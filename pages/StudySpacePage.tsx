@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { TouchEvent as ReactTouchEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  GitFork, History, BookOpen, Users, Archive,
+  GitFork, History, Users, Archive,
   Plus, X, Loader2, Sparkles,
   Bookmark, Zap, LogOut, HelpCircle, ArrowRight,
   ChevronLeft, ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers,
@@ -2290,9 +2290,7 @@ Do not repeat content already given.`;
     { id: 'map',         label: 'Neural Map',   Icon: GitFork },
     { id: 'history',     label: 'History',       Icon: History },
     { id: 'flashcards',  label: 'Flashcards',    Icon: Layers },
-    { id: 'concepts',    label: 'Base Concepts', Icon: BookOpen },
     { id: 'collaborate', label: 'Collaborate',   Icon: Users },
-    { id: 'archives',    label: 'Archives',      Icon: Archive },
   ];
 
   const isBranchSelected = !!selectedNode;
