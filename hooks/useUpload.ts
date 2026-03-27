@@ -1,6 +1,33 @@
 import { useState, useCallback } from "react";
-import { api, tokenStorage } from "../lib/api";
+import { api } from "../lib/api";
 import type { UploadedFile, UploadProgress, UploadContext } from "../types/upload.types";
+
+interface SignedUploadPayload {
+  upload: UploadedFile;
+  signed_upload: {
+    bucket: string;
+    path: string;
+    token: string;
+    signedUrl: string;
+  };
+}
+
+async function uploadToSignedStorageUrl(signedUrl: string, file: File): Promise<void> {
+  const form = new FormData();
+  form.append("cacheControl", "3600");
+  form.append("", file);
+  const response = await fetch(signedUrl, {
+    method: "PUT",
+    headers: { "x-upsert": "false" },
+    body: form,
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(
+      `Direct upload failed (${response.status})${body ? `: ${body.slice(0, 180)}` : ""}`
+    );
+  }
+}
 
 interface UseUploadReturn {
   uploads: UploadedFile[];
@@ -42,21 +69,24 @@ export function useUpload(): UseUploadReturn {
         );
 
         try {
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("context", context);
-
-          const data = await api.upload<{ uploads: UploadedFile[] }>("/api/uploads", formData);
-
-          if (data.uploads[0]) {
-            uploadedFiles.push(data.uploads[0]);
-            setUploads((prev) => [...prev, data.uploads[0]]);
-          }
+          const signed = await api.post<SignedUploadPayload>("/api/uploads/signed-upload-url", {
+            original_name: file.name,
+            mime_type: file.type,
+            size_bytes: file.size,
+            context,
+          });
+          setProgress((prev) =>
+            prev.map((p, idx) => (idx === i ? { ...p, progress: 50 } : p))
+          );
+          await uploadToSignedStorageUrl(signed.signed_upload.signedUrl, file);
+          const uploaded = signed.upload;
+          uploadedFiles.push(uploaded);
+          setUploads((prev) => [...prev, uploaded]);
 
           setProgress((prev) =>
             prev.map((p, idx) =>
               idx === i
-                ? { ...p, status: "done", progress: 100, uploadId: data.uploads[0]?.id }
+                ? { ...p, status: "done", progress: 100, uploadId: uploaded.id }
                 : p
             )
           );

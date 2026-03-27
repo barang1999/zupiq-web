@@ -64,6 +64,21 @@ interface AnalyzeImageResponse {
   analysis_structured?: AnalyzeImageStructuredPayload;
 }
 
+interface SignedUploadPayload {
+  upload: {
+    id: string;
+    stored_name: string;
+    mime_type: string;
+    size_bytes: number;
+  };
+  signed_upload: {
+    bucket: string;
+    path: string;
+    token: string;
+    signedUrl: string;
+  };
+}
+
 interface ProblemBreakdown {
   id?: string;
   title: string;
@@ -388,6 +403,10 @@ function resolveAttachmentErrorMessage(
     }
   }
 
+  if (stageLabel.startsWith('storage-upload')) {
+    return `Core issue: direct object-storage upload failed before backend analysis (stage: ${stageLabel}). Check Supabase storage CORS/policy and network access to storage domain.`;
+  }
+
   if (/failed to fetch/i.test(raw) || /networkerror/i.test(raw)) {
     return `Core issue: request failed before server response (stage: ${stageLabel}). Check CORS/SSL/DNS/connectivity to ${apiOrigin}.`;
   }
@@ -403,6 +422,20 @@ function resolveAttachmentErrorMessage(
 function nextAttachmentTraceId(): string {
   const rand = Math.random().toString(36).slice(2, 8);
   return `att_${Date.now().toString(36)}_${rand}`;
+}
+
+async function uploadToSignedStorageUrl(signedUrl: string, file: File): Promise<Response> {
+  const form = new FormData();
+  form.append("cacheControl", "3600");
+  // Supabase signed upload endpoint expects an unnamed file field in multipart form data.
+  form.append("", file);
+  return fetch(signedUrl, {
+    method: "PUT",
+    headers: {
+      "x-upsert": "false",
+    },
+    body: form,
+  });
 }
 
 function computeInitialPositions(nodes: BreakdownNode[], canvasW: number, canvasH: number): Record<string, NodePos> {
@@ -1430,23 +1463,42 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
         );
       }
 
-      const formData = new FormData();
-      formData.append('file', normalizedFile);
-      formData.append('context', 'ai_query');
-      formData.append('attach_trace_id', traceId);
-
-      currentStage = 'upload:start';
-      logAttach(currentStage, { endpoint: '/api/uploads' });
-      const uploadResponse = await api.upload<{ uploads: Array<{ id: string }> }>('/api/uploads', formData);
-      currentStage = 'upload:done';
-      const uploadId = uploadResponse.uploads?.[0]?.id;
+      currentStage = 'signed-url:start';
+      logAttach(currentStage, { endpoint: '/api/uploads/signed-upload-url' });
+      const signedUploadResponse = await api.post<SignedUploadPayload>('/api/uploads/signed-upload-url', {
+        original_name: normalizedFile.name,
+        mime_type: normalizedFile.type,
+        size_bytes: normalizedFile.size,
+        context: 'ai_query',
+        attach_trace_id: traceId,
+      });
+      currentStage = 'signed-url:done';
+      const uploadId = signedUploadResponse.upload?.id;
+      const signedUpload = signedUploadResponse.signed_upload;
       logAttach(currentStage, {
         uploadId: uploadId ?? null,
-        uploadCount: uploadResponse.uploads?.length ?? 0,
+        hasSignedUrl: Boolean(signedUpload?.signedUrl),
+        storagePath: signedUpload?.path ?? null,
+        bucket: signedUpload?.bucket ?? null,
       });
-      if (!uploadId) {
-        throw new Error('Failed to upload file.');
+      if (!uploadId || !signedUpload?.signedUrl) {
+        throw new Error('Failed to initialize direct upload.');
       }
+
+      currentStage = 'storage-upload:start';
+      logAttach(currentStage, {
+        bucket: signedUpload.bucket,
+        path: signedUpload.path,
+      });
+      const directUploadResponse = await uploadToSignedStorageUrl(signedUpload.signedUrl, normalizedFile);
+      if (!directUploadResponse.ok) {
+        const errorText = await directUploadResponse.text().catch(() => '');
+        throw new Error(`Direct upload failed with HTTP ${directUploadResponse.status}${errorText ? `: ${errorText.slice(0, 240)}` : ''}`);
+      }
+      currentStage = 'storage-upload:done';
+      logAttach(currentStage, {
+        status: directUploadResponse.status,
+      });
 
       const analyzePayload: Record<string, unknown> = {
         upload_id: uploadId,
