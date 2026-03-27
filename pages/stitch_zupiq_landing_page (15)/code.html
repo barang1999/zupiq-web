@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Zupiq | Neural Tiers</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-primary-fixed": "#004346",
+                        "primary": "#a1faff",
+                        "on-background": "#dee5ff",
+                        "on-secondary": "#400040",
+                        "on-error-container": "#ffa8a3",
+                        "error-container": "#9f0519",
+                        "on-surface-variant": "#a3aac4",
+                        "tertiary-fixed": "#cafd00",
+                        "surface-container-highest": "#192540",
+                        "secondary": "#ff51fa",
+                        "surface-container-high": "#141f38",
+                        "secondary-fixed-dim": "#ffa6f3",
+                        "on-primary": "#006165",
+                        "on-primary-fixed-variant": "#006266",
+                        "error-dim": "#d7383b",
+                        "on-tertiary-fixed-variant": "#526900",
+                        "on-secondary-fixed": "#620061",
+                        "primary-container": "#00f4fe",
+                        "inverse-on-surface": "#4d556b",
+                        "secondary-fixed": "#ffbdf3",
+                        "secondary-container": "#a900a9",
+                        "tertiary": "#f3ffca",
+                        "surface-container-low": "#091328",
+                        "on-secondary-container": "#fff5f9",
+                        "primary-dim": "#00e5ee",
+                        "on-tertiary-container": "#4a5e00",
+                        "primary-fixed-dim": "#00e5ee",
+                        "tertiary-container": "#cafd00",
+                        "surface-variant": "#192540",
+                        "surface-container": "#0f1930",
+                        "tertiary-dim": "#beee00",
+                        "primary-fixed": "#00f4fe",
+                        "surface": "#060e20",
+                        "outline-variant": "#40485d",
+                        "on-primary-container": "#00575b",
+                        "on-error": "#490006",
+                        "tertiary-fixed-dim": "#beee00",
+                        "on-tertiary-fixed": "#3a4a00",
+                        "on-surface": "#dee5ff",
+                        "surface-dim": "#060e20",
+                        "on-tertiary": "#516700",
+                        "inverse-surface": "#faf8ff",
+                        "on-secondary-fixed-variant": "#920091",
+                        "inverse-primary": "#006a6e",
+                        "background": "#060e20",
+                        "error": "#ff716c",
+                        "secondary-dim": "#ff51fa",
+                        "surface-bright": "#1f2b49",
+                        "surface-container-lowest": "#000000",
+                        "outline": "#6d758c",
+                        "surface-tint": "#a1faff"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(25, 37, 64, 0.4);
+            backdrop-filter: blur(20px);
+        }
+        .neon-border {
+            box-shadow: 0 0 15px rgba(161, 250, 255, 0.3), inset 0 0 5px rgba(161, 250, 255, 0.2);
+        }
+        .prismatic-gradient {
+            background: linear-gradient(45deg, #a1faff, #ff51fa);
+        }
+        .glow-corner {
+            background: radial-gradient(circle at top right, rgba(243, 255, 202, 0.15), transparent 70%);
+        }
+        .neural-bg {
+            background-image: radial-gradient(circle at 50% 50%, #141f38 0%, #060e20 100%);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary/30">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#192540]/60 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
+<nav class="flex justify-between items-center px-8 h-20 w-full max-w-none">
+<div class="text-2xl font-headline font-bold tracking-tighter text-[#dee5ff] uppercase">Zupiq</div>
+<div class="hidden md:flex items-center space-x-8 font-headline tracking-tight">
+<a class="text-[#a3aac4] hover:text-[#dee5ff] transition-colors" href="#">Features</a>
+<a class="text-[#00F5FF] border-b-2 border-[#00F5FF] pb-1" href="#">Pricing</a>
+<a class="text-[#a3aac4] hover:text-[#dee5ff] transition-colors" href="#">Enterprise</a>
+<a class="text-[#a3aac4] hover:text-[#dee5ff] transition-colors" href="#">Docs</a>
+</div>
+<button class="bg-primary-container text-on-primary-container px-6 py-2 rounded-full font-bold hover:bg-[#192540]/80 transition-all duration-300 active:scale-95">
+                Get Started
+            </button>
+</nav>
+</header>
+<main class="pt-32 pb-24 overflow-hidden neural-bg">
+<!-- Hero Section -->
+<section class="max-w-7xl mx-auto px-6 text-center mb-24 relative">
+<div class="absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-secondary-container/10 blur-[120px] rounded-full"></div>
+<h1 class="font-headline text-6xl md:text-8xl font-bold tracking-tighter mb-6">
+                Select Your <span class="text-transparent bg-clip-text prismatic-gradient">Neural Tier</span>
+</h1>
+<p class="text-on-surface-variant text-xl md:text-2xl max-w-2xl mx-auto leading-relaxed">
+                Elevate your cognitive architecture with intelligence layers designed for precision, speed, and deep discovery.
+            </p>
+<!-- Pricing Toggle -->
+<div class="mt-12 flex items-center justify-center gap-4">
+<span class="text-on-surface-variant font-medium">Monthly</span>
+<div class="w-16 h-8 bg-surface-container-highest rounded-full p-1 cursor-pointer flex items-center relative neon-border">
+<div class="absolute inset-0 prismatic-gradient opacity-20 blur-sm rounded-full"></div>
+<div class="w-6 h-6 bg-primary rounded-full shadow-lg ml-auto"></div>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-on-surface font-medium">Annual</span>
+<span class="bg-tertiary-container text-on-tertiary-container text-[10px] font-bold px-2 py-0.5 rounded-full">SAVE 20%</span>
+</div>
+</div>
+</section>
+<!-- Plan Cards -->
+<section class="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-8 relative z-10">
+<!-- Scholar -->
+<div class="glass-card p-10 rounded-3xl border border-outline-variant/20 flex flex-col hover:border-primary/30 transition-all duration-500">
+<div class="mb-8">
+<h3 class="font-headline text-2xl font-bold mb-2">Scholar</h3>
+<div class="flex items-baseline gap-1">
+<span class="text-4xl font-bold">$0</span>
+<span class="text-on-surface-variant">/mo</span>
+</div>
+</div>
+<p class="text-on-surface-variant mb-8 leading-relaxed">Fundamental AI access for individual learners starting their journey.</p>
+<ul class="space-y-4 mb-10 flex-grow">
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+<span class="text-sm">Basic AI Intelligence</span>
+</li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+<span class="text-sm">3 Daily Breakdowns</span>
+</li>
+<li class="flex items-center gap-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+<span class="text-sm">Standard Support</span>
+</li>
+</ul>
+<button class="w-full py-4 rounded-full border border-outline-variant hover:bg-surface-container-highest transition-colors font-bold">
+                    Start Learning
+                </button>
+</div>
+<!-- Neural Architect (Recommended) -->
+<div class="relative glass-card p-10 rounded-3xl border-2 border-primary glow-corner flex flex-col shadow-[0_0_50px_rgba(161,250,255,0.15)] transform md:-translate-y-4">
+<div class="absolute -top-4 left-1/2 -translate-x-1/2 prismatic-gradient text-on-primary font-bold px-4 py-1 rounded-full text-xs uppercase tracking-widest">
+                    Recommended
+                </div>
+<div class="mb-8">
+<h3 class="font-headline text-2xl font-bold mb-2">Neural Architect</h3>
+<div class="flex items-baseline gap-1">
+<span class="text-4xl font-bold">$29</span>
+<span class="text-on-surface-variant">/mo</span>
+</div>
+</div>
+<p class="text-on-surface-variant mb-8 leading-relaxed">For power users building complex knowledge systems and deep insights.</p>
+<ul class="space-y-4 mb-10 flex-grow">
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+<span class="text-sm">Unlimited Daily Breakdowns</span>
+</li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+<span class="text-sm font-bold text-tertiary">Deep Dive mode</span>
+</li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+<span class="text-sm">24/7 Cognitive Tutor</span>
+</li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+<span class="text-sm">Custom Knowledge Maps</span>
+</li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-sm">check_circle</span>
+<span class="text-sm">Priority Infrastructure</span>
+</li>
+</ul>
+<button class="w-full py-4 rounded-full prismatic-gradient text-on-primary font-bold active:scale-95 transition-transform">
+                    Deploy Architecture
+                </button>
+</div>
+<!-- Quantum Lab -->
+<div class="glass-card p-10 rounded-3xl border border-outline-variant/20 flex flex-col bg-surface-container-high/60">
+<div class="mb-8">
+<h3 class="font-headline text-2xl font-bold mb-2">Quantum Lab</h3>
+<div class="flex items-baseline gap-1">
+<span class="text-4xl font-bold">$99</span>
+<span class="text-on-surface-variant">/mo</span>
+</div>
+</div>
+<p class="text-on-surface-variant mb-8 leading-relaxed">Enterprise-grade tools for teams and neural research environments.</p>
+<ul class="space-y-4 mb-10 flex-grow">
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary text-sm">check_circle</span>
+<span class="text-sm">Collaborative Rooms</span>
+</li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary text-sm">check_circle</span>
+<span class="text-sm">Full API access</span>
+</li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary text-sm">check_circle</span>
+<span class="text-sm">Team Neural Insights</span>
+</li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary text-sm">check_circle</span>
+<span class="text-sm">Dedicated Node Access</span>
+</li>
+</ul>
+<button class="w-full py-4 rounded-full bg-surface-container-highest border border-secondary/30 text-secondary font-bold hover:bg-secondary/10 transition-colors">
+                    Access Lab
+                </button>
+</div>
+</section>
+<!-- Feature Matrix -->
+<section class="max-w-7xl mx-auto px-6 mt-32">
+<h2 class="font-headline text-4xl font-bold mb-12 text-center">Neural Comparison Matrix</h2>
+<div class="overflow-hidden rounded-3xl bg-surface-container-low border border-outline-variant/10">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container">
+<th class="p-8 text-on-surface-variant font-medium">Metric</th>
+<th class="p-8 font-headline font-bold">Scholar</th>
+<th class="p-8 font-headline font-bold text-primary">Neural Architect</th>
+<th class="p-8 font-headline font-bold text-secondary">Quantum Lab</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<tr>
+<td class="p-8 font-medium">Daily Breakdowns</td>
+<td class="p-8">3 / Day</td>
+<td class="p-8 font-bold">Unlimited</td>
+<td class="p-8 font-bold">Unlimited + Batch</td>
+</tr>
+<tr class="bg-surface-container/30">
+<td class="p-8 font-medium">Neural Map Exports</td>
+<td class="p-8">Static (PNG)</td>
+<td class="p-8">Dynamic (SVG/JSON)</td>
+<td class="p-8">Source (RAW/USD)</td>
+</tr>
+<tr>
+<td class="p-8 font-medium">AI Logic Processing</td>
+<td class="p-8">Standard</td>
+<td class="p-8">High Priority</td>
+<td class="p-8 font-bold">Dedicated Node</td>
+</tr>
+<tr class="bg-surface-container/30">
+<td class="p-8 font-medium">Data Encryption</td>
+<td class="p-8">AES-256</td>
+<td class="p-8">Quantum-Resistant</td>
+<td class="p-8 font-bold">End-to-End HSM</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- FAQ Section -->
+<section class="max-w-3xl mx-auto px-6 mt-32">
+<h2 class="font-headline text-4xl font-bold mb-12 text-center">Inquiry Hub</h2>
+<div class="space-y-4">
+<div class="bg-surface-container p-6 rounded-2xl cursor-pointer group">
+<div class="flex justify-between items-center">
+<span class="font-bold text-lg">Can I upgrade mid-cycle?</span>
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">expand_more</span>
+</div>
+<div class="mt-4 text-on-surface-variant leading-relaxed">
+                        Absolutely. When you upgrade, your current cycle will be pro-rated, and you'll immediately gain access to the enhanced neural capabilities of your new tier.
+                    </div>
+</div>
+<div class="bg-surface-container p-6 rounded-2xl cursor-pointer group">
+<div class="flex justify-between items-center">
+<span class="font-bold text-lg">Is my data private?</span>
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">expand_more</span>
+</div>
+<div class="hidden mt-4 text-on-surface-variant leading-relaxed">
+                        Security is woven into our architecture. All neural processing occurs within encrypted sandboxes, and we never use your proprietary knowledge maps for global training.
+                    </div>
+</div>
+</div>
+</section>
+<!-- Footer CTA -->
+<section class="max-w-7xl mx-auto px-6 mt-32 text-center">
+<div class="relative p-16 rounded-[40px] overflow-hidden bg-surface-container-high">
+<div class="absolute inset-0 prismatic-gradient opacity-10"></div>
+<div class="relative z-10">
+<h2 class="font-headline text-4xl md:text-5xl font-bold mb-6">Ready to expand your Cognitive Horizon?</h2>
+<p class="text-on-surface-variant text-xl mb-10 max-w-xl mx-auto">Join 50,000+ architects building the future of intelligence.</p>
+<button class="bg-primary text-on-primary px-10 py-5 rounded-full font-bold text-lg shadow-[0_0_30px_rgba(161,250,255,0.4)] hover:scale-105 transition-transform">
+                        Start Your Journey
+                    </button>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-[#060e20] w-full py-12 border-t border-[#40485d]/20">
+<div class="flex flex-col md:flex-row justify-between items-center px-12 gap-6">
+<div class="flex flex-col gap-2">
+<div class="font-['Space_Grotesk'] font-bold text-[#dee5ff] text-xl">ZUPIQ</div>
+<p class="text-[#a3aac4] font-['Inter'] text-sm">© 2024 Zupiq Chromatic Intelligence. All rights reserved.</p>
+</div>
+<div class="flex gap-8">
+<a class="text-[#a3aac4] hover:text-[#f3ffca] transition-colors font-['Inter'] text-sm" href="#">Privacy Policy</a>
+<a class="text-[#a3aac4] hover:text-[#f3ffca] transition-colors font-['Inter'] text-sm" href="#">Terms of Service</a>
+<a class="text-[#a3aac4] hover:text-[#f3ffca] transition-colors font-['Inter'] text-sm" href="#">Security</a>
+<a class="text-[#a3aac4] hover:text-[#f3ffca] transition-colors font-['Inter'] text-sm" href="#">Status</a>
+</div>
+</div>
+</footer>
+<!-- Signature Floating Orb -->
+<div class="fixed bottom-10 right-10 w-16 h-16 rounded-full bg-primary-container shadow-[0_0_40px_rgba(0,244,254,0.4)] flex items-center justify-center z-[100] cursor-pointer group">
+<span class="material-symbols-outlined text-on-primary-container font-bold group-hover:rotate-180 transition-transform duration-500">psychology</span>
+<div class="absolute inset-0 rounded-full animate-ping bg-primary-container opacity-20"></div>
+</div>
+</body></html>

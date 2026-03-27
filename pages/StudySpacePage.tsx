@@ -604,6 +604,7 @@ interface Props {
   user: any;
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
+  onNavigatePlan?: () => void;
   onNavigateSettings?: () => void;
   showInstallAppButton?: boolean;
   onInstallApp?: () => void;
@@ -615,6 +616,7 @@ export function StudySpacePage({
   user,
   onNavigateHistory,
   onNavigateFlashcards,
+  onNavigatePlan,
   onNavigateSettings,
   showInstallAppButton,
   onInstallApp,
@@ -2380,6 +2382,17 @@ Do not repeat content already given.`;
     setBranchActionPortal(null);
   }, [activeBranchActionNode, branchActionPortal]);
 
+  const handleUpgradeToPro = useCallback(() => {
+    if (onNavigatePlan) {
+      onNavigatePlan();
+      return;
+    }
+    if (typeof window !== 'undefined' && window.location.pathname !== '/plan') {
+      window.history.pushState({ page: 'plan' }, '', '/plan');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { page: 'plan' } }));
+    }
+  }, [onNavigatePlan]);
+
   return (
     <div className="min-h-screen bg-background text-on-surface overflow-hidden">
       {/* Ambient glows */}
@@ -2494,6 +2507,7 @@ Do not repeat content already given.`;
             {isExpanded && (
               <motion.button
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                onClick={handleUpgradeToPro}
                 className="w-full py-3 px-4 rounded-xl bg-surface-container-highest border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest hover:bg-primary/10 transition-all whitespace-nowrap overflow-hidden"
               >
                 Upgrade to Pro

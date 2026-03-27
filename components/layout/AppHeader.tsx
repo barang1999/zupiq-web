@@ -91,6 +91,13 @@ export function AppHeader({
     action();
   };
 
+  const handleUpgradeToPro = () => {
+    if (window.location.pathname !== '/plan') {
+      window.history.pushState({ page: 'plan' }, '', '/plan');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { page: 'plan' } }));
+    }
+  };
+
   const openProfileMenu = () => {
     if (window.innerWidth >= 640) return;
     setIsProfileMenuOpen(true);
@@ -228,6 +235,14 @@ export function AppHeader({
               </nav>
 
               <div className="mt-8 border-t border-outline-variant/20 pt-6">
+                <button
+                  type="button"
+                  onClick={() => runAndClose(handleUpgradeToPro)}
+                  className="mb-3 flex w-full items-center gap-3 rounded-full px-5 py-3 text-left bg-gradient-to-r from-primary/20 to-secondary/20 border border-primary/30 text-primary transition-colors hover:from-primary/30 hover:to-secondary/30"
+                >
+                  <Sparkles className="h-5 w-5" />
+                  <span className="font-headline text-lg font-medium">Upgrade to Pro</span>
+                </button>
                 {showInstallAppButton && onInstallAppClick && (
                   <button
                     type="button"

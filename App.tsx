@@ -31,13 +31,14 @@ import { StudySpacePage } from "./pages/StudySpacePage";
 import { HistoryPage } from "./pages/HistoryPage";
 import MobileHistoryPage from "./pages/MobileHistoryPage";
 import ArchivePage from "./pages/ArchivePage";
+import PlanPage from "./pages/PlanPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
 import FlashcardSubjectSelectionPage from "./pages/FlashcardSubjectSelectionPage";
 import FlashcardSessionPage from "./pages/FlashcardSessionPage";
 
-type AppShellPage = 'study' | 'history' | 'archive' | 'flashcards' | 'flashcards-session' | 'settings' | 'privacy' | 'terms';
+type AppShellPage = 'study' | 'history' | 'archive' | 'plan' | 'flashcards' | 'flashcards-session' | 'settings' | 'privacy' | 'terms';
 type IOSNavigator = Navigator & { standalone?: boolean };
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -610,6 +611,7 @@ export default function App() {
   const pathToPage = (path: string): AppShellPage => {
     if (path === '/history') return 'history';
     if (path === '/archive') return 'archive';
+    if (path === '/plan') return 'plan';
     if (path === '/flashcards/session') return 'flashcards-session';
     if (path === '/flashcards') return 'flashcards';
     if (path === '/settings') return 'settings';
@@ -631,6 +633,8 @@ export default function App() {
       url = "/";
     } else if (next === "archive") {
       url = "/archive";
+    } else if (next === "plan") {
+      url = "/plan";
     } else if (next === "flashcards") {
       url = "/flashcards";
     } else if (next === "flashcards-session") {
@@ -803,6 +807,18 @@ export default function App() {
           onInstallApp={handleInstallApp}
         />
       );
+    } else if (page === 'plan') {
+      authenticatedPage = (
+        <PlanPage
+          user={currentUser}
+          onNavigateStudy={() => setPage('study')}
+          onNavigateHistory={() => setPage('history')}
+          onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
+        />
+      );
     } else if (page === 'flashcards') {
       authenticatedPage = (
         <FlashcardSubjectSelectionPage
@@ -846,6 +862,7 @@ export default function App() {
           user={currentUser}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigatePlan={() => setPage('plan')}
           onNavigateSettings={() => setPage('settings')}
           showInstallAppButton={showInstallButton}
           onInstallApp={handleInstallApp}

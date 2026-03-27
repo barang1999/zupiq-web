@@ -2,7 +2,7 @@ import React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard, Brain, Layers, Users, BookOpen, User,
-  ChevronLeft, X
+  ChevronLeft, Sparkles, X
 } from "lucide-react";
 import { useAppStore } from "../../store/app.store";
 import { useAuth } from "../../hooks/useAuth";
@@ -44,6 +44,16 @@ export function Sidebar() {
   const handleNavigate = (page: AppPage) => {
     navigateTo(page);
     // Close sidebar on mobile
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  };
+
+  const handleUpgradeToPro = () => {
+    if (window.location.pathname !== "/plan") {
+      window.history.pushState({ page: "plan" }, "", "/plan");
+      window.dispatchEvent(new PopStateEvent("popstate", { state: { page: "plan" } }));
+    }
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
@@ -120,6 +130,26 @@ export function Sidebar() {
             );
           })}
         </nav>
+
+        {isAuthenticated && (
+          <div className="px-2 pb-2">
+            <button
+              onClick={handleUpgradeToPro}
+              title={!isSidebarOpen ? "Upgrade to Pro" : undefined}
+              className={[
+                "w-full flex items-center gap-3 rounded-xl transition-all",
+                isSidebarOpen ? "px-3 py-2.5" : "justify-center p-2.5",
+                "bg-gradient-to-r from-primary/20 to-secondary/20 border border-primary/30",
+                "text-primary hover:from-primary/30 hover:to-secondary/30",
+              ].join(" ")}
+            >
+              <Sparkles className="w-5 h-5 flex-shrink-0" />
+              {isSidebarOpen && (
+                <span className="truncate text-sm font-semibold">Upgrade to Pro</span>
+              )}
+            </button>
+          </div>
+        )}
       </aside>
     </>
   );
