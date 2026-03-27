@@ -86,7 +86,9 @@ function toCodePoints(input: string): string[] {
 function normalizeLatexInput(src: string): string {
   // Some model outputs contain over-escaped commands (e.g. \\circ instead of \circ).
   // Normalize only command-style sequences to avoid touching intended plain backslashes.
-  return src.replace(/\\\\(?=[A-Za-z])/g, '\\');
+  return src
+    .replace(/\\{2,}(?=[A-Za-z])/g, '\\')
+    .replace(/\\\$/g, '$');
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -194,10 +196,42 @@ type InlineSegment =
   | { type: 'italic'; value: string }
   | { type: 'math'; value: string; display: boolean };
 
+function autoWrapInlineMathForRender(text: string): string {
+  const mathDelimited = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\])/g;
+  const segments = text.split(mathDelimited);
+
+  return segments.map((segment) => {
+    if (!segment) return segment;
+    if (segment.startsWith('$') || segment.startsWith('\\(') || segment.startsWith('\\[')) return segment;
+
+    let next = segment;
+
+    // e.g. g = 9.8 \text{ m/s}^2
+    next = next.replace(
+      /\b[A-Za-zα-ωΑ-Ω]\s*=\s*\d+(?:\.\d+)?\s*(?:\\(?:text|mathrm)\{[^{}]+\})(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+))?/g,
+      (match) => `$${match.trim()}$`
+    );
+
+    // e.g. g = 9.8 m/s^2
+    next = next.replace(
+      /\b[A-Za-zα-ωΑ-Ω]\s*=\s*\d+(?:\.\d+)?\s*[A-Za-z]+(?:\/[A-Za-z]+)+(?:\^\d+)?\b/g,
+      (match) => `$${match.trim()}$`
+    );
+
+    // e.g. 20 \text{ m/s}
+    next = next.replace(
+      /\b\d+(?:\.\d+)?\s*(?:\\(?:text|mathrm)\{[^{}]+\})(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+))?/g,
+      (match) => `$${match.trim()}$`
+    );
+
+    return next;
+  }).join('');
+}
+
 function parseInline(text: string): InlineSegment[] {
   const segments: InlineSegment[] = [];
   // Order matters: $$, $, **, *, bare LaTeX
-  const regex = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]|\*\*(.+?)\*\*|\*([^*\n]+?)\*|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|\\[a-zA-Z]+(?:\{[^{}]*\})?)/g;
+  const regex = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]|\*\*(.+?)\*\*|\*([^*\n]+?)\*|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|\\[a-zA-Z]+(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
@@ -242,7 +276,7 @@ function stripOrphanMarkers(s: string): string {
 }
 
 function renderInline(text: string): React.ReactNode[] {
-  const segs = parseInline(text);
+  const segs = parseInline(autoWrapInlineMathForRender(text));
   const nodes: React.ReactNode[] = [];
   const mathDebug = isMathDebugEnabled();
 

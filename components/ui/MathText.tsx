@@ -17,11 +17,12 @@ interface Props {
  */
 export function MathText({ children, math = false, className }: Props) {
   if (!children) return null;
+  const normalizedInput = autoWrapInlineMathForRender(children);
 
   // Some model outputs mix narrative text with inline $...$ math even in "math" fields.
   // In that case, use mixed rendering instead of forcing one KaTeX block.
-  if (math && isMixedNarrativeMath(children)) {
-    const parts = splitMathSegments(children);
+  if (math && (isMixedNarrativeMath(normalizedInput) || isLikelyNarrativeMathWithoutDelimiters(normalizedInput))) {
+    const parts = splitMathSegments(normalizedInput);
     return (
       <span className={className} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
         {parts.map((part, i) =>
@@ -39,9 +40,9 @@ export function MathText({ children, math = false, className }: Props) {
     );
   }
 
-  if (math || looksLikePureLaTeX(children)) {
+  if (math || looksLikePureLaTeX(normalizedInput)) {
     // Strip outer $$ or $ delimiters the AI may include in mathContent fields
-    let src = children.trim();
+    let src = normalizedInput.trim();
     if (src.startsWith('$$') && src.endsWith('$$') && src.length > 4) {
       src = src.slice(2, -2).trim();
     } else if (src.startsWith('$') && src.endsWith('$') && src.length > 2) {
@@ -51,7 +52,7 @@ export function MathText({ children, math = false, className }: Props) {
     if (!looksLikeMathExpression(src)) {
       return (
         <span className={className} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-          {children}
+          {normalizedInput}
         </span>
       );
     }
@@ -65,7 +66,7 @@ export function MathText({ children, math = false, className }: Props) {
   }
 
   // Mixed text — split on $$...$$ and $...$ delimiters
-  const parts = splitMathSegments(children);
+  const parts = splitMathSegments(normalizedInput);
 
   return (
     <span className={className}>
@@ -96,7 +97,9 @@ function toCodePoints(input: string): string[] {
 function normalizeLatexInput(src: string): string {
   // Some model outputs contain over-escaped commands (e.g. \\circ instead of \circ).
   // Normalize only command-style sequences to avoid touching intended plain backslashes.
-  return src.replace(/\\\\(?=[A-Za-z])/g, '\\');
+  return src
+    .replace(/\\{2,}(?=[A-Za-z])/g, '\\')
+    .replace(/\\\$/g, '$');
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -171,7 +174,20 @@ function renderKaTeX(src: string, displayMode: boolean): string {
 
 /** Returns true if the whole string is bare LaTeX (no $ delimiters, but contains \ commands) */
 function looksLikePureLaTeX(s: string): boolean {
-  return /\\[a-zA-Z{]/.test(s) && !s.includes('$');
+  const t = s.trim();
+  if (!t || t.includes('$')) return false;
+  if (!/\\[a-zA-Z{]/.test(t)) return false;
+  if (containsNonMathUnicode(t)) return false;
+
+  // If there are many long natural-language words, this is likely prose with a math fragment.
+  const proseWordCount = (
+    t
+      .replace(/\\[a-zA-Z]+(?:\s*\{[^{}]*\})?/g, ' ')
+      .replace(/[0-9=+\-*/^_{}()[\],.;:<>|]/g, ' ')
+      .match(/[A-Za-z]{3,}/g) ?? []
+  ).length;
+
+  return proseWordCount <= 2;
 }
 
 function looksLikeMathExpression(s: string): boolean {
@@ -185,15 +201,61 @@ function looksLikeMathExpression(s: string): boolean {
 }
 
 function isMixedNarrativeMath(s: string): boolean {
-  const hasDelimitedMath = /\$\$[\s\S]+?\$\$/.test(s) || /\$[^$\n]+?\$/.test(s);
+  const hasDelimitedMath = /\$\$[\s\S]+?\$\$/.test(s)
+    || /\$[^$\n]+?\$/.test(s)
+    || /\\\[[\s\S]+?\\\]/.test(s)
+    || /\\\([\s\S]+?\\\)/.test(s);
   if (!hasDelimitedMath) return false;
 
   const outsideMath = s
     .replace(/\$\$[\s\S]+?\$\$/g, " ")
     .replace(/\$[^$\n]+?\$/g, " ")
+    .replace(/\\\[[\s\S]+?\\\]/g, " ")
+    .replace(/\\\([\s\S]+?\\\)/g, " ")
     .trim();
 
   return /[A-Za-z\u0600-\u06FF\u0900-\u097F\u1780-\u17FF\u4E00-\u9FFF\uAC00-\uD7AF\u3040-\u30FF]/.test(outsideMath);
+}
+
+function isLikelyNarrativeMathWithoutDelimiters(s: string): boolean {
+  const t = s.trim();
+  if (!t || /\$\$?/.test(t)) return false;
+
+  const hasMathSignal = /\\[a-zA-Z]+|[=+\-*/^_]|\d/.test(t);
+  if (!hasMathSignal) return false;
+
+  // Non-Latin scripts are frequently OCR narrative text with embedded math snippets.
+  if (containsNonMathUnicode(t)) return true;
+
+  // English/Latin prose with math commands, e.g. "initial speed 20 \mathrm{m/s}".
+  const proseWords = t.match(/[A-Za-z]{3,}/g) ?? [];
+  return proseWords.length >= 3;
+}
+
+function autoWrapInlineMathForRender(text: string): string {
+  const mathDelimited = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\])/g;
+  const segments = text.split(mathDelimited);
+
+  return segments.map((segment) => {
+    if (!segment) return segment;
+    if (segment.startsWith('$') || segment.startsWith('\\(') || segment.startsWith('\\[')) return segment;
+
+    let next = segment;
+
+    // e.g. 20 \mathrm{m/s}, g = 9.8 \mathrm{m/s}^2
+    next = next.replace(
+      /(?:\b[A-Za-zα-ωΑ-Ω]\s*=\s*)?\d+(?:\.\d+)?\s*(?:\\(?:text|mathrm)\{[^{}]+\})(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+))?/g,
+      (match) => `$${match.trim()}$`
+    );
+
+    // e.g. g = 9.8 m/s^2
+    next = next.replace(
+      /\b[A-Za-zα-ωΑ-Ω]\s*=\s*\d+(?:\.\d+)?\s*[A-Za-z]+(?:\/[A-Za-z]+)+(?:\^\d+)?\b/g,
+      (match) => `$${match.trim()}$`
+    );
+
+    return next;
+  }).join('');
 }
 
 type Segment = { type: 'text' | 'inline' | 'display'; value: string };
@@ -205,8 +267,8 @@ function stripOrphanDollars(s: string): string {
 function splitMathSegments(text: string): Segment[] {
   const segments: Segment[] = [];
   const mathDebug = isMathDebugEnabled();
-  // Match $$...$$ first (display), then $...$  (inline)
-  const regex = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$/g;
+  // Match $$...$$ / \[...\] first (display), then $...$ / \(...\) (inline)
+  const regex = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
@@ -218,6 +280,10 @@ function splitMathSegments(text: string): Segment[] {
       segments.push({ type: 'display', value: match[1] });
     } else if (match[2] !== undefined) {
       segments.push({ type: 'inline', value: match[2] });
+    } else if (match[3] !== undefined) {
+      segments.push({ type: 'display', value: match[3] });
+    } else if (match[4] !== undefined) {
+      segments.push({ type: 'inline', value: match[4] });
     }
     last = match.index + match[0].length;
   }

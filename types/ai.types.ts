@@ -28,12 +28,39 @@ export interface ChatSession {
 // ─── AI Response types ────────────────────────────────────────────────────────
 
 export interface AIResponse {
+  analysis_contract_version?: number;
   response?: string;
   explanation?: string;
   solution?: string;
   hint?: string;
   summary?: string;
   analysis?: string;
+  analysis_plain_text?: string;
+  analysis_math_segments?: Array<{
+    id: string;
+    placeholder: string;
+    token: string;
+    latexRaw: string;
+    latexNormalized: string;
+    display: boolean;
+    valid: boolean;
+    issues: string[];
+  }>;
+  analysis_structured?: {
+    text?: string;
+    plain_text?: string;
+    math_segments?: Array<{
+      id: string;
+      placeholder: string;
+      token: string;
+      latexRaw: string;
+      latexNormalized: string;
+      display: boolean;
+      valid: boolean;
+      issues: string[];
+    }>;
+    warnings?: string[];
+  };
   session_id?: string;
 }
 

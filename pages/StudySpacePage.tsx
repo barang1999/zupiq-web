@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   GitFork, History, BookOpen, Users, Archive,
   Plus, X, Loader2, Sparkles,
-  Bookmark, Zap, LogOut, HelpCircle, ArrowRight, Paperclip,
+  Bookmark, Zap, LogOut, HelpCircle, ArrowRight,
   ChevronLeft, ZoomIn, ZoomOut, Maximize2,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
@@ -13,6 +13,7 @@ import { MathText } from '../components/ui/MathText';
 import { RichText } from '../components/ui/RichText';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
+import { MAX_FILE_SIZE_MB, validateFile } from '../utils/validators';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,32 @@ interface NodeConversationMessage {
   role: 'user' | 'model';
   content: string;
   createdAt: string;
+}
+
+interface OcrMathSegment {
+  id: string;
+  placeholder: string;
+  token: string;
+  latexRaw: string;
+  latexNormalized: string;
+  display: boolean;
+  valid: boolean;
+  issues: string[];
+}
+
+interface AnalyzeImageStructuredPayload {
+  text?: string;
+  plain_text?: string;
+  math_segments?: OcrMathSegment[];
+  warnings?: string[];
+}
+
+interface AnalyzeImageResponse {
+  analysis_contract_version?: number;
+  analysis?: string;
+  analysis_plain_text?: string;
+  analysis_math_segments?: OcrMathSegment[];
+  analysis_structured?: AnalyzeImageStructuredPayload;
 }
 
 interface ProblemBreakdown {
@@ -187,6 +214,110 @@ function logPageMathDebug(source: string, text: string, meta: Record<string, unk
   });
 }
 
+function normalizeMathDelimiters(text: string): string {
+  return text
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_match, expr: string) => `$${expr.trim()}$`)
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_match, expr: string) => `$$${expr.trim()}$$`);
+}
+
+function normalizeUnicodeSuperscripts(text: string): string {
+  return text
+    .replace(/²/g, '^2')
+    .replace(/³/g, '^3')
+    .replace(/⁴/g, '^4')
+    .replace(/⁵/g, '^5');
+}
+
+function wrapInlineMathCandidates(text: string): string {
+  const mathDelimited = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
+  const segments = text.split(mathDelimited);
+
+  return segments.map((segment) => {
+    if (!segment) return segment;
+    if (segment.startsWith('$')) return segment;
+
+    let next = segment;
+
+    // e.g. 20 \text{ m/s}, g = 9.8 \text{ m/s}^2
+    next = next.replace(
+      /(?:\b[A-Za-z]\s*=\s*)?\d+(?:\.\d+)?\s*(?:\\(?:text|mathrm)\{[^{}]+\}|\\(?:frac|sqrt)\{[^{}]+\}(?:\{[^{}]+\})?|\\(?:times|div|cdot|pm|approx|leq|geq|neq|circ|degree))(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+|_\{[^{}]+\}|_[0-9A-Za-z]+))*/g,
+      (match) => `$${match.trim()}$`
+    );
+
+    // e.g. g = 9.8 m/s^2
+    next = next.replace(
+      /\b[A-Za-z]\s*=\s*\d+(?:\.\d+)?\s*[A-Za-z]+(?:\/[A-Za-z]+)+(?:\^\d+)?\b/g,
+      (match) => `$${match.trim()}$`
+    );
+
+    return next;
+  }).join('');
+}
+
+function looksLikeStandaloneMathLine(line: string): boolean {
+  const t = line.trim();
+  if (!t || t.includes('$')) return false;
+
+  const hasLatexCommand = /\\[a-zA-Z]+/.test(t);
+  const hasMathOperator = /[=<>+\-*/^_]|[≤≥≈≠±×÷]/.test(t);
+  const hasDigits = /\d/.test(t);
+  const hasSentenceEnding = /[.!?។៕]\s*$/.test(t);
+  const wordCount = (t.match(/[A-Za-z\u0600-\u06FF\u0900-\u097F\u1780-\u17FF\u4E00-\u9FFF\uAC00-\uD7AF\u3040-\u30FF]+/g) ?? []).length;
+
+  if (hasSentenceEnding && wordCount > 8) return false;
+  if (hasLatexCommand && (hasMathOperator || hasDigits) && wordCount <= 14) return true;
+  if (hasMathOperator && hasDigits && wordCount <= 6) return true;
+  return false;
+}
+
+function normalizeImageProblemText(input: string): string {
+  if (!input) return '';
+  const normalized = wrapInlineMathCandidates(normalizeMathDelimiters(
+    input
+      .replace(/\r\n?/g, '\n')
+      .replace(/\\{2,}(?=[A-Za-z])/g, '\\')
+      .replace(/\\\$/g, '$')
+      .replace(/[−–]/g, '-')
+      .replace(/[×]/g, '\\times ')
+      .replace(/[÷]/g, '\\div ')
+      .replace(/([A-Za-z])\s*\/\s*([A-Za-z])/g, '$1/$2')
+      .replace(/\^(\s+)(\d+)/g, '^$2')
+      .trim()
+  ));
+
+  const lines = normalized.split('\n').map((line) => {
+    const trimmed = normalizeUnicodeSuperscripts(line.trim());
+    if (!trimmed) return line;
+    if (looksLikeStandaloneMathLine(trimmed)) return `$${trimmed}$`;
+    return line.replace(line.trim(), trimmed);
+  });
+
+  return lines.join('\n').replace(/[ \t]{2,}/g, ' ').trim();
+}
+
+function buildDelimitedMathFromSegment(segment: OcrMathSegment): string {
+  const latex = (segment.latexNormalized || segment.latexRaw || '').trim();
+  if (!latex) return '';
+  return segment.display ? `$$${latex}$$` : `$${latex}$`;
+}
+
+function rebuildFromStructuredOcr(
+  plainText: string,
+  mathSegments: OcrMathSegment[]
+): string {
+  if (!plainText) return '';
+  if (!Array.isArray(mathSegments) || mathSegments.length === 0) return plainText;
+
+  let out = plainText;
+  mathSegments.forEach((segment, idx) => {
+    const placeholder = segment.placeholder || `[[EQ_${idx + 1}]]`;
+    const token = buildDelimitedMathFromSegment(segment);
+    if (!token) return;
+    out = out.split(placeholder).join(token);
+  });
+  return out;
+}
+
 function computeInitialPositions(nodes: BreakdownNode[], canvasW: number, canvasH: number): Record<string, NodePos> {
   const pos: Record<string, NodePos> = {};
   const roots    = nodes.filter(n => n.type === 'root');
@@ -269,6 +400,7 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   const [nodeConversations, setNodeConversations] = useState<Record<string, NodeConversationMessage[]>>({});
   const [showInput,      setShowInput]      = useState(false);
   const [problemInput,   setProblemInput]   = useState('');
+  const [isImageAnalyzing, setIsImageAnalyzing] = useState(false);
   const [composerInput,  setComposerInput]  = useState('');
   const [activeTab,      setActiveTab]      = useState<string>('map');
   const [sidebarOpen,    setSidebarOpen]    = useState(false);
@@ -281,6 +413,7 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   );
   const [debugEntries, setDebugEntries] = useState<StudyDebugEntry[]>([]);
   const isExpanded = sidebarOpen || sidebarHovered;
+  const lastOcrInsertRef = useRef<string | null>(null);
 
   useEffect(() => {
     const win = window as unknown as {
@@ -952,6 +1085,7 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   useEffect(() => { setComposerInput(''); setComposerError(null); }, [selectedNode?.id]);
 
   const handleSubmit = async () => {
+    if (isImageAnalyzing) return;
     if (!problemInput.trim()) return;
     const trimmedProblem = problemInput.trim();
     debugStudy('submit:start', {
@@ -1004,6 +1138,7 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       setSelectedNode(bd.nodes.find(n => n.type === 'root') ?? null);
       setShowInput(false);
       setProblemInput('');
+      lastOcrInsertRef.current = null;
       setComposerInput('');
       debugStudy('submit:success', {
         newSessionId,
@@ -1014,6 +1149,203 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       debugStudy('submit:error', { message: err?.message ?? 'unknown' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAttachProblemFile = async (file: File) => {
+    const lowerName = file.name.toLowerCase();
+    const hasMissingMimeFallback = !file.type && (lowerName.endsWith('.pdf') || lowerName.endsWith('.txt'));
+    const normalizedFile = hasMissingMimeFallback
+      ? new File(
+        [file],
+        file.name,
+        {
+          type: lowerName.endsWith('.pdf') ? 'application/pdf' : 'text/plain',
+          lastModified: file.lastModified,
+        }
+      )
+      : file;
+
+    const validationError = hasMissingMimeFallback
+      ? (normalizedFile.size > MAX_FILE_SIZE_MB * 1024 * 1024
+        ? `File must be smaller than ${MAX_FILE_SIZE_MB}MB`
+        : null)
+      : validateFile(normalizedFile);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    const isImageFile = normalizedFile.type.startsWith('image/');
+    const isPdfFile = normalizedFile.type === 'application/pdf';
+    const isTextFile = normalizedFile.type === 'text/plain';
+    if (!isImageFile && !isPdfFile && !isTextFile) {
+      setError('Unsupported file type. Please upload JPG, PNG, WebP, PDF, or TXT.');
+      return;
+    }
+
+    debugStudy('attachment:attach:start', {
+      name: normalizedFile.name,
+      type: normalizedFile.type,
+      size: normalizedFile.size,
+      usedMimeFallback: hasMissingMimeFallback,
+      category: isImageFile ? 'image' : isPdfFile ? 'pdf' : 'text',
+    });
+
+    const insertExtractedText = (rawExtractedText: string, uploadId: string | null, meta: Record<string, unknown> = {}) => {
+      const extractedText = normalizeImageProblemText(rawExtractedText);
+      logPageMathDebug('attachment:attach:analysis-raw', rawExtractedText, {
+        uploadId,
+        stage: 'raw',
+        ...meta,
+      });
+      logPageMathDebug('attachment:attach:analysis-normalized', extractedText, {
+        uploadId,
+        stage: 'normalized',
+      });
+
+      if (!extractedText) {
+        throw new Error('No readable problem text found in this attachment.');
+      }
+      if (rawExtractedText !== extractedText) {
+        debugStudy('attachment:attach:normalized', {
+          uploadId,
+          rawLength: rawExtractedText.length,
+          normalizedLength: extractedText.length,
+          rawPreview: debugClip(rawExtractedText, 260),
+          normalizedPreview: debugClip(extractedText, 260),
+        });
+      }
+
+      setProblemInput((prev) => {
+        const prevTrimmed = prev.trim();
+        const lastOcrInsert = (lastOcrInsertRef.current ?? '').trim();
+
+        let nextValue: string;
+        if (!prevTrimmed) {
+          nextValue = extractedText;
+        } else if (lastOcrInsert && (prevTrimmed === lastOcrInsert || prevTrimmed.endsWith(`\n\n${lastOcrInsert}`))) {
+          // Replace prior OCR insert to avoid stacking stale OCR results across retries.
+          const withoutLastOcr = prevTrimmed === lastOcrInsert
+            ? ''
+            : prevTrimmed.slice(0, -(`\n\n${lastOcrInsert}`).length).trim();
+          nextValue = withoutLastOcr ? `${withoutLastOcr}\n\n${extractedText}` : extractedText;
+        } else {
+          // Keep user-typed context and append extracted text.
+          nextValue = `${prevTrimmed}\n\n${extractedText}`;
+        }
+
+        lastOcrInsertRef.current = extractedText;
+        logPageMathDebug('attachment:attach:composer-insert', nextValue, {
+          uploadId,
+          replacedPreviousOcr: Boolean(
+            lastOcrInsert && (prevTrimmed === lastOcrInsert || prevTrimmed.endsWith(`\n\n${lastOcrInsert}`))
+          ),
+        });
+        return nextValue;
+      });
+      setShowInput(true);
+      debugStudy('attachment:attach:success', {
+        uploadId,
+        extractedLength: extractedText.length,
+        preview: debugClip(extractedText, 260),
+      });
+    };
+
+    setError(null);
+    setIsImageAnalyzing(true);
+    try {
+      if (isTextFile) {
+        const fileText = await normalizedFile.text();
+        insertExtractedText((fileText ?? '').trim(), null, {
+          source: 'local:text-file',
+        });
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', normalizedFile);
+      formData.append('context', 'ai_query');
+
+      const uploadResponse = await api.upload<{ uploads: Array<{ id: string }> }>('/api/uploads', formData);
+      const uploadId = uploadResponse.uploads?.[0]?.id;
+      if (!uploadId) {
+        throw new Error('Failed to upload file.');
+      }
+
+      const analyzePayload: Record<string, unknown> = {
+        upload_id: uploadId,
+        mode: 'problem_ocr',
+      };
+      if (isPdfFile) {
+        analyzePayload.question = 'Extract all readable problem text from this PDF as plain text. Preserve equations in KaTeX-friendly LaTeX with $...$ or $$...$$ delimiters.';
+      }
+
+      const analyzeImageResponse = await api.post<AnalyzeImageResponse>('/api/ai/analyze-image', analyzePayload);
+
+      const structured = analyzeImageResponse.analysis_structured;
+      const structuredText = (structured?.text ?? '').trim();
+      const structuredPlainText = (structured?.plain_text ?? analyzeImageResponse.analysis_plain_text ?? '').trim();
+      const structuredMathSegments = (
+        structured?.math_segments
+        ?? analyzeImageResponse.analysis_math_segments
+        ?? []
+      );
+      const reconstructedStructuredText = rebuildFromStructuredOcr(structuredPlainText, structuredMathSegments).trim();
+      console.log('[StudySpace OCR API response shape]', {
+        uploadId,
+        mimeType: normalizedFile.type,
+        analysisContractVersion: analyzeImageResponse.analysis_contract_version ?? null,
+        responseKeys: Object.keys(analyzeImageResponse ?? {}),
+        hasAnalysis: typeof analyzeImageResponse.analysis === 'string',
+        hasStructured: Boolean(structured),
+        hasStructuredText: Boolean(structuredText),
+        hasStructuredPlainText: Boolean(structuredPlainText),
+        structuredMathSegments: structuredMathSegments.length,
+        structuredWarnings: structured?.warnings ?? [],
+        analysisPreview: debugClip((analyzeImageResponse.analysis ?? '').trim(), 200),
+        structuredTextPreview: debugClip(structuredText, 200),
+        structuredPlainPreview: debugClip(structuredPlainText, 200),
+      });
+      if (!structured && (analyzeImageResponse.analysis_plain_text || analyzeImageResponse.analysis_math_segments?.length)) {
+        console.warn('[StudySpace OCR API] partial structured payload received (no analysis_structured object)', {
+          uploadId,
+          analysisPlainTextLength: (analyzeImageResponse.analysis_plain_text ?? '').length,
+          analysisMathSegments: analyzeImageResponse.analysis_math_segments?.length ?? 0,
+        });
+      }
+      const rawExtractedText = (
+        structuredText
+        || reconstructedStructuredText
+        || (analyzeImageResponse.analysis ?? '').trim()
+      );
+
+      if (structuredMathSegments.length) {
+        console.log('[StudySpace structured OCR]', {
+          uploadId,
+          structuredMathSegments: structuredMathSegments.length,
+          invalidMathSegments: structuredMathSegments.filter((segment) => !segment.valid).map((segment) => ({
+            id: segment.id,
+            issues: segment.issues,
+            latexRaw: segment.latexRaw,
+            latexNormalized: segment.latexNormalized,
+          })),
+          structuredWarnings: structured?.warnings ?? [],
+        });
+      }
+
+      insertExtractedText(rawExtractedText, uploadId, {
+        source: isPdfFile ? 'upload:pdf' : 'upload:image',
+        hasStructured: Boolean(structured),
+        structuredMathSegments: structuredMathSegments.length,
+        structuredWarnings: structured?.warnings ?? [],
+      });
+    } catch (err: any) {
+      const message = err?.message ?? 'Failed to analyze attachment.';
+      setError(message);
+      debugStudy('attachment:attach:error', { message });
+    } finally {
+      setIsImageAnalyzing(false);
     }
   };
 
@@ -1435,19 +1767,6 @@ Do not repeat content already given.`;
 
           {/* Canvas area */}
           <div className="flex-1 relative overflow-hidden">
-          <ProblemComposer
-            open={showInput}
-            value={problemInput}
-            loading={loading}
-            error={error}
-            onChange={(next) => {
-              setProblemInput(next);
-              if (error) setError(null);
-            }}
-            onSubmit={handleSubmit}
-            onClose={() => setShowInput(false)}
-          />
-
           {/* Zoom controls overlay */}
           <div className="absolute bottom-6 right-6 z-30 flex flex-col gap-1.5">
             <button
@@ -1944,6 +2263,24 @@ Do not repeat content already given.`;
           </div></>}
         </motion.aside>
       </motion.main>
+
+      <ProblemComposer
+        open={showInput}
+        value={problemInput}
+        loading={loading}
+        imageLoading={isImageAnalyzing}
+        error={error}
+        onChange={(next) => {
+          if (lastOcrInsertRef.current && next.trim() !== (lastOcrInsertRef.current ?? '').trim()) {
+            lastOcrInsertRef.current = null;
+          }
+          setProblemInput(next);
+          if (error) setError(null);
+        }}
+        onSubmit={handleSubmit}
+        onClose={() => setShowInput(false)}
+        onAttachFile={handleAttachProblemFile}
+      />
 
       {showDebugOverlay && (
         <div className="fixed left-2 right-2 bottom-16 sm:left-auto sm:right-4 sm:w-[520px] z-[70] bg-black/85 border border-white/20 rounded-xl p-3 text-[11px] text-white backdrop-blur-md">
