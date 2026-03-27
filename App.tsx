@@ -880,6 +880,26 @@ export default function App() {
     );
   }
 
+  if (page === "plan") {
+    return (
+      <>
+        <PlanPage
+          user={currentUser}
+          onNavigateStudy={() => setPage("study")}
+          onNavigateHistory={() => setShowAuth(true)}
+          onNavigateFlashcards={() => setShowAuth(true)}
+          onNavigateSettings={() => setShowAuth(true)}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
+          onRequireAuth={() => setShowAuth(true)}
+        />
+        <AnimatePresence>
+          {showAuth && <Auth onClose={() => setShowAuth(false)} />}
+        </AnimatePresence>
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-on-surface selection:bg-primary selection:text-on-primary">
       {/* Background Blobs */}

@@ -35,6 +35,7 @@ interface Props {
   onNavigateSettings?: () => void;
   showInstallAppButton?: boolean;
   onInstallApp?: () => void;
+  onRequireAuth?: () => void;
 }
 
 interface PlanMarketingCopy {
@@ -81,7 +82,9 @@ export default function PlanPage({
   onNavigateSettings,
   showInstallAppButton,
   onInstallApp,
+  onRequireAuth,
 }: Props) {
+  const isAuthenticated = Boolean(user?.id || user?.email);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHovered, setSidebarHovered] = useState(false);
   const [annualBilling, setAnnualBilling] = useState(false);
@@ -97,13 +100,16 @@ export default function PlanPage({
   const loadBilling = async () => {
     setPricingLoading(true);
     try {
-      const [catalogRes, subscriptionRes] = await Promise.all([
-        getBillingCatalog(),
-        getBillingSubscription(),
-      ]);
+      const catalogRes = await getBillingCatalog();
       setCatalog(catalogRes.plans);
-      setAccessState(subscriptionRes.access);
-      setUsageState(subscriptionRes.usage);
+      if (isAuthenticated) {
+        const subscriptionRes = await getBillingSubscription();
+        setAccessState(subscriptionRes.access);
+        setUsageState(subscriptionRes.usage);
+      } else {
+        setAccessState(null);
+        setUsageState(null);
+      }
       setPricingError(null);
     } catch (err: any) {
       setPricingError(err?.message ?? 'Failed to load subscription data');
@@ -114,7 +120,7 @@ export default function PlanPage({
 
   useEffect(() => {
     void loadBilling();
-  }, []);
+  }, [isAuthenticated]);
 
   const supportsAnnualBilling = useMemo(
     () => catalog.some((tier) => typeof tier.pricing.annual === 'number'),
@@ -141,6 +147,10 @@ export default function PlanPage({
   );
 
   const handlePlanSelection = async (planKey: PlanKey) => {
+    if (!isAuthenticated) {
+      onRequireAuth?.();
+      return;
+    }
     if (!accessState) return;
     if (accessState.effectivePlanKey === planKey) return;
 
@@ -210,7 +220,7 @@ export default function PlanPage({
       <AppHeader
         user={user}
         onSettingsClick={onNavigateSettings}
-        onSignOut={handleSignOut}
+        onSignOut={isAuthenticated ? handleSignOut : undefined}
         onNavigateStudy={onNavigateStudy}
         onNavigateHistory={onNavigateHistory}
         onNavigateFlashcards={onNavigateFlashcards}
@@ -275,13 +285,15 @@ export default function PlanPage({
               <HelpCircle className="w-4 h-4 shrink-0" />
               {isExpanded && <span className="text-xs whitespace-nowrap">Support</span>}
             </a>
-            <button
-              onClick={handleSignOut}
-              className={`flex items-center gap-3 text-on-surface-variant hover:text-error transition-colors ${!isExpanded ? 'justify-center p-2 rounded-xl hover:bg-surface-container' : 'px-1'}`}
-            >
-              <LogOut className="w-4 h-4 shrink-0" />
-              {isExpanded && <span className="text-xs whitespace-nowrap">Sign Out</span>}
-            </button>
+            {isAuthenticated && (
+              <button
+                onClick={handleSignOut}
+                className={`flex items-center gap-3 text-on-surface-variant hover:text-error transition-colors ${!isExpanded ? 'justify-center p-2 rounded-xl hover:bg-surface-container' : 'px-1'}`}
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                {isExpanded && <span className="text-xs whitespace-nowrap">Sign Out</span>}
+              </button>
+            )}
           </div>
         </div>
       </motion.aside>
@@ -331,7 +343,7 @@ export default function PlanPage({
               <p className="mt-8 text-sm text-on-surface-variant relative z-10">Monthly pricing is currently active.</p>
             )}
 
-            {accessState && (
+            {isAuthenticated && accessState && (
               <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-surface-container-highest/70 border border-outline-variant/20 px-4 py-2 text-xs relative z-10">
                 <span className="text-on-surface-variant">Current plan:</span>
                 <span className="font-bold text-primary">{accessState.effectivePlan.displayName}</span>
@@ -358,7 +370,9 @@ export default function PlanPage({
               const isCurrent = accessState?.effectivePlanKey === tier.planKey;
               const isActioning = actionPlanKey === tier.planKey;
               const isDowngradeToFree = tier.planKey === 'free' && accessState?.effectivePlanKey !== 'free';
-              const ctaLabel = isCurrent
+              const ctaLabel = !isAuthenticated
+                ? (tier.planKey === 'free' ? 'Get Started Free' : `Choose ${tier.displayName}`)
+                : isCurrent
                 ? (accessState?.subscription.cancelAtPeriodEnd ? 'Current (Cancel Scheduled)' : 'Current Plan')
                 : isDowngradeToFree
                   ? 'Downgrade to Scholar'
@@ -394,7 +408,7 @@ export default function PlanPage({
                 </ul>
                 <button
                   onClick={() => handlePlanSelection(tier.planKey as PlanKey)}
-                  disabled={isCurrent || isActioning}
+                  disabled={(isAuthenticated && isCurrent) || isActioning}
                   className={`w-full py-3.5 rounded-full font-bold transition-transform active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed ${
                     marketing.highlight
                       ? 'bg-gradient-to-r from-primary to-secondary text-on-primary'
