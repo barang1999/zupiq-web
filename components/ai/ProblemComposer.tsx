@@ -216,8 +216,10 @@ export function ProblemComposer({
   }, [open, showRenderedPreview, value.length]);
 
   const triggerSubmit = (source: 'button' | 'enter-key') => {
+    if (loading || imageLoading || !value.trim()) return;
     logComposerMathDebug(`composer:submit:${source}`, value, { force: true });
     onSubmit();
+    onClose();
   };
 
   const handleTextChange = (nextValue: string, source: 'desktop' | 'mobile') => {
@@ -295,15 +297,23 @@ export function ProblemComposer({
             onChange={(e) => handleFileChange(e, 'camera')}
           />
 
-          <div className="fixed inset-0 z-[91] px-3 sm:px-6 pt-20 sm:pt-24 pb-4 sm:pb-6 flex items-end justify-center pointer-events-none">
-            <motion.section
-              initial={{ opacity: 0, y: 18, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 18, scale: 0.98 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              onClick={(e) => e.stopPropagation()}
-              className={`pointer-events-auto relative overflow-hidden rounded-[24px] sm:rounded-[28px] w-full max-w-5xl overflow-y-auto bg-surface-container-highest/80 backdrop-blur-2xl border border-primary/40 shadow-[0_0_20px_rgba(161,250,255,0.35),inset_0_0_2px_rgba(161,250,255,0.45)] ${modalHeightClass}`}
-            >
+          <div className="fixed inset-0 z-[91] pointer-events-none">
+            <button
+              type="button"
+              aria-label="Close composer"
+              onClick={onClose}
+              className="absolute inset-0 pointer-events-auto cursor-default"
+            />
+
+            <div className="absolute inset-0 px-3 sm:px-6 pt-20 sm:pt-24 pb-4 sm:pb-6 flex items-end justify-center pointer-events-none">
+              <motion.section
+                initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 18, scale: 0.98 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                onClick={(e) => e.stopPropagation()}
+                className={`pointer-events-auto relative overflow-hidden rounded-[24px] sm:rounded-[28px] w-full max-w-5xl overflow-y-auto bg-surface-container-highest/80 backdrop-blur-2xl border border-primary/40 shadow-[0_0_20px_rgba(161,250,255,0.35),inset_0_0_2px_rgba(161,250,255,0.45)] ${modalHeightClass}`}
+              >
               <div className={`px-4 sm:px-8 ${contentPaddingClass}`}>
                 <div className={`flex items-start justify-between gap-3 ${headerSlotClass}`}>
                   <div className="min-w-0 flex-1">
@@ -462,7 +472,8 @@ export function ProblemComposer({
               </div>
 
               <div className="absolute top-0 right-0 w-36 h-36 bg-tertiary/10 blur-3xl pointer-events-none" />
-            </motion.section>
+              </motion.section>
+            </div>
           </div>
         </>
       )}
