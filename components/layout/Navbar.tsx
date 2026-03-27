@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Menu, X, Brain, LogOut, User as UserIcon } from "lucide-react";
+import { Menu, X, Brain, LogOut, User as UserIcon, Play } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Avatar } from "../ui/Avatar";
 import { useAuth } from "../../hooks/useAuth";
 import { useAppStore } from "../../store/app.store";
 import { NAV_ITEMS } from "../../constants/routes";
+import type { AppPage } from "../../constants/routes";
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -22,6 +23,20 @@ export function Navbar() {
   const navLinks = NAV_ITEMS.filter(
     (item) => !item.requiresAuth || isAuthenticated
   );
+
+  const handleNavigate = (page: AppPage, closeMobile = false) => {
+    navigateTo(page);
+
+    // Keep browser URL in sync for the current shell router.
+    if (page === "flashcards" && window.location.pathname !== "/flashcards") {
+      window.history.pushState({ page: "flashcards" }, "", "/flashcards");
+      window.dispatchEvent(new PopStateEvent("popstate", { state: { page: "flashcards" } }));
+    }
+
+    if (closeMobile) {
+      setIsMobileMenuOpen(false);
+    }
+  };
 
   return (
     <nav
@@ -47,7 +62,7 @@ export function Navbar() {
             {navLinks.slice(0, 5).map((item) => (
               <button
                 key={item.page}
-                onClick={() => navigateTo(item.page)}
+                onClick={() => handleNavigate(item.page)}
                 className={[
                   "transition-colors text-sm",
                   currentPage === item.page
@@ -65,6 +80,14 @@ export function Navbar() {
         <div className="hidden md:flex gap-3 items-center">
           {isAuthenticated ? (
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleNavigate("flashcards")}
+                className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 border border-primary/30 text-primary px-3 py-1.5 text-xs font-semibold hover:bg-primary/25 transition-colors"
+                title="Play Flashcards"
+              >
+                <Play className="w-3.5 h-3.5" />
+                Play
+              </button>
               <button
                 onClick={() => navigateTo("profile")}
                 className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors"
@@ -111,14 +134,20 @@ export function Navbar() {
           animate={{ opacity: 1, y: 0 }}
           className="md:hidden absolute top-full left-0 w-full bg-surface-container-highest border-t border-white/5 p-6 flex flex-col gap-4"
         >
+          {isAuthenticated ? (
+            <button
+              onClick={() => handleNavigate("flashcards", true)}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary font-bold py-2.5"
+            >
+              <Play className="w-4 h-4" />
+              Play Flashcards
+            </button>
+          ) : null}
           {isAuthenticated
             ? navLinks.map((item) => (
                 <button
                   key={item.page}
-                  onClick={() => {
-                    navigateTo(item.page);
-                    setIsMobileMenuOpen(false);
-                  }}
+                  onClick={() => handleNavigate(item.page, true)}
                   className="text-on-surface-variant hover:text-on-surface text-left transition-colors py-1"
                 >
                   {item.label}

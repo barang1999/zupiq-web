@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Neural Study - Flashcard Session</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface": "#dee5ff",
+              "on-error-container": "#ffa8a3",
+              "on-surface-variant": "#a3aac4",
+              "on-error": "#490006",
+              "secondary-fixed": "#ffbdf3",
+              "secondary": "#ff51fa",
+              "on-secondary": "#400040",
+              "surface-container-high": "#141f38",
+              "inverse-on-surface": "#4d556b",
+              "primary": "#a1faff",
+              "on-primary-fixed-variant": "#006266",
+              "on-primary-container": "#00575b",
+              "on-primary": "#006165",
+              "on-secondary-fixed-variant": "#920091",
+              "on-secondary-fixed": "#620061",
+              "surface-dim": "#060e20",
+              "background": "#060e20",
+              "on-tertiary-container": "#4a5e00",
+              "on-tertiary-fixed": "#3a4a00",
+              "surface-container-highest": "#192540",
+              "surface-tint": "#a1faff",
+              "secondary-container": "#a900a9",
+              "error": "#ff716c",
+              "on-secondary-container": "#fff5f9",
+              "primary-fixed-dim": "#00e5ee",
+              "error-dim": "#d7383b",
+              "surface-container": "#0f1930",
+              "outline-variant": "#40485d",
+              "tertiary-container": "#cafd00",
+              "on-tertiary": "#516700",
+              "inverse-surface": "#faf8ff",
+              "tertiary-fixed-dim": "#beee00",
+              "on-background": "#dee5ff",
+              "error-container": "#9f0519",
+              "tertiary": "#f3ffca",
+              "on-primary-fixed": "#004346",
+              "secondary-dim": "#ff51fa",
+              "inverse-primary": "#006a6e",
+              "surface": "#060e20",
+              "tertiary-dim": "#beee00",
+              "surface-bright": "#1f2b49",
+              "primary-dim": "#00e5ee",
+              "primary-container": "#00f4fe",
+              "on-tertiary-fixed-variant": "#526900",
+              "surface-container-lowest": "#000000",
+              "surface-variant": "#192540",
+              "secondary-fixed-dim": "#ffa6f3",
+              "primary-fixed": "#00f4fe",
+              "tertiary-fixed": "#cafd00",
+              "outline": "#6d758c",
+              "surface-container-low": "#091328"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .glass-card {
+        background: rgba(25, 37, 64, 0.6);
+        backdrop-filter: blur(20px);
+      }
+      .glow-orb {
+        filter: blur(80px);
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface-dim text-on-surface font-body min-h-screen selection:bg-primary/30 overflow-x-hidden">
+<!-- Background Accents -->
+<div class="fixed top-[-10%] left-[-10%] w-[60%] h-[40%] bg-secondary-container/10 glow-orb rounded-full z-0"></div>
+<div class="fixed bottom-[-5%] right-[-10%] w-[50%] h-[50%] bg-primary/5 glow-orb rounded-full z-0"></div>
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#192540]/60 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)] flex justify-between items-center px-6 h-16 w-full">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#00F5FF]" data-icon="analytics">analytics</span>
+<h1 class="font-['Space_Grotesk'] tracking-tight text-[#dee5ff] text-xl font-bold">Neural Study</h1>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 bg-surface-container-highest/50 px-3 py-1 rounded-full border border-outline-variant/20">
+<span class="material-symbols-outlined text-sm text-secondary" data-icon="timer">timer</span>
+<span class="text-xs font-mono font-medium tracking-tighter">12:45</span>
+</div>
+<span class="material-symbols-outlined text-[#a3aac4] hover:bg-[#192540] transition-colors active:scale-95 transition-transform p-2 rounded-full cursor-pointer" data-icon="settings">settings</span>
+</div>
+</header>
+<main class="relative z-10 pt-24 pb-32 px-6 flex flex-col items-center min-h-screen">
+<!-- Progress Indicator Section -->
+<div class="w-full max-w-md mb-8">
+<div class="flex justify-between items-end mb-3 px-1">
+<span class="font-headline text-2xl font-bold tracking-tight text-primary">Quantum Recall</span>
+<span class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant">14 / 42 Cards</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-secondary w-1/3 rounded-full shadow-[0_0_15px_rgba(161,250,255,0.4)]"></div>
+</div>
+</div>
+<!-- Main Flashcard Container -->
+<div class="w-full max-w-md perspective-1000">
+<div class="glass-card relative rounded-[40px] p-8 aspect-[4/5] flex flex-col items-center justify-between border border-outline-variant/10 shadow-2xl">
+<!-- AI Glow Corner -->
+<div class="absolute top-0 right-0 w-32 h-32 bg-radial-gradient from-tertiary/10 to-transparent rounded-tr-[40px] pointer-events-none"></div>
+<div class="w-full">
+<div class="flex items-center gap-2 mb-6">
+<span class="text-[10px] font-bold uppercase tracking-widest text-tertiary bg-tertiary/10 px-2 py-1 rounded">Physics</span>
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Hard Complexity</span>
+</div>
+<h2 class="font-headline text-3xl md:text-4xl font-bold text-on-surface leading-tight tracking-tight">
+                        What is the EPR Paradox?
+                    </h2>
+</div>
+<!-- Floating AI Orb Decorative -->
+<div class="relative w-16 h-16 mb-4">
+<div class="absolute inset-0 bg-primary-container rounded-full opacity-20 animate-pulse"></div>
+<div class="absolute inset-2 bg-primary rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(0,244,254,0.5)]">
+<span class="material-symbols-outlined text-on-primary text-2xl" data-icon="psychology">psychology</span>
+</div>
+</div>
+<button class="w-full py-5 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary font-headline font-bold text-lg shadow-[0_10px_30px_rgba(255,81,250,0.3)] active:scale-95 transition-transform">
+                    Show Answer
+                </button>
+</div>
+</div>
+<!-- Response Actions -->
+<div class="w-full max-w-md mt-10 grid grid-cols-3 gap-3">
+<!-- Hard -->
+<button class="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-3xl bg-surface-container-high border border-outline-variant/10 hover:bg-surface-container-highest transition-all active:scale-95">
+<span class="material-symbols-outlined text-error" data-icon="history_toggle_off">history_toggle_off</span>
+<div class="text-center">
+<span class="block font-headline font-bold text-sm text-on-surface">Hard</span>
+<span class="block font-label text-[9px] text-on-surface-variant uppercase tracking-tighter">Review in 1m</span>
+</div>
+</button>
+<!-- Good -->
+<button class="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-3xl bg-surface-container-high border border-outline-variant/10 hover:bg-surface-container-highest transition-all active:scale-95">
+<span class="material-symbols-outlined text-primary" data-icon="check_circle">check_circle</span>
+<div class="text-center">
+<span class="block font-headline font-bold text-sm text-on-surface">Good</span>
+<span class="block font-label text-[9px] text-on-surface-variant uppercase tracking-tighter">Review in 1d</span>
+</div>
+</button>
+<!-- Easy -->
+<button class="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-3xl bg-surface-container-high border border-outline-variant/10 hover:bg-surface-container-highest transition-all active:scale-95">
+<span class="material-symbols-outlined text-tertiary" data-icon="bolt">bolt</span>
+<div class="text-center">
+<span class="block font-headline font-bold text-sm text-on-surface">Too Easy</span>
+<span class="block font-label text-[9px] text-on-surface-variant uppercase tracking-tighter">Review in 4d</span>
+</div>
+</button>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 rounded-t-[32px] bg-[#192540]/60 backdrop-blur-xl shadow-[0_-10px_30px_rgba(0,0,0,0.3)] flex justify-around items-center w-full px-4 pb-4 pt-2">
+<div class="flex flex-col items-center justify-center text-[#a3aac4] p-3 hover:text-[#dee5ff] transition-all active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined mb-1" data-icon="layers">layers</span>
+<span class="font-['Inter'] text-[10px] font-medium uppercase tracking-widest">Decks</span>
+</div>
+<div class="flex flex-col items-center justify-center bg-gradient-to-tr from-[#a1faff] to-[#ff51fa] text-[#006165] rounded-full p-3 active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="school" data-weight="fill" style="font-variation-settings: 'FILL' 1;">school</span>
+<span class="hidden font-['Inter'] text-[10px] font-medium uppercase tracking-widest">Study</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#a3aac4] p-3 hover:text-[#dee5ff] transition-all active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined mb-1" data-icon="trending_up">trending_up</span>
+<span class="font-['Inter'] text-[10px] font-medium uppercase tracking-widest">Progress</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#a3aac4] p-3 hover:text-[#dee5ff] transition-all active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined mb-1" data-icon="account_circle">account_circle</span>
+<span class="font-['Inter'] text-[10px] font-medium uppercase tracking-widest">Profile</span>
+</div>
+</nav>
+</body></html>

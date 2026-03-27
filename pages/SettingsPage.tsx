@@ -16,6 +16,10 @@ interface Props {
   onUserUpdate: (user: any) => void;
   onSignOut: () => void;
   onBack: () => void;
+  onNavigateHistory?: () => void;
+  onNavigateFlashcards?: () => void;
+  showInstallAppButton?: boolean;
+  onInstallApp?: () => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -94,7 +98,16 @@ function Toggle({ checked, onChange, color = 'bg-primary' }: {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SettingsPage({ user, onUserUpdate, onSignOut, onBack }: Props) {
+export function SettingsPage({
+  user,
+  onUserUpdate,
+  onSignOut,
+  onBack,
+  onNavigateHistory,
+  onNavigateFlashcards,
+  showInstallAppButton,
+  onInstallApp,
+}: Props) {
   const [activeSection, setActiveSection] = useState('account');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -208,7 +221,16 @@ export function SettingsPage({ user, onUserUpdate, onSignOut, onBack }: Props) {
       <div className="fixed top-1/4 -right-20 w-96 h-96 bg-secondary-container/10 blur-[120px] rounded-full pointer-events-none -z-10" />
       <div className="fixed bottom-1/4 -left-20 w-96 h-96 bg-primary-container/10 blur-[120px] rounded-full pointer-events-none -z-10" />
 
-      <AppHeader user={user} />
+      <AppHeader
+        user={user}
+        onSignOut={onSignOut}
+        onNavigateStudy={onBack}
+        onNavigateHistory={onNavigateHistory}
+        onNavigateFlashcards={onNavigateFlashcards}
+        activeMobileMenu="settings"
+        showInstallAppButton={showInstallAppButton}
+        onInstallAppClick={onInstallApp}
+      />
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <aside className="fixed left-0 top-14 h-[calc(100vh-56px)] w-64 bg-surface-container-low hidden sm:flex flex-col py-8 px-4 gap-2">

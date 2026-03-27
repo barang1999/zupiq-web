@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Layers, BookOpen, Trash2, Play, Brain } from "lucide-react";
 import { motion } from "motion/react";
 import type { FlashcardDeck } from "../../types/flashcard.types";
@@ -96,6 +96,40 @@ export function FlashcardDeckGrid({
   onDelete,
   onCreateNew,
 }: FlashcardDeckGridProps) {
+  const [selectedSubject, setSelectedSubject] = useState<string>("all");
+
+  const subjects = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        decks
+          .map((deck) => deck.subject?.trim())
+          .filter((subject): subject is string => Boolean(subject))
+      )
+    );
+    return values.sort((a, b) => a.localeCompare(b));
+  }, [decks]);
+
+  useEffect(() => {
+    if (selectedSubject === "all") return;
+    if (!subjects.includes(selectedSubject)) {
+      setSelectedSubject("all");
+    }
+  }, [selectedSubject, subjects]);
+
+  const filteredDecks = useMemo(() => {
+    if (selectedSubject === "all") return decks;
+    return decks.filter((deck) => (deck.subject?.trim() ?? "") === selectedSubject);
+  }, [decks, selectedSubject]);
+
+  const subjectCounts = useMemo(
+    () =>
+      subjects.reduce<Record<string, number>>((acc, subject) => {
+        acc[subject] = decks.filter((deck) => (deck.subject?.trim() ?? "") === subject).length;
+        return acc;
+      }, {}),
+    [decks, subjects]
+  );
+
   if (decks.length === 0) {
     return (
       <div className="text-center py-16">
@@ -114,15 +148,80 @@ export function FlashcardDeckGrid({
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {decks.map((deck) => (
-        <FlashcardDeckCard
-          key={deck.id}
-          deck={deck}
-          onStudy={onStudy}
-          onDelete={onDelete}
-        />
-      ))}
+    <div className="space-y-4">
+      {subjects.length > 0 && (
+        <>
+          <div className="sm:hidden">
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-medium uppercase tracking-[0.12em] text-on-surface-variant">
+                Subject
+              </span>
+              <select
+                value={selectedSubject}
+                onChange={(event) => setSelectedSubject(event.target.value)}
+                className="h-10 rounded-xl border border-outline-variant/40 bg-surface-container-high px-3 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/35"
+              >
+                <option value="all">All Subjects ({decks.length})</option>
+                {subjects.map((subject) => (
+                  <option key={subject} value={subject}>
+                    {subject} ({subjectCounts[subject] ?? 0})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="hidden sm:flex sm:flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedSubject("all")}
+              className={[
+                "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
+                selectedSubject === "all"
+                  ? "bg-primary/20 text-primary border border-primary/40"
+                  : "bg-surface-container-high text-on-surface-variant hover:text-on-surface",
+              ].join(" ")}
+            >
+              All Subjects ({decks.length})
+            </button>
+            {subjects.map((subject) => {
+              const isActive = selectedSubject === subject;
+              return (
+                <button
+                  key={subject}
+                  type="button"
+                  onClick={() => setSelectedSubject(subject)}
+                  className={[
+                    "px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
+                    isActive
+                      ? "bg-primary/20 text-primary border border-primary/40"
+                      : "bg-surface-container-high text-on-surface-variant hover:text-on-surface",
+                  ].join(" ")}
+                >
+                  {subject} ({subjectCounts[subject] ?? 0})
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {filteredDecks.length === 0 ? (
+        <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-high/30 p-6 text-sm text-on-surface-variant">
+          No decks found for <span className="text-on-surface font-medium">{selectedSubject}</span>.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredDecks.map((deck) => (
+            <FlashcardDeckCard
+              key={deck.id}
+              deck={deck}
+              onStudy={onStudy}
+              onDelete={onDelete}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

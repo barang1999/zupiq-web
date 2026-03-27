@@ -33,8 +33,10 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
+import FlashcardSubjectSelectionPage from "./pages/FlashcardSubjectSelectionPage";
+import FlashcardSessionPage from "./pages/FlashcardSessionPage";
 
-type AppShellPage = 'study' | 'history' | 'settings' | 'privacy' | 'terms';
+type AppShellPage = 'study' | 'history' | 'flashcards' | 'flashcards-session' | 'settings' | 'privacy' | 'terms';
 type IOSNavigator = Navigator & { standalone?: boolean };
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -540,23 +542,27 @@ const MobileBottomNav = ({
   page: AppShellPage;
   onNavigate: (next: AppShellPage) => void;
 }) => {
+  const activeItemForPage = (
+    currentPage: AppShellPage
+  ): "study" | "history" | "archive" | "play" => {
+    if (currentPage === "history") return "history";
+    if (currentPage === "flashcards" || currentPage === "flashcards-session") return "play";
+    return "study";
+  };
+
   const [activeItem, setActiveItem] = useState<'study' | 'history' | 'archive' | 'play'>(
-    page === 'history' ? 'history' : 'study'
+    activeItemForPage(page)
   );
 
   useEffect(() => {
-    if (page === 'history') {
-      setActiveItem('history');
-    } else if (page === 'study' && activeItem === 'history') {
-      setActiveItem('study');
-    }
-  }, [page, activeItem]);
+    setActiveItem(activeItemForPage(page));
+  }, [page]);
 
   const navItems = [
     { id: 'study' as const, page: 'study' as const, label: 'Study', Icon: GitFork },
     { id: 'history' as const, page: 'history' as const, label: 'History', Icon: HistoryIcon },
     { id: 'archive' as const, page: 'study' as const, label: 'Archive', Icon: ArchiveIcon },
-    { id: 'play' as const, page: 'study' as const, label: 'Play', Icon: Play },
+    { id: 'play' as const, page: 'flashcards' as const, label: 'Play', Icon: Play },
   ];
 
   return (
@@ -602,6 +608,8 @@ export default function App() {
 
   const pathToPage = (path: string): AppShellPage => {
     if (path === '/history') return 'history';
+    if (path === '/flashcards/session') return 'flashcards-session';
+    if (path === '/flashcards') return 'flashcards';
     if (path === '/settings') return 'settings';
     if (path === '/privacy') return 'privacy';
     if (path === '/terms') return 'terms';
@@ -609,10 +617,29 @@ export default function App() {
   };
 
   const [page, setPageState] = useState<AppShellPage>(() => pathToPage(window.location.pathname));
+  const [flashcardSubject, setFlashcardSubject] = useState<string | null>(() => {
+    const value = new URLSearchParams(window.location.search).get("subject");
+    return value?.trim() ? value : null;
+  });
   const [initialBreakdown, setInitialBreakdown] = useState<any>(null);
 
-  const setPage = (next: AppShellPage) => {
-    const url = next === 'study' ? '/' : `/${next}`;
+  const setPage = (next: AppShellPage, options?: { subject?: string | null }) => {
+    let url: string;
+    if (next === "study") {
+      url = "/";
+    } else if (next === "flashcards") {
+      url = "/flashcards";
+    } else if (next === "flashcards-session") {
+      const nextSubject = options?.subject ?? flashcardSubject;
+      if (options && "subject" in options) {
+        setFlashcardSubject(options.subject ?? null);
+      }
+      const query = nextSubject ? `?subject=${encodeURIComponent(nextSubject)}` : "";
+      url = `/flashcards/session${query}`;
+    } else {
+      url = `/${next}`;
+    }
+
     window.history.pushState({ page: next }, '', url);
     setPageState(next);
   };
@@ -629,6 +656,8 @@ export default function App() {
     // Sync page state with browser back/forward buttons
     const onPopState = (e: PopStateEvent) => {
       setPageState(e.state?.page ?? pathToPage(window.location.pathname));
+      const value = new URLSearchParams(window.location.search).get("subject");
+      setFlashcardSubject(value?.trim() ? value : null);
     };
     window.addEventListener('popstate', onPopState);
 
@@ -678,48 +707,26 @@ export default function App() {
     setInstallPromptEvent(null);
   };
 
-  const installButton = showInstallButton ? (
-    <button
-      onClick={handleInstallApp}
-      className="fixed bottom-24 right-4 z-50 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-3 text-sm font-bold text-on-primary shadow-xl shadow-primary/20 md:bottom-6 md:right-6"
-    >
-      Install App
-    </button>
-  ) : null;
-
   if (page === 'privacy') {
-    return (
-      <>
-        <PrivacyPage onBack={() => setPage('study')} />
-        {installButton}
-      </>
-    );
+    return <PrivacyPage onBack={() => setPage('study')} />;
   }
 
   if (page === 'terms') {
-    return (
-      <>
-        <TermsPage onBack={() => setPage('study')} />
-        {installButton}
-      </>
-    );
+    return <TermsPage onBack={() => setPage('study')} />;
   }
 
   if (showOnboarding && currentUser) {
     return (
-      <>
-        <OnboardingPage
-          user={currentUser}
-          onComplete={(updatedUser) => {
-            setCurrentUser(updatedUser);
-            setShowOnboarding(false);
-            const access = tokenStorage.getAccess();
-            const refresh = tokenStorage.getRefresh();
-            if (access && refresh) tokenStorage.setTokens(access, refresh, updatedUser);
-          }}
-        />
-        {installButton}
-      </>
+      <OnboardingPage
+        user={currentUser}
+        onComplete={(updatedUser) => {
+          setCurrentUser(updatedUser);
+          setShowOnboarding(false);
+          const access = tokenStorage.getAccess();
+          const refresh = tokenStorage.getRefresh();
+          if (access && refresh) tokenStorage.setTokens(access, refresh, updatedUser);
+        }}
+      />
     );
   }
 
@@ -727,6 +734,7 @@ export default function App() {
     await supabase.auth.signOut();
     await firebaseSignOut();
     setCurrentUser(null);
+    setFlashcardSubject(null);
     window.history.pushState({}, '', '/');
     setPageState('study');
   };
@@ -748,6 +756,10 @@ export default function App() {
           }}
           onSignOut={handleSignOut}
           onBack={() => setPage('study')}
+          onNavigateHistory={() => setPage('history')}
+          onNavigateFlashcards={() => setPage('flashcards')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
         />
       );
     } else if (page === 'history') {
@@ -755,7 +767,47 @@ export default function App() {
         <HistoryPage
           user={currentUser}
           onNavigateStudy={(bd) => { setInitialBreakdown(bd ?? null); setPage('study'); }}
+          onNavigateFlashcards={() => setPage('flashcards')}
           onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
+        />
+      );
+    } else if (page === 'flashcards') {
+      authenticatedPage = (
+        <FlashcardSubjectSelectionPage
+          user={currentUser}
+          initialSubject={flashcardSubject}
+          onNavigateStudy={() => setPage('study')}
+          onNavigateHistory={() => setPage('history')}
+          onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
+          onStartSession={(subject) => setPage('flashcards-session', { subject })}
+        />
+      );
+    } else if (page === 'flashcards-session') {
+      authenticatedPage = flashcardSubject ? (
+        <FlashcardSessionPage
+          user={currentUser}
+          selectedSubject={flashcardSubject}
+          onNavigateStudy={() => setPage('study')}
+          onNavigateHistory={() => setPage('history')}
+          onNavigateSubjects={() => setPage('flashcards')}
+          onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
+        />
+      ) : (
+        <FlashcardSubjectSelectionPage
+          user={currentUser}
+          initialSubject={flashcardSubject}
+          onNavigateStudy={() => setPage('study')}
+          onNavigateHistory={() => setPage('history')}
+          onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
+          onStartSession={(subject) => setPage('flashcards-session', { subject })}
         />
       );
     } else {
@@ -763,7 +815,10 @@ export default function App() {
         <StudySpacePage
           user={currentUser}
           onNavigateHistory={() => setPage('history')}
+          onNavigateFlashcards={() => setPage('flashcards')}
           onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
           initialBreakdown={initialBreakdown}
           onBreakdownConsumed={() => setInitialBreakdown(null)}
         />
@@ -774,7 +829,6 @@ export default function App() {
       <>
         {authenticatedPage}
         <MobileBottomNav page={page} onNavigate={setPage} />
-        {installButton}
       </>
     );
   }
@@ -797,7 +851,6 @@ export default function App() {
       <AnimatePresence>
         {showAuth && <Auth onClose={() => setShowAuth(false)} />}
       </AnimatePresence>
-      {installButton}
     </div>
   );
 }

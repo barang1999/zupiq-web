@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space_Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface": "#060e20",
+            "inverse-on-surface": "#4d556b",
+            "outline": "#6d758c",
+            "tertiary": "#f3ffca",
+            "on-primary-fixed-variant": "#006266",
+            "on-secondary": "#400040",
+            "tertiary-container": "#cafd00",
+            "surface-bright": "#1f2b49",
+            "surface-variant": "#192540",
+            "primary-dim": "#00e5ee",
+            "inverse-surface": "#faf8ff",
+            "surface-container-high": "#141f38",
+            "error-dim": "#d7383b",
+            "secondary-dim": "#ff51fa",
+            "on-primary-fixed": "#004346",
+            "on-surface": "#dee5ff",
+            "primary": "#a1faff",
+            "surface-tint": "#a1faff",
+            "on-tertiary-fixed": "#3a4a00",
+            "background": "#060e20",
+            "on-secondary-fixed-variant": "#920091",
+            "secondary-fixed": "#ffbdf3",
+            "primary-container": "#00f4fe",
+            "on-background": "#dee5ff",
+            "surface-container-highest": "#192540",
+            "surface-container": "#0f1930",
+            "on-tertiary-container": "#4a5e00",
+            "on-error": "#490006",
+            "on-tertiary-fixed-variant": "#526900",
+            "tertiary-fixed-dim": "#beee00",
+            "primary-fixed-dim": "#00e5ee",
+            "tertiary-dim": "#beee00",
+            "surface-dim": "#060e20",
+            "surface-container-low": "#091328",
+            "on-tertiary": "#516700",
+            "on-secondary-container": "#fff5f9",
+            "secondary-fixed-dim": "#ffa6f3",
+            "tertiary-fixed": "#cafd00",
+            "on-primary-container": "#00575b",
+            "on-primary": "#006165",
+            "secondary": "#ff51fa",
+            "inverse-primary": "#006a6e",
+            "surface-container-lowest": "#000000",
+            "on-error-container": "#ffa8a3",
+            "error": "#ff716c",
+            "primary-fixed": "#00f4fe",
+            "outline-variant": "#40485d",
+            "on-secondary-fixed": "#620061",
+            "secondary-container": "#a900a9",
+            "error-container": "#9f0519",
+            "on-surface-variant": "#a3aac4"
+          },
+          fontFamily: {
+            "headline": ["Space Grotesk"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          },
+          borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+        },
+      },
+    }
+  </script>
+<style>
+    .glass-morphism {
+      background: rgba(25, 37, 64, 0.6);
+      backdrop-filter: blur(20px);
+    }
+    .neural-glow {
+      box-shadow: 0 0 20px rgba(161, 250, 255, 0.15), 0 0 40px rgba(255, 81, 250, 0.1);
+    }
+    .text-gradient {
+      background: linear-gradient(to right, #a1faff, #ff51fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body min-h-screen">
+<!-- Full Screen Navigation Drawer Modal -->
+<div class="fixed inset-0 z-[100] flex flex-col bg-slate-900/70 backdrop-blur-2xl p-8 h-full w-full">
+<!-- Header / Close Action -->
+<div class="flex justify-between items-center mb-12">
+<div class="text-xl font-bold text-cyan-400 font-headline tracking-tight">
+        Zupiq Prism
+      </div>
+<button class="w-12 h-12 rounded-full surface-container-highest flex items-center justify-center text-on-surface hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- User Profile Section (Predicted Component: NavigationDrawer header_type: "profile") -->
+<div class="mb-12 flex flex-col items-start gap-4">
+<div class="relative">
+<div class="w-20 h-20 rounded-full p-1 bg-gradient-to-tr from-primary to-secondary neural-glow">
+<img alt="User Avatar" class="w-full h-full rounded-full object-cover border-4 border-surface" data-alt="Close-up portrait of a tech professional with neon blue and pink ambient lighting reflecting on their face, futuristic aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_y1z926NB4O5CMg-evW7wFsUMD4oa-DD5o6ggHSTnc6U00b_lfvyYBqARnM7L5ebmBVfUYus7w7teKBx6h5Fd8SKsZiqYWuBkh2xOYSFfoL7J83CuCPTqIl86AS7xia4Rw4lpzfaRXyG5_TY8YY6uWAMondiAh1X96Vh_6WTaYCYLIqdPuvGe86CJf6Q18GuW31RKLmpqIQoXPYQY1bWExCv2r6P4rHvgTWdYLjrDYX3pS4y8o3EHi7gz-HlRWCSqmZmTXW1i0dA"/>
+</div>
+<div class="absolute -bottom-1 -right-1 w-6 h-6 bg-tertiary-container rounded-full flex items-center justify-center border-2 border-surface">
+<span class="material-symbols-outlined text-[14px] text-on-tertiary-container" style="font-variation-settings: 'FILL' 1;">bolt</span>
+</div>
+</div>
+<div>
+<h2 class="font-headline text-2xl font-bold text-on-surface">Neural Architect</h2>
+<p class="text-on-surface-variant label-md uppercase tracking-widest text-[10px]">Pro Tier • Active Session</p>
+</div>
+</div>
+<!-- Navigation Links (Mapping Shared Components JSON NavigationDrawer) -->
+<nav class="flex-1 space-y-2 overflow-y-auto">
+<!-- Dashboard -->
+<a class="flex items-center gap-4 bg-gradient-to-r from-cyan-500/20 to-fuchsia-500/20 text-cyan-200 rounded-full px-6 py-4 border-l-4 border-cyan-400 transition-all duration-300 hover:translate-x-2" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-headline text-lg font-medium">Dashboard</span>
+</a>
+<!-- Study Space / Map -->
+<a class="flex items-center gap-4 text-slate-400 px-6 py-4 transition-all duration-300 hover:bg-slate-800/60 hover:text-white hover:translate-x-2" href="#">
+<span class="material-symbols-outlined" data-icon="school">school</span>
+<span class="font-headline text-lg font-medium">Study Space</span>
+</a>
+<!-- Library -->
+<a class="flex items-center gap-4 text-slate-400 px-6 py-4 transition-all duration-300 hover:bg-slate-800/60 hover:text-white hover:translate-x-2" href="#">
+<span class="material-symbols-outlined" data-icon="library_books">library_books</span>
+<span class="font-headline text-lg font-medium">Library</span>
+</a>
+<!-- History -->
+<a class="flex items-center gap-4 text-slate-400 px-6 py-4 transition-all duration-300 hover:bg-slate-800/60 hover:text-white hover:translate-x-2" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-headline text-lg font-medium">History</span>
+</a>
+<!-- Settings -->
+<a class="flex items-center gap-4 text-slate-400 px-6 py-4 transition-all duration-300 hover:bg-slate-800/60 hover:text-white hover:translate-x-2" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-headline text-lg font-medium">Settings</span>
+</a>
+</nav>
+<!-- Footer Actions -->
+<div class="mt-auto pt-8 border-t border-outline-variant/20 flex flex-col gap-6">
+<button class="flex items-center gap-4 px-6 py-3 text-error hover:bg-error-container/10 rounded-full transition-colors active:scale-95">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-headline text-lg font-medium">Sign Out</span>
+</button>
+<div class="flex justify-between items-center px-6">
+<span class="text-[10px] text-on-surface-variant uppercase tracking-widest font-label">v2.4.0-Prism</span>
+<div class="flex gap-4">
+<span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
+<span class="w-2 h-2 rounded-full bg-secondary-container"></span>
+<span class="w-2 h-2 rounded-full bg-tertiary-container"></span>
+</div>
+</div>
+</div>
+<!-- Background Decorative Orb -->
+<div class="absolute -bottom-20 -right-20 w-64 h-64 bg-secondary-container/10 rounded-full blur-[100px] pointer-events-none"></div>
+<div class="absolute top-1/2 -left-32 w-48 h-48 bg-primary-container/5 rounded-full blur-[80px] pointer-events-none"></div>
+</div>
+<!-- Content Canvas (Main Screen - Preview behind modal) -->
+<main class="p-6 pt-24 space-y-8 opacity-40">
+<div class="space-y-2">
+<h1 class="text-4xl font-headline font-bold leading-tight">Neural<br/>Architecture</h1>
+<p class="text-on-surface-variant">Synchronizing your cognitive patterns...</p>
+</div>
+<!-- Bento Grid Placeholder -->
+<div class="grid grid-cols-2 gap-4">
+<div class="col-span-2 h-48 rounded-3xl bg-surface-container neural-glow"></div>
+<div class="h-32 rounded-3xl bg-surface-container-low"></div>
+<div class="h-32 rounded-3xl bg-surface-variant"></div>
+</div>
+</main>
+<!-- Top Bar (Suppressed on menu modal but standard for background) -->
+<header class="fixed top-0 w-full z-40 flex justify-between items-center px-6 h-16 bg-slate-950/60 backdrop-blur-xl">
+<span class="material-symbols-outlined text-cyan-400">bubble_chart</span>
+<div class="text-xl font-bold bg-gradient-to-r from-cyan-400 to-fuchsia-500 bg-clip-text text-transparent font-headline">Chromatic AI</div>
+<div class="w-8 h-8 rounded-full bg-surface-variant"></div>
+</header>
+</body></html>

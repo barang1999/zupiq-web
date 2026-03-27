@@ -79,10 +79,20 @@ function subjectIcon(subject: string) {
 interface Props {
   user: any;
   onNavigateStudy?: (breakdown?: ProblemBreakdown) => void;
+  onNavigateFlashcards?: () => void;
   onNavigateSettings?: () => void;
+  showInstallAppButton?: boolean;
+  onInstallApp?: () => void;
 }
 
-export function HistoryPage({ user, onNavigateStudy, onNavigateSettings }: Props) {
+export function HistoryPage({
+  user,
+  onNavigateStudy,
+  onNavigateFlashcards,
+  onNavigateSettings,
+  showInstallAppButton,
+  onInstallApp,
+}: Props) {
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
@@ -140,6 +150,12 @@ export function HistoryPage({ user, onNavigateStudy, onNavigateSettings }: Props
       <AppHeader
         user={user}
         onSettingsClick={onNavigateSettings}
+        onSignOut={handleSignOut}
+        onNavigateStudy={() => onNavigateStudy?.()}
+        onNavigateFlashcards={onNavigateFlashcards}
+        activeMobileMenu="history"
+        showInstallAppButton={showInstallAppButton}
+        onInstallAppClick={onInstallApp}
         left={
           <div className="hidden md:flex items-center bg-surface-container-highest px-4 py-2 rounded-full gap-2">
             <Search className="w-4 h-4 text-primary" />

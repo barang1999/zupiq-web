@@ -5,7 +5,7 @@ import {
   GitFork, History, BookOpen, Users, Archive,
   Plus, X, Loader2, Sparkles,
   Bookmark, Zap, LogOut, HelpCircle, ArrowRight,
-  ChevronLeft, ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw,
+  ChevronLeft, ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
 import { ProblemComposer } from '../components/ai/ProblemComposer';
@@ -120,7 +120,61 @@ const INSIGHT_SWIPE_HORIZONTAL_RATIO = 1.12;
 const BRANCH_LONG_PRESS_MS = 420;
 const BRANCH_LONG_PRESS_MOVE_THRESHOLD = 12;
 const QUICK_FLASHCARD_DECK_STORAGE_KEY = 'zupiq_flashcard_quick_deck_v1';
+const QUICK_FLASHCARD_DEFAULT_SUBJECT_KEY = '__general__';
 const studyDebugLastEventAt: Record<string, number> = {};
+
+function normalizeQuickDeckSubject(subject: string | null | undefined): string {
+  const normalized = (subject ?? '').trim().toLowerCase();
+  return normalized || QUICK_FLASHCARD_DEFAULT_SUBJECT_KEY;
+}
+
+function readQuickDeckCache(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  const raw = localStorage.getItem(QUICK_FLASHCARD_DECK_STORAGE_KEY);
+  if (!raw) return {};
+
+  // Backward compatibility: older versions stored a single deck id string.
+  if (!raw.trim().startsWith('{')) {
+    return { [QUICK_FLASHCARD_DEFAULT_SUBJECT_KEY]: raw.trim() };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const entries = Object.entries(parsed as Record<string, unknown>).filter(
+      ([key, value]) => key && typeof value === 'string' && value.trim().length > 0
+    ) as Array<[string, string]>;
+    return Object.fromEntries(entries);
+  } catch {
+    return {};
+  }
+}
+
+function writeQuickDeckCache(cache: Record<string, string>): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(QUICK_FLASHCARD_DECK_STORAGE_KEY, JSON.stringify(cache));
+}
+
+function getQuickDeckIdForSubject(subject: string | null | undefined): string | null {
+  const key = normalizeQuickDeckSubject(subject);
+  const cache = readQuickDeckCache();
+  return cache[key] ?? null;
+}
+
+function setQuickDeckIdForSubject(subject: string | null | undefined, deckId: string): void {
+  const key = normalizeQuickDeckSubject(subject);
+  const cache = readQuickDeckCache();
+  cache[key] = deckId;
+  writeQuickDeckCache(cache);
+}
+
+function clearQuickDeckIdForSubject(subject: string | null | undefined): void {
+  const key = normalizeQuickDeckSubject(subject);
+  const cache = readQuickDeckCache();
+  if (!(key in cache)) return;
+  delete cache[key];
+  writeQuickDeckCache(cache);
+}
 
 function debugStudy(event: string, payload?: Record<string, unknown>) {
   const stamp = new Date().toISOString();
@@ -549,12 +603,24 @@ function resolveCollisions(pos: Record<string, NodePos>, draggedId?: string): Re
 interface Props {
   user: any;
   onNavigateHistory?: () => void;
+  onNavigateFlashcards?: () => void;
   onNavigateSettings?: () => void;
+  showInstallAppButton?: boolean;
+  onInstallApp?: () => void;
   initialBreakdown?: ProblemBreakdown | null;
   onBreakdownConsumed?: () => void;
 }
 
-export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, initialBreakdown, onBreakdownConsumed }: Props) {
+export function StudySpacePage({
+  user,
+  onNavigateHistory,
+  onNavigateFlashcards,
+  onNavigateSettings,
+  showInstallAppButton,
+  onInstallApp,
+  initialBreakdown,
+  onBreakdownConsumed,
+}: Props) {
   const [breakdown,      setBreakdown]      = useState<ProblemBreakdown | null>(null);
   const [sessionId,      setSessionId]      = useState<string | null>(null);
   const [positions,      setPositions]      = useState<Record<string, NodePos>>({});
@@ -1983,17 +2049,33 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   const handleAddBranchToFlashcards = useCallback(async (node: BreakdownNode) => {
     if (!breakdown) return;
     setBranchActionBusy('flashcard');
+    const normalizedSubject = normalizeQuickDeckSubject(breakdown.subject);
     const createQuickDeck = async () => {
       const { deck } = await api.post<{ deck: { id: string } }>('/api/flashcards/decks', {
         title: 'StudySpace Quick Capture',
         description: 'Cards captured from StudySpace branch actions',
         subject: breakdown.subject,
       });
-      localStorage.setItem(QUICK_FLASHCARD_DECK_STORAGE_KEY, deck.id);
+      setQuickDeckIdForSubject(breakdown.subject, deck.id);
       return deck.id;
     };
+    const isDeckSubjectMatch = async (deckId: string) => {
+      try {
+        const { deck } = await api.get<{ deck: { subject: string | null } }>(`/api/flashcards/decks/${deckId}`);
+        return normalizeQuickDeckSubject(deck.subject) === normalizedSubject;
+      } catch {
+        return false;
+      }
+    };
     try {
-      let deckId = localStorage.getItem(QUICK_FLASHCARD_DECK_STORAGE_KEY);
+      let deckId = getQuickDeckIdForSubject(breakdown.subject);
+      if (deckId) {
+        const matches = await isDeckSubjectMatch(deckId);
+        if (!matches) {
+          clearQuickDeckIdForSubject(breakdown.subject);
+          deckId = null;
+        }
+      }
       if (!deckId) deckId = await createQuickDeck();
 
       const cardPayload = {
@@ -2005,7 +2087,7 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       try {
         await api.post(`/api/flashcards/decks/${deckId}/cards`, cardPayload);
       } catch {
-        localStorage.removeItem(QUICK_FLASHCARD_DECK_STORAGE_KEY);
+        clearQuickDeckIdForSubject(breakdown.subject);
         const recreatedDeckId = await createQuickDeck();
         await api.post(`/api/flashcards/decks/${recreatedDeckId}/cards`, cardPayload);
       }
@@ -2207,6 +2289,7 @@ Do not repeat content already given.`;
   const NAV_ITEMS = [
     { id: 'map',         label: 'Neural Map',   Icon: GitFork },
     { id: 'history',     label: 'History',       Icon: History },
+    { id: 'flashcards',  label: 'Flashcards',    Icon: Layers },
     { id: 'concepts',    label: 'Base Concepts', Icon: BookOpen },
     { id: 'collaborate', label: 'Collaborate',   Icon: Users },
     { id: 'archives',    label: 'Archives',      Icon: Archive },
@@ -2309,6 +2392,12 @@ Do not repeat content already given.`;
       <AppHeader
         user={user}
         onSettingsClick={onNavigateSettings}
+        onSignOut={handleSignOut}
+        onNavigateHistory={onNavigateHistory}
+        onNavigateFlashcards={onNavigateFlashcards}
+        activeMobileMenu="study"
+        showInstallAppButton={showInstallAppButton}
+        onInstallAppClick={onInstallApp}
         left={
           <nav className="hidden md:flex gap-6 items-center">
             {['Focus Mode', 'Workspace', 'Library'].map((label, i) => (
@@ -2362,7 +2451,17 @@ Do not repeat content already given.`;
             return (
               <button
                 key={id}
-                onClick={() => { if (id === 'history') { onNavigateHistory?.(); } else { setActiveTab(id); } }}
+                onClick={() => {
+                  if (id === 'history') {
+                    onNavigateHistory?.();
+                    return;
+                  }
+                  if (id === 'flashcards') {
+                    onNavigateFlashcards?.();
+                    return;
+                  }
+                  setActiveTab(id);
+                }}
                 title={!isExpanded ? label : undefined}
                 className={`w-full flex items-center gap-3 px-3 py-3 transition-all duration-200 text-left ${
                   isActive

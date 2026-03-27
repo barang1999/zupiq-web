@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Zupiq | Flashcard Subject Selection</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "outline": "#6d758c",
+                        "on-secondary-fixed": "#620061",
+                        "inverse-primary": "#006a6e",
+                        "on-surface-variant": "#a3aac4",
+                        "primary-container": "#00f4fe",
+                        "secondary-container": "#a900a9",
+                        "outline-variant": "#40485d",
+                        "tertiary-fixed": "#cafd00",
+                        "tertiary-dim": "#beee00",
+                        "primary-fixed": "#00f4fe",
+                        "secondary-fixed": "#ffbdf3",
+                        "tertiary-container": "#cafd00",
+                        "secondary-fixed-dim": "#ffa6f3",
+                        "on-error": "#490006",
+                        "primary": "#a1faff",
+                        "on-tertiary": "#516700",
+                        "on-primary": "#006165",
+                        "on-tertiary-container": "#4a5e00",
+                        "on-secondary-fixed-variant": "#920091",
+                        "error-dim": "#d7383b",
+                        "tertiary-fixed-dim": "#beee00",
+                        "surface-dim": "#060e20",
+                        "on-tertiary-fixed": "#3a4a00",
+                        "on-surface": "#dee5ff",
+                        "inverse-surface": "#faf8ff",
+                        "primary-dim": "#00e5ee",
+                        "secondary-dim": "#ff51fa",
+                        "on-secondary-container": "#fff5f9",
+                        "on-primary-fixed": "#004346",
+                        "on-primary-container": "#00575b",
+                        "on-tertiary-fixed-variant": "#526900",
+                        "surface-container-high": "#141f38",
+                        "surface-container-low": "#091328",
+                        "surface": "#060e20",
+                        "surface-container-lowest": "#000000",
+                        "background": "#060e20",
+                        "on-secondary": "#400040",
+                        "on-primary-fixed-variant": "#006266",
+                        "on-error-container": "#ffa8a3",
+                        "inverse-on-surface": "#4d556b",
+                        "surface-bright": "#1f2b49",
+                        "surface-tint": "#a1faff",
+                        "error": "#ff716c",
+                        "tertiary": "#f3ffca",
+                        "secondary": "#ff51fa",
+                        "primary-fixed-dim": "#00e5ee",
+                        "surface-container-highest": "#192540",
+                        "surface-container": "#0f1930",
+                        "error-container": "#9f0519",
+                        "surface-variant": "#192540",
+                        "on-background": "#dee5ff"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(25, 37, 64, 0.6);
+            backdrop-filter: blur(20px);
+        }
+        .glow-corner {
+            background: radial-gradient(circle at top right, rgba(243, 255, 202, 0.15), transparent 70%);
+        }
+        .neural-gradient {
+            background: linear-gradient(135deg, #a1faff 0%, #ff51fa 100%);
+        }
+        body {
+            background-color: #060e20;
+            color: #dee5ff;
+            overflow-x: hidden;
+        }
+        .asymmetric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+    </style>
+</head>
+<body class="font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar Predicted Component -->
+<nav class="fixed top-0 w-full z-50 bg-[#060e20]/60 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)] flex justify-between items-center px-6 py-4">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-bold bg-gradient-to-r from-[#a1faff] to-[#ff51fa] bg-clip-text text-transparent font-['Space_Grotesk'] tracking-tight">Zupiq</span>
+<div class="hidden md:flex gap-6 items-center">
+<a class="text-[#a1faff] transition-colors font-medium" href="#">Learn</a>
+<a class="text-[#a3aac4] hover:bg-[#192540]/50 px-3 py-1 rounded-full transition-colors" href="#">Library</a>
+<a class="text-[#a3aac4] hover:bg-[#192540]/50 px-3 py-1 rounded-full transition-colors" href="#">Mastery</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-[#a1faff] hover:bg-[#192540]/50 rounded-full active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+<button class="p-2 text-[#a1faff] hover:bg-[#192540]/50 rounded-full active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="pt-32 pb-40 px-6 md:px-12 max-w-7xl mx-auto relative">
+<!-- Background Ambient Blobs -->
+<div class="absolute -top-20 -left-20 w-96 h-96 bg-secondary-container/10 blur-[120px] rounded-full pointer-events-none"></div>
+<div class="absolute top-1/2 -right-20 w-[500px] h-[500px] bg-primary-container/5 blur-[150px] rounded-full pointer-events-none"></div>
+<!-- Header Section -->
+<header class="mb-16 relative">
+<h1 class="font-headline text-5xl md:text-7xl font-bold tracking-tighter text-on-surface mb-4">
+                Select Your <span class="text-primary italic">Focus</span>
+</h1>
+<p class="text-on-surface-variant text-lg md:text-xl max-w-2xl font-light">
+                Choose a neural path to begin your active recall session. Every interaction strengthens the synaptic connections of your knowledge base.
+            </p>
+</header>
+<!-- Subject Selection Grid -->
+<section class="asymmetric-grid">
+<!-- Subject Card 1: Quantum Physics -->
+<div class="glass-card glow-corner p-8 rounded-[32px] group cursor-pointer relative overflow-hidden transition-all duration-300 hover:translate-y-[-8px] hover:shadow-[0_20px_40px_rgba(161,250,255,0.1)] active:scale-95">
+<div class="flex justify-between items-start mb-12">
+<div class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="waves">waves</span>
+</div>
+<span class="text-tertiary font-headline text-2xl font-bold">68%</span>
+</div>
+<h3 class="font-headline text-2xl font-bold text-on-surface mb-2">Quantum Physics</h3>
+<p class="text-on-surface-variant text-sm mb-6 font-medium tracking-wide uppercase">Wave-Particle Duality &amp; Mechanics</p>
+<div class="flex items-center gap-4 text-xs font-label text-on-surface-variant">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="style">style</span>
+<span>42 cards</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="schedule">schedule</span>
+<span>12 min est.</span>
+</div>
+</div>
+<!-- Progress Bar -->
+<div class="mt-8 h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full w-[68%] bg-gradient-to-r from-primary to-secondary"></div>
+</div>
+</div>
+<!-- Subject Card 2: Multivariable Calculus -->
+<div class="glass-card glow-corner p-8 rounded-[32px] group cursor-pointer relative overflow-hidden transition-all duration-300 hover:translate-y-[-8px] hover:shadow-[0_20px_40px_rgba(255,81,250,0.1)] active:scale-95">
+<div class="flex justify-between items-start mb-12">
+<div class="w-12 h-12 rounded-full bg-secondary/20 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="functions">functions</span>
+</div>
+<span class="text-tertiary font-headline text-2xl font-bold">45%</span>
+</div>
+<h3 class="font-headline text-2xl font-bold text-on-surface mb-2">Multivariable Calculus</h3>
+<p class="text-on-surface-variant text-sm mb-6 font-medium tracking-wide uppercase">Vector Fields &amp; Integration</p>
+<div class="flex items-center gap-4 text-xs font-label text-on-surface-variant">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="style">style</span>
+<span>128 cards</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="schedule">schedule</span>
+<span>25 min est.</span>
+</div>
+</div>
+<div class="mt-8 h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full w-[45%] bg-gradient-to-r from-secondary to-primary"></div>
+</div>
+</div>
+<!-- Subject Card 3: Organic Chemistry -->
+<div class="glass-card glow-corner p-8 rounded-[32px] group cursor-pointer relative overflow-hidden transition-all duration-300 hover:translate-y-[-8px] hover:shadow-[0_20px_40px_rgba(161,250,255,0.1)] active:scale-95">
+<div class="flex justify-between items-start mb-12">
+<div class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="science">science</span>
+</div>
+<span class="text-tertiary font-headline text-2xl font-bold">92%</span>
+</div>
+<h3 class="font-headline text-2xl font-bold text-on-surface mb-2">Organic Chemistry</h3>
+<p class="text-on-surface-variant text-sm mb-6 font-medium tracking-wide uppercase">Molecular Structures &amp; Bonding</p>
+<div class="flex items-center gap-4 text-xs font-label text-on-surface-variant">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="style">style</span>
+<span>86 cards</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="schedule">schedule</span>
+<span>18 min est.</span>
+</div>
+</div>
+<div class="mt-8 h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full w-[92%] bg-gradient-to-r from-primary to-secondary"></div>
+</div>
+</div>
+<!-- Subject Card 4: Microeconomics -->
+<div class="glass-card glow-corner p-8 rounded-[32px] group cursor-pointer relative overflow-hidden transition-all duration-300 hover:translate-y-[-8px] hover:shadow-[0_20px_40px_rgba(255,81,250,0.1)] active:scale-95">
+<div class="flex justify-between items-start mb-12">
+<div class="w-12 h-12 rounded-full bg-secondary/20 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="insights">insights</span>
+</div>
+<span class="text-tertiary font-headline text-2xl font-bold">12%</span>
+</div>
+<h3 class="font-headline text-2xl font-bold text-on-surface mb-2">Microeconomics</h3>
+<p class="text-on-surface-variant text-sm mb-6 font-medium tracking-wide uppercase">Supply, Demand &amp; Market Equilibrium</p>
+<div class="flex items-center gap-4 text-xs font-label text-on-surface-variant">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="style">style</span>
+<span>54 cards</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="schedule">schedule</span>
+<span>10 min est.</span>
+</div>
+</div>
+<div class="mt-8 h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full w-[12%] bg-gradient-to-r from-secondary to-primary"></div>
+</div>
+</div>
+</section>
+<!-- Signature Component: Floating AI Orb (Indicator) -->
+<div class="fixed bottom-32 right-8 flex flex-col items-center gap-4 group">
+<div class="relative w-16 h-16 rounded-full primary-container bg-[#00f4fe] flex items-center justify-center shadow-[0_0_30px_rgba(0,244,254,0.4)] cursor-pointer">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="bolt">bolt</span>
+<div class="absolute inset-0 rounded-full border-4 border-primary/20 animate-ping"></div>
+</div>
+<span class="text-xs font-label font-bold uppercase tracking-[0.2em] text-primary opacity-0 group-hover:opacity-100 transition-opacity">Neural Sync</span>
+</div>
+<!-- Call to Action Container -->
+<div class="fixed bottom-24 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-40">
+<button class="w-full py-5 rounded-full neural-gradient text-on-primary font-headline font-bold text-xl shadow-[0_15px_30px_rgba(161,250,255,0.3)] hover:scale-[1.02] active:scale-95 duration-300 flex items-center justify-center gap-3">
+                Start Session
+                <span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</main>
+<!-- BottomNavBar Predicted Component -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-2 bg-[#192540]/60 backdrop-blur-2xl rounded-t-[32px] z-50 shadow-[0_-10px_30px_rgba(161,250,255,0.05)]">
+<div class="flex flex-col items-center justify-center bg-gradient-to-br from-[#a1faff] to-[#ff51fa] text-[#060e20] rounded-full p-3 mb-2 scale-110 shadow-[0_0_15px_rgba(161,250,255,0.4)]">
+<span class="material-symbols-outlined" data-icon="school">school</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Learn</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#a3aac4] p-3 hover:text-[#a1faff] transition-all active:scale-90 duration-300 ease-out">
+<span class="material-symbols-outlined" data-icon="style">style</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Library</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#a3aac4] p-3 hover:text-[#a1faff] transition-all active:scale-90 duration-300 ease-out">
+<span class="material-symbols-outlined" data-icon="insights">insights</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Mastery</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#a3aac4] p-3 hover:text-[#a1faff] transition-all active:scale-90 duration-300 ease-out">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Profile</span>
+</div>
+</nav>
+</body></html>
