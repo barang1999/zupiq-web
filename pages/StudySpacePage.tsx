@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import type { TouchEvent as ReactTouchEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   GitFork, History, BookOpen, Users, Archive,
@@ -99,6 +100,9 @@ const VIEWPORT_STORAGE_KEY = 'zupiq_study_viewport_v1';
 const WORKSPACE_STORAGE_KEY = 'zupiq_study_workspace_v1';
 const STUDY_DEBUG_PREFIX = '[StudySpaceDebug]';
 const STUDY_DEBUG_TRACE_KEY = 'zupiq_study_debug_trace_v1';
+const INSIGHT_SWIPE_CLOSE_THRESHOLD = 82;
+const INSIGHT_SWIPE_MAX_OFFSET = 220;
+const INSIGHT_SWIPE_HORIZONTAL_RATIO = 1.12;
 const studyDebugLastEventAt: Record<string, number> = {};
 
 function debugStudy(event: string, payload?: Record<string, unknown>) {
@@ -521,6 +525,8 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   const [showInput,      setShowInput]      = useState(false);
   const [problemInput,   setProblemInput]   = useState('');
   const [isImageAnalyzing, setIsImageAnalyzing] = useState(false);
+  const [insightSwipeOffsetX, setInsightSwipeOffsetX] = useState(0);
+  const [isInsightSwipeDragging, setIsInsightSwipeDragging] = useState(false);
   const [composerInput,  setComposerInput]  = useState('');
   const [activeTab,      setActiveTab]      = useState<string>('map');
   const [sidebarOpen,    setSidebarOpen]    = useState(false);
@@ -714,6 +720,65 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   // Swipe-to-close for the node insight panel
   const insightSwipeStartX = useRef<number | null>(null);
   const insightSwipeStartY = useRef<number | null>(null);
+  const insightSwipeLatestDx = useRef(0);
+
+  const resetInsightSwipe = useCallback(() => {
+    setIsInsightSwipeDragging(false);
+    setInsightSwipeOffsetX(0);
+    insightSwipeStartX.current = null;
+    insightSwipeStartY.current = null;
+    insightSwipeLatestDx.current = 0;
+  }, []);
+
+  useEffect(() => {
+    if (selectedNode) return;
+    resetInsightSwipe();
+  }, [resetInsightSwipe, selectedNode]);
+
+  const handleInsightSwipeStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
+    if (!selectedNode) return;
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    insightSwipeStartX.current = touch.clientX;
+    insightSwipeStartY.current = touch.clientY;
+    insightSwipeLatestDx.current = 0;
+    setIsInsightSwipeDragging(false);
+  }, [selectedNode]);
+
+  const handleInsightSwipeMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
+    if (insightSwipeStartX.current === null || insightSwipeStartY.current === null) return;
+    const touch = e.touches?.[0];
+    if (!touch) return;
+
+    const dx = touch.clientX - insightSwipeStartX.current;
+    const dy = touch.clientY - insightSwipeStartY.current;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    if (dx <= 0) {
+      if (isInsightSwipeDragging) {
+        insightSwipeLatestDx.current = 0;
+        setInsightSwipeOffsetX(0);
+      }
+      return;
+    }
+
+    if (!isInsightSwipeDragging && absDx < 8) return;
+    if (!isInsightSwipeDragging && absDx <= absDy * INSIGHT_SWIPE_HORIZONTAL_RATIO) return;
+
+    insightSwipeLatestDx.current = dx;
+    setInsightSwipeOffsetX(Math.min(INSIGHT_SWIPE_MAX_OFFSET, dx));
+    if (!isInsightSwipeDragging) setIsInsightSwipeDragging(true);
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+  }, [isInsightSwipeDragging]);
+
+  const handleInsightSwipeEnd = useCallback(() => {
+    const shouldClose = insightSwipeLatestDx.current > INSIGHT_SWIPE_CLOSE_THRESHOLD;
+    resetInsightSwipe();
+    if (shouldClose) {
+      setSelectedNode(null);
+    }
+  }, [resetInsightSwipe]);
 
   // Always-current refs used by save callbacks to avoid stale closures
   const positionsRef      = useRef<Record<string, NodePos>>({});
@@ -2328,30 +2393,28 @@ Do not repeat content already given.`;
 
         {/* ── Right Panel ─────────────────────────────────────────────────── */}
         <motion.aside
-          animate={{ width: selectedNode ? 384 : 0, opacity: selectedNode ? 1 : 0 }}
-          transition={{ duration: 0.25, ease: 'easeInOut' }}
+          animate={{
+            width: selectedNode ? 384 : 0,
+            opacity: selectedNode ? 1 : 0,
+            x: selectedNode ? insightSwipeOffsetX : 24,
+          }}
+          transition={{
+            width: { duration: 0.22, ease: 'easeInOut' },
+            opacity: { duration: 0.18, ease: 'easeOut' },
+            x: isInsightSwipeDragging
+              ? { duration: 0 }
+              : { type: 'spring', stiffness: 420, damping: 34, mass: 0.35 },
+          }}
           className="h-full bg-surface-container-low/80 backdrop-blur-md border-l border-outline-variant/10 shrink-0 relative overflow-hidden z-20"
         >
-          {/* Invisible swipe handle on the left edge — sits above scroll content to capture rightward swipes */}
-          {selectedNode && (
-            <div
-              className="absolute left-0 top-0 h-full w-8 z-20 pointer-events-auto"
-              style={{ touchAction: 'pan-y' }}
-              onTouchStart={(e) => {
-                insightSwipeStartX.current = e.touches[0].clientX;
-                insightSwipeStartY.current = e.touches[0].clientY;
-              }}
-              onTouchEnd={(e) => {
-                if (insightSwipeStartX.current === null || insightSwipeStartY.current === null) return;
-                const dx = e.changedTouches[0].clientX - insightSwipeStartX.current;
-                const dy = Math.abs(e.changedTouches[0].clientY - insightSwipeStartY.current);
-                if (dx > 60 && dy < 80) setSelectedNode(null);
-                insightSwipeStartX.current = null;
-                insightSwipeStartY.current = null;
-              }}
-            />
-          )}
-          {selectedNode && <><div className="h-full overflow-y-auto p-8 pb-[200px]" style={{ width: 384 }}>
+          {selectedNode && <><div
+            className="h-full overflow-y-auto p-8 pb-[200px]"
+            style={{ width: 384, touchAction: 'pan-y' }}
+            onTouchStart={handleInsightSwipeStart}
+            onTouchMove={handleInsightSwipeMove}
+            onTouchEnd={handleInsightSwipeEnd}
+            onTouchCancel={handleInsightSwipeEnd}
+          >
             <div className="flex items-center justify-between mb-8">
               <h2 className="font-headline font-bold text-xl">Node Insights</h2>
               {selectedNode && (
