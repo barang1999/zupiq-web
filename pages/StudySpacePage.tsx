@@ -1433,18 +1433,11 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       const formData = new FormData();
       formData.append('file', normalizedFile);
       formData.append('context', 'ai_query');
+      formData.append('attach_trace_id', traceId);
 
       currentStage = 'upload:start';
       logAttach(currentStage, { endpoint: '/api/uploads' });
-      const uploadResponse = await api.upload<{ uploads: Array<{ id: string }> }>(
-        '/api/uploads',
-        formData,
-        {
-          headers: {
-            'x-attach-trace-id': traceId,
-          },
-        }
-      );
+      const uploadResponse = await api.upload<{ uploads: Array<{ id: string }> }>('/api/uploads', formData);
       currentStage = 'upload:done';
       const uploadId = uploadResponse.uploads?.[0]?.id;
       logAttach(currentStage, {
@@ -1458,6 +1451,7 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       const analyzePayload: Record<string, unknown> = {
         upload_id: uploadId,
         mode: 'problem_ocr',
+        attach_trace_id: traceId,
       };
       if (isPdfFile) {
         analyzePayload.question = 'Extract all readable problem text from this PDF as plain text. Preserve equations in KaTeX-friendly LaTeX with $...$ or $$...$$ delimiters.';
@@ -1469,15 +1463,7 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
         mode: analyzePayload.mode,
         hasQuestion: typeof analyzePayload.question === 'string',
       });
-      const analyzeImageResponse = await api.post<AnalyzeImageResponse>(
-        '/api/ai/analyze-image',
-        analyzePayload,
-        {
-          headers: {
-            'x-attach-trace-id': traceId,
-          },
-        }
-      );
+      const analyzeImageResponse = await api.post<AnalyzeImageResponse>('/api/ai/analyze-image', analyzePayload);
       currentStage = 'analyze:done';
 
       const structured = analyzeImageResponse.analysis_structured;
