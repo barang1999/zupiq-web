@@ -5,13 +5,14 @@ import {
   GitFork, History, BookOpen, Users, Archive,
   Plus, X, Loader2, Sparkles,
   Bookmark, Zap, LogOut, HelpCircle, ArrowRight,
-  ChevronLeft, ZoomIn, ZoomOut, Maximize2,
+  ChevronLeft, ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
 import { ProblemComposer } from '../components/ai/ProblemComposer';
 import { api, ApiError } from '../lib/api';
 import { MathText } from '../components/ui/MathText';
 import { RichText } from '../components/ui/RichText';
+import { ActionPopover } from '../components/ui/ActionPopover';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
 import { MAX_FILE_SIZE_MB, validateFile } from '../utils/validators';
@@ -92,6 +93,19 @@ interface ProblemBreakdown {
 }
 
 interface NodePos { x: number; y: number }
+interface BranchActionPortalState {
+  nodeId: string;
+  x: number;
+  y: number;
+}
+
+interface RegeneratedBranchNodeResponse {
+  node: {
+    label?: string;
+    description?: string;
+    mathContent?: string;
+  };
+}
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
@@ -103,6 +117,9 @@ const STUDY_DEBUG_TRACE_KEY = 'zupiq_study_debug_trace_v1';
 const INSIGHT_SWIPE_CLOSE_THRESHOLD = 82;
 const INSIGHT_SWIPE_MAX_OFFSET = 220;
 const INSIGHT_SWIPE_HORIZONTAL_RATIO = 1.12;
+const BRANCH_LONG_PRESS_MS = 420;
+const BRANCH_LONG_PRESS_MOVE_THRESHOLD = 12;
+const QUICK_FLASHCARD_DECK_STORAGE_KEY = 'zupiq_flashcard_quick_deck_v1';
 const studyDebugLastEventAt: Record<string, number> = {};
 
 function debugStudy(event: string, payload?: Record<string, unknown>) {
@@ -245,6 +262,35 @@ function normalizeUnicodeSuperscripts(text: string): string {
     .replace(/³/g, '^3')
     .replace(/⁴/g, '^4')
     .replace(/⁵/g, '^5');
+}
+
+function normalizeCopiedLatexExpression(expression: string): string {
+  return normalizeUnicodeSuperscripts(expression ?? '')
+    .replace(/\\ext\{/g, '\\text{')
+    .replace(/(^|[^\\])ext\{/g, '$1\\text{')
+    .replace(/\\\s+text\{/g, '\\text{')
+    .replace(/\t+/g, ' ')
+    .replace(/\{\s+/g, '{')
+    .replace(/\s+\}/g, '}')
+    .replace(/\s+\\text\{/g, ' \\text{')
+    .replace(/ {2,}/g, ' ')
+    .trim();
+}
+
+function extractMathExpressionsForCopy(input: string): string[] {
+  const normalized = normalizeMathDelimiters(input ?? '');
+  const tokens = normalized.match(/(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g) ?? [];
+  const expressions = tokens
+    .map((token) => token.startsWith('$$') ? token.slice(2, -2) : token.slice(1, -1))
+    .map(normalizeCopiedLatexExpression)
+    .filter(Boolean);
+  return Array.from(new Set(expressions));
+}
+
+function buildCopyMathPayload(raw: string): string {
+  const expressions = extractMathExpressionsForCopy(raw);
+  if (expressions.length > 0) return expressions.join('\n');
+  return normalizeCopiedLatexExpression(raw);
 }
 
 function wrapInlineMathCandidates(text: string): string {
@@ -520,11 +566,15 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   const [composerLoading, setComposerLoading] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
   const [error,          setError]          = useState<string | null>(null);
+  const [actionToast,    setActionToast]    = useState<string | null>(null);
+  const [branchActionBusy, setBranchActionBusy] = useState<'regenerate' | 'flashcard' | null>(null);
   const [nodeInsights,   setNodeInsights]   = useState<Record<string, NodeInsight>>({});
   const [nodeConversations, setNodeConversations] = useState<Record<string, NodeConversationMessage[]>>({});
   const [showInput,      setShowInput]      = useState(false);
   const [problemInput,   setProblemInput]   = useState('');
   const [isImageAnalyzing, setIsImageAnalyzing] = useState(false);
+  const [isInsightPanelOpen, setIsInsightPanelOpen] = useState(false);
+  const [branchActionPortal, setBranchActionPortal] = useState<BranchActionPortalState | null>(null);
   const [insightSwipeOffsetX, setInsightSwipeOffsetX] = useState(0);
   const [isInsightSwipeDragging, setIsInsightSwipeDragging] = useState(false);
   const [composerInput,  setComposerInput]  = useState('');
@@ -540,6 +590,9 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   const [debugEntries, setDebugEntries] = useState<StudyDebugEntry[]>([]);
   const isExpanded = sidebarOpen || sidebarHovered;
   const lastOcrInsertRef = useRef<string | null>(null);
+  const branchLongPressTimerRef = useRef<number | null>(null);
+  const branchTouchGestureRef = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
+  const suppressBranchClickRef = useRef(false);
 
   useEffect(() => {
     const win = window as unknown as {
@@ -730,20 +783,62 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     insightSwipeLatestDx.current = 0;
   }, []);
 
-  useEffect(() => {
-    if (selectedNode) return;
+  const closeInsightPanel = useCallback(() => {
+    setIsInsightPanelOpen(false);
     resetInsightSwipe();
-  }, [resetInsightSwipe, selectedNode]);
+  }, [resetInsightSwipe]);
+
+  const selectNode = useCallback((node: BreakdownNode) => {
+    setSelectedNode(node);
+    setIsInsightPanelOpen(true);
+    setBranchActionPortal(null);
+  }, []);
+
+  const showActionToast = useCallback((message: string) => {
+    setActionToast(message);
+  }, []);
+
+  const openBranchActionPortal = useCallback((node: BreakdownNode, clientX: number, clientY: number) => {
+    if (typeof window === 'undefined') return;
+    const portalWidth = 248;
+    const portalHeight = 244;
+    const x = Math.max(12, Math.min(window.innerWidth - portalWidth - 12, clientX));
+    const y = Math.max(12, Math.min(window.innerHeight - portalHeight - 12, clientY));
+    setSelectedNode(node);
+    setBranchActionPortal({ nodeId: node.id, x, y });
+  }, []);
+
+  const clearBranchLongPressTimer = useCallback(() => {
+    if (branchLongPressTimerRef.current !== null) {
+      window.clearTimeout(branchLongPressTimerRef.current);
+      branchLongPressTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => clearBranchLongPressTimer();
+  }, [clearBranchLongPressTimer]);
+
+  useEffect(() => {
+    if (!actionToast) return;
+    const timer = window.setTimeout(() => setActionToast(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [actionToast]);
+
+  useEffect(() => {
+    if (selectedNode && isInsightPanelOpen) return;
+    resetInsightSwipe();
+  }, [isInsightPanelOpen, resetInsightSwipe, selectedNode]);
 
   const handleInsightSwipeStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
-    if (!selectedNode) return;
+    if (!selectedNode || !isInsightPanelOpen) return;
     const touch = e.touches?.[0];
     if (!touch) return;
     insightSwipeStartX.current = touch.clientX;
     insightSwipeStartY.current = touch.clientY;
     insightSwipeLatestDx.current = 0;
     setIsInsightSwipeDragging(false);
-  }, [selectedNode]);
+  }, [isInsightPanelOpen, selectedNode]);
 
   const handleInsightSwipeMove = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
     if (insightSwipeStartX.current === null || insightSwipeStartY.current === null) return;
@@ -776,7 +871,7 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     const shouldClose = insightSwipeLatestDx.current > INSIGHT_SWIPE_CLOSE_THRESHOLD;
     resetInsightSwipe();
     if (shouldClose) {
-      setSelectedNode(null);
+      setIsInsightPanelOpen(false);
     }
   }, [resetInsightSwipe]);
 
@@ -806,7 +901,9 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     setNodeInsights(bd.nodeInsights ?? {});
     setNodeConversations(bd.nodeConversations ?? {});
     setPositions(restoredPositions);
-    setSelectedNode(bd.nodes.find((n: BreakdownNode) => n.type === 'root') ?? null);
+    const rootNode = bd.nodes.find((n: BreakdownNode) => n.type === 'root') ?? null;
+    setSelectedNode(rootNode);
+    setIsInsightPanelOpen(!!rootNode);
     setShowInput(false);
     setComposerInput('');
     if (bd.id) localStorage.setItem('zupiq_lastSessionId', bd.id);
@@ -833,7 +930,9 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     const selected = snapshot.selectedNodeId
       ? bd.nodes.find((n: BreakdownNode) => n.id === snapshot.selectedNodeId) ?? null
       : null;
-    setSelectedNode(selected ?? bd.nodes.find((n: BreakdownNode) => n.type === 'root') ?? null);
+    const focusedNode = selected ?? bd.nodes.find((n: BreakdownNode) => n.type === 'root') ?? null;
+    setSelectedNode(focusedNode);
+    setIsInsightPanelOpen(!!focusedNode);
     setActiveTab(snapshot.activeTab || 'map');
     setShowInput(false);
     setComposerInput('');
@@ -1182,7 +1281,12 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   // Auto-fetch insight for the selected node (cached by node id)
   useEffect(() => {
     if (!selectedNode || !breakdown) return;
-    if (nodeInsights[selectedNode.id]) return; // already cached
+    const cachedInsight = nodeInsights[selectedNode.id];
+    const cachedSimple = (cachedInsight?.simpleBreakdown ?? '').trim();
+    const descriptionFallbackStale = !!cachedInsight
+      && cachedSimple.length > 0
+      && cachedSimple === (selectedNode.description ?? '').trim();
+    if (cachedInsight && !descriptionFallbackStale) return; // already cached
     console.debug('[NodeInsight FE] auto request', {
       nodeId: selectedNode.id,
       nodeType: selectedNode.type,
@@ -1225,12 +1329,12 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
           nodeId: selectedNode.id,
           error: err?.message ?? String(err),
         });
-        // fallback to node description so panel isn't empty
+        // Fallback hint so panel stays useful without duplicating node text.
         setNodeInsights(prev => {
           const next = {
             ...prev,
             [selectedNode.id]: {
-              simpleBreakdown: selectedNode.description,
+              simpleBreakdown: 'Could not generate a detailed breakdown right now. Long-press this node and tap Regenerate Node to retry.',
               keyFormula: selectedNode.mathContent || '',
             },
           };
@@ -1254,18 +1358,63 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     setDraggingId(id);
   }, [positions]);
 
-  const startTouchDrag = useCallback((e: React.TouchEvent, id: string) => {
-    e.stopPropagation();
-    const touch = e.touches[0];
+  const startTouchDragAt = useCallback((id: string, clientX: number, clientY: number) => {
     dragState.current = {
       id,
-      startX: touch.clientX,
-      startY: touch.clientY,
+      startX: clientX,
+      startY: clientY,
       origX: positions[id]?.x ?? 0,
       origY: positions[id]?.y ?? 0,
     };
     setDraggingId(id);
   }, [positions]);
+
+  const handleBranchTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>, node: BreakdownNode) => {
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    e.stopPropagation();
+    clearBranchLongPressTimer();
+    branchTouchGestureRef.current = {
+      nodeId: node.id,
+      startX: touch.clientX,
+      startY: touch.clientY,
+    };
+    branchLongPressTimerRef.current = window.setTimeout(() => {
+      const gesture = branchTouchGestureRef.current;
+      if (!gesture || gesture.nodeId !== node.id) return;
+      suppressBranchClickRef.current = true;
+      openBranchActionPortal(node, gesture.startX, gesture.startY);
+      branchTouchGestureRef.current = null;
+      branchLongPressTimerRef.current = null;
+    }, BRANCH_LONG_PRESS_MS);
+  }, [clearBranchLongPressTimer, openBranchActionPortal]);
+
+  const handleBranchTouchMove = useCallback((e: ReactTouchEvent<HTMLDivElement>, node: BreakdownNode) => {
+    const gesture = branchTouchGestureRef.current;
+    if (!gesture || gesture.nodeId !== node.id) return;
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    const distance = Math.hypot(touch.clientX - gesture.startX, touch.clientY - gesture.startY);
+    if (distance < BRANCH_LONG_PRESS_MOVE_THRESHOLD) return;
+    clearBranchLongPressTimer();
+    branchTouchGestureRef.current = null;
+    suppressBranchClickRef.current = true;
+    startTouchDragAt(node.id, touch.clientX, touch.clientY);
+  }, [clearBranchLongPressTimer, startTouchDragAt]);
+
+  const handleBranchTouchEnd = useCallback((nodeId: string) => {
+    clearBranchLongPressTimer();
+    if (branchTouchGestureRef.current?.nodeId === nodeId) {
+      branchTouchGestureRef.current = null;
+    }
+  }, [clearBranchLongPressTimer]);
+
+  const handleBranchTouchCancel = useCallback((nodeId: string) => {
+    clearBranchLongPressTimer();
+    if (branchTouchGestureRef.current?.nodeId === nodeId) {
+      branchTouchGestureRef.current = null;
+    }
+  }, [clearBranchLongPressTimer]);
 
   useEffect(() => { setComposerInput(''); setComposerError(null); }, [selectedNode?.id]);
 
@@ -1284,6 +1433,7 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     setNodeInsights({});
     setNodeConversations({});
     setSelectedNode(null);
+    setIsInsightPanelOpen(false);
     setBreakdown(null);
     setPositions({});
     try {
@@ -1320,7 +1470,9 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       setNodeInsights(bd.nodeInsights ?? {});
       setNodeConversations(bd.nodeConversations ?? {});
       setPositions(resolveCollisions(initial));
-      setSelectedNode(bd.nodes.find(n => n.type === 'root') ?? null);
+      const rootNode = bd.nodes.find(n => n.type === 'root') ?? null;
+      setSelectedNode(rootNode);
+      setIsInsightPanelOpen(!!rootNode);
       setShowInput(false);
       setProblemInput('');
       lastOcrInsertRef.current = null;
@@ -1742,6 +1894,153 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     }
   };
 
+  const copyToClipboard = useCallback(async (text: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+  }, []);
+
+  const handleRegenerateBranchNode = useCallback(async (node: BreakdownNode) => {
+    if (!breakdown) return;
+    setBranchActionBusy('regenerate');
+    try {
+      const parentNode = node.parentId
+        ? breakdown.nodes.find((n) => n.id === node.parentId) ?? null
+        : null;
+      const rootNode = breakdown.nodes.find((n) => n.type === 'root') ?? null;
+      const parentProblem = parentNode?.mathContent || parentNode?.label || rootNode?.mathContent || rootNode?.label || breakdown.title;
+      const { node: regenerated } = await api.post<RegeneratedBranchNodeResponse>('/api/ai/regenerate-node', {
+        nodeLabel: node.label,
+        nodeDescription: node.description,
+        nodeMathContent: node.mathContent || node.label,
+        nodeType: node.type,
+        parentProblem,
+        subject: breakdown.subject,
+      });
+
+      const nextLabel = (regenerated?.label ?? '').trim() || node.label;
+      const nextDescription = (regenerated?.description ?? '').trim() || node.description;
+      const nextMathContent = (regenerated?.mathContent ?? '').trim() || node.mathContent || node.label;
+      const nextBreakdown: ProblemBreakdown = {
+        ...breakdown,
+        nodeInsights: { ...nodeInsights },
+        nodeConversations: { ...nodeConversations },
+        nodes: breakdown.nodes.map((n) => (
+          n.id === node.id
+            ? { ...n, label: nextLabel, description: nextDescription, mathContent: nextMathContent }
+            : n
+        )),
+      };
+      setSelectedNode((prev) => {
+        if (!prev || prev.id !== node.id) return prev;
+        return { ...prev, label: nextLabel, description: nextDescription, mathContent: nextMathContent };
+      });
+
+      const nextNodeInsights = { ...nodeInsights };
+      const nextNodeConversations = { ...nodeConversations };
+      delete nextNodeInsights[node.id];
+      delete nextNodeConversations[node.id];
+      setNodeInsights(nextNodeInsights);
+      setNodeConversations(nextNodeConversations);
+      const persistedBreakdown: ProblemBreakdown = {
+        ...nextBreakdown,
+        nodeInsights: nextNodeInsights,
+        nodeConversations: nextNodeConversations,
+        nodePositions: positionsRef.current,
+      };
+      setBreakdown(persistedBreakdown);
+      if (sessionId) {
+        api.put(`/api/sessions/${sessionId}`, {
+          breakdown_json: JSON.stringify(persistedBreakdown),
+        }).catch(() => {});
+      }
+
+      setBranchActionPortal(null);
+      showActionToast('Node regenerated.');
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to regenerate node');
+      showActionToast('Regenerate failed.');
+    } finally {
+      setBranchActionBusy(null);
+    }
+  }, [
+    breakdown,
+    nodeConversations,
+    nodeInsights,
+    sessionId,
+    showActionToast,
+  ]);
+
+  const handleAddBranchToFlashcards = useCallback(async (node: BreakdownNode) => {
+    if (!breakdown) return;
+    setBranchActionBusy('flashcard');
+    const createQuickDeck = async () => {
+      const { deck } = await api.post<{ deck: { id: string } }>('/api/flashcards/decks', {
+        title: 'StudySpace Quick Capture',
+        description: 'Cards captured from StudySpace branch actions',
+        subject: breakdown.subject,
+      });
+      localStorage.setItem(QUICK_FLASHCARD_DECK_STORAGE_KEY, deck.id);
+      return deck.id;
+    };
+    try {
+      let deckId = localStorage.getItem(QUICK_FLASHCARD_DECK_STORAGE_KEY);
+      if (!deckId) deckId = await createQuickDeck();
+
+      const cardPayload = {
+        front: (node.mathContent ?? node.label).trim(),
+        back: `${node.label}\n${node.description}${node.mathContent ? `\nMath: ${node.mathContent}` : ''}`.trim(),
+        hint: breakdown.title,
+        difficulty: 'medium' as const,
+      };
+      try {
+        await api.post(`/api/flashcards/decks/${deckId}/cards`, cardPayload);
+      } catch {
+        localStorage.removeItem(QUICK_FLASHCARD_DECK_STORAGE_KEY);
+        const recreatedDeckId = await createQuickDeck();
+        await api.post(`/api/flashcards/decks/${recreatedDeckId}/cards`, cardPayload);
+      }
+
+      setBranchActionPortal(null);
+      showActionToast('Added to flashcards.');
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to add flashcard');
+      showActionToast('Add to flashcards failed.');
+    } finally {
+      setBranchActionBusy(null);
+    }
+  }, [breakdown, showActionToast]);
+
+  const handleCopyBranchMath = useCallback(async (node: BreakdownNode) => {
+    const raw = (node.mathContent || node.label || '').trim();
+    const text = buildCopyMathPayload(raw);
+    if (!text) {
+      showActionToast('No math content to copy.');
+      return;
+    }
+    try {
+      await copyToClipboard(text);
+      setBranchActionPortal(null);
+      showActionToast('Math copied.');
+    } catch {
+      showActionToast('Copy failed.');
+    }
+  }, [copyToClipboard, showActionToast]);
+
+  const handleBranchBreakdownFurther = useCallback((node: BreakdownNode) => {
+    setBranchActionPortal(null);
+    handleExpand(node);
+  }, [handleExpand]);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     await firebaseSignOut();
@@ -1941,6 +2240,64 @@ Do not repeat content already given.`;
   const composerPlaceholder = selectedNode
     ? `Ask Zupiq about ${selectedNode.label}...`
     : 'Select a node to start deep dive...';
+  const activeBranchActionNode = useMemo(() => {
+    if (!branchActionPortal || !breakdown) return null;
+    const node = breakdown.nodes.find((n) => n.id === branchActionPortal.nodeId);
+    if (!node) return null;
+    return node;
+  }, [branchActionPortal, breakdown]);
+  const actionPortalActions = useMemo(() => {
+    if (!activeBranchActionNode) return [];
+    return [
+      {
+        id: 'regenerate',
+        label: 'Regenerate Node',
+        onClick: () => handleRegenerateBranchNode(activeBranchActionNode),
+        disabled: branchActionBusy !== null,
+        icon: branchActionBusy === 'regenerate'
+          ? <Loader2 className="w-4 h-4 animate-spin text-secondary" />
+          : <RefreshCw className="w-4 h-4 text-secondary" />,
+      },
+      {
+        id: 'flashcard',
+        label: 'Add To Flashcard',
+        onClick: () => handleAddBranchToFlashcards(activeBranchActionNode),
+        disabled: branchActionBusy !== null,
+        icon: branchActionBusy === 'flashcard'
+          ? <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          : <Bookmark className="w-4 h-4 text-primary" />,
+      },
+      {
+        id: 'copy',
+        label: 'Copy Math',
+        onClick: () => handleCopyBranchMath(activeBranchActionNode),
+        disabled: branchActionBusy !== null,
+        icon: <Copy className="w-4 h-4 text-tertiary" />,
+      },
+      {
+        id: 'expand',
+        label: 'Breakdown Further',
+        onClick: () => handleBranchBreakdownFurther(activeBranchActionNode),
+        disabled: branchActionBusy !== null || !!expandingId,
+        icon: expandingId === activeBranchActionNode.id
+          ? <Loader2 className="w-4 h-4 animate-spin text-secondary" />
+          : <GitFork className="w-4 h-4 text-secondary" />,
+      },
+    ];
+  }, [
+    activeBranchActionNode,
+    branchActionBusy,
+    expandingId,
+    handleAddBranchToFlashcards,
+    handleBranchBreakdownFurther,
+    handleCopyBranchMath,
+    handleRegenerateBranchNode,
+  ]);
+  useEffect(() => {
+    if (!branchActionPortal) return;
+    if (activeBranchActionNode) return;
+    setBranchActionPortal(null);
+  }, [activeBranchActionNode, branchActionPortal]);
 
   return (
     <div className="min-h-screen bg-background text-on-surface overflow-hidden">
@@ -2245,8 +2602,22 @@ Do not repeat content already given.`;
                         userSelect: 'none',
                       }}
                       onMouseDown={e => startDrag(e, node.id)}
-                      onTouchStart={e => startTouchDrag(e, node.id)}
-                      onClick={() => setSelectedNode(node)}
+                      onTouchStart={e => handleBranchTouchStart(e, node)}
+                      onTouchMove={e => handleBranchTouchMove(e, node)}
+                      onTouchEnd={() => handleBranchTouchEnd(node.id)}
+                      onTouchCancel={() => handleBranchTouchCancel(node.id)}
+                      onContextMenu={e => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openBranchActionPortal(node, e.clientX, e.clientY);
+                      }}
+                      onClick={() => {
+                        if (suppressBranchClickRef.current) {
+                          suppressBranchClickRef.current = false;
+                          return;
+                        }
+                        selectNode(node);
+                      }}
                     >
                       {/* ── Root node ─── */}
                       {node.type === 'root' && (
@@ -2383,20 +2754,12 @@ Do not repeat content already given.`;
           </div>{/* end canvas area */}
         </section>
 
-        {/* ── Click-outside overlay ───────────────────────────────────────── */}
-        {selectedNode && (
-          <div
-            className="absolute inset-0 z-10"
-            onClick={() => setSelectedNode(null)}
-          />
-        )}
-
         {/* ── Right Panel ─────────────────────────────────────────────────── */}
         <motion.aside
           animate={{
-            width: selectedNode ? 384 : 0,
-            opacity: selectedNode ? 1 : 0,
-            x: selectedNode ? insightSwipeOffsetX : 24,
+            width: selectedNode && isInsightPanelOpen ? 384 : 0,
+            opacity: selectedNode && isInsightPanelOpen ? 1 : 0,
+            x: selectedNode && isInsightPanelOpen ? insightSwipeOffsetX : 24,
           }}
           transition={{
             width: { duration: 0.22, ease: 'easeInOut' },
@@ -2407,7 +2770,7 @@ Do not repeat content already given.`;
           }}
           className="h-full bg-surface-container-low/80 backdrop-blur-md border-l border-outline-variant/10 shrink-0 relative overflow-hidden z-20"
         >
-          {selectedNode && <><div
+          {selectedNode && isInsightPanelOpen && <><div
             className="h-full overflow-y-auto p-8 pb-[200px]"
             style={{ width: 384, touchAction: 'pan-y' }}
             onTouchStart={handleInsightSwipeStart}
@@ -2418,7 +2781,7 @@ Do not repeat content already given.`;
             <div className="flex items-center justify-between mb-8">
               <h2 className="font-headline font-bold text-xl">Node Insights</h2>
               {selectedNode && (
-                <button onClick={() => setSelectedNode(null)} className="text-on-surface-variant hover:text-on-surface">
+                <button onClick={closeInsightPanel} className="text-on-surface-variant hover:text-on-surface">
                   <X className="w-5 h-5" />
                 </button>
               )}
@@ -2609,6 +2972,29 @@ Do not repeat content already given.`;
           </div></>}
         </motion.aside>
       </motion.main>
+
+      <ActionPopover
+        open={!!(branchActionPortal && activeBranchActionNode)}
+        position={branchActionPortal}
+        onRequestClose={() => setBranchActionPortal(null)}
+        title="Action Portal"
+        subtitle={activeBranchActionNode ? <MathText>{activeBranchActionNode.label}</MathText> : null}
+        actions={actionPortalActions}
+      />
+
+      <AnimatePresence>
+        {actionToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[65] rounded-full px-4 py-2 text-xs font-medium bg-surface-container-highest border border-outline-variant/35 shadow-xl"
+          >
+            {actionToast}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <ProblemComposer
         open={showInput}
