@@ -318,6 +318,46 @@ function rebuildFromStructuredOcr(
   return out;
 }
 
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+}
+
+function resolveApiBaseHost(): string | null {
+  if (typeof window === 'undefined') return null;
+  const rawBase = (import.meta as ImportMeta & { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL;
+  if (!rawBase) return null;
+  try {
+    return new URL(rawBase, window.location.origin).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function resolveApiBaseUrl(): URL | null {
+  if (typeof window === 'undefined') return null;
+  const rawBase = (import.meta as ImportMeta & { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL;
+  if (!rawBase) return null;
+  try {
+    return new URL(rawBase, window.location.origin);
+  } catch {
+    return null;
+  }
+}
+
+function resolveAttachmentErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? '');
+  if (/failed to fetch/i.test(raw) || /networkerror/i.test(raw)) {
+    return 'Cannot reach the upload server. Check API domain/SSL/CORS. If site is HTTPS, API must also be HTTPS.';
+  }
+  if (/cors/i.test(raw)) {
+    return 'Upload blocked by CORS policy. Please allow your current web origin in backend CORS settings.';
+  }
+  if (/mixed content/i.test(raw)) {
+    return 'Blocked by browser mixed-content policy. Use an HTTPS API URL when the site is served over HTTPS.';
+  }
+  return raw || 'Failed to analyze attachment.';
+}
+
 function computeInitialPositions(nodes: BreakdownNode[], canvasW: number, canvasH: number): Record<string, NodePos> {
   const pos: Record<string, NodePos> = {};
   const roots    = nodes.filter(n => n.type === 'root');
@@ -1263,6 +1303,33 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
         return;
       }
 
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error('You are offline. Please reconnect and try again.');
+      }
+
+      const apiUrl = resolveApiBaseUrl();
+      const apiHost = resolveApiBaseHost();
+      if (
+        typeof window !== 'undefined'
+        && window.location.protocol === 'https:'
+        && apiUrl
+        && apiUrl.protocol === 'http:'
+      ) {
+        throw new Error(
+          'Blocked by mixed-content policy: site is HTTPS but API URL is HTTP. Configure `VITE_API_URL` to HTTPS.'
+        );
+      }
+      if (
+        typeof window !== 'undefined'
+        && apiHost
+        && isLoopbackHost(apiHost)
+        && !isLoopbackHost(window.location.hostname)
+      ) {
+        throw new Error(
+          'Cannot reach upload API from this device because `VITE_API_URL` points to localhost. Use your computer LAN IP for mobile testing.'
+        );
+      }
+
       const formData = new FormData();
       formData.append('file', normalizedFile);
       formData.append('context', 'ai_query');
@@ -1341,9 +1408,17 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
         structuredWarnings: structured?.warnings ?? [],
       });
     } catch (err: any) {
-      const message = err?.message ?? 'Failed to analyze attachment.';
+      const message = resolveAttachmentErrorMessage(err);
       setError(message);
-      debugStudy('attachment:attach:error', { message });
+      debugStudy('attachment:attach:error', {
+        message,
+        rawError: err instanceof Error ? err.message : String(err ?? ''),
+        webOrigin: typeof window !== 'undefined' ? window.location.origin : null,
+        webProtocol: typeof window !== 'undefined' ? window.location.protocol : null,
+        apiBaseUrl: resolveApiBaseUrl()?.toString() ?? null,
+        apiBaseHost: resolveApiBaseHost(),
+        online: typeof navigator !== 'undefined' ? navigator.onLine : null,
+      });
     } finally {
       setIsImageAnalyzing(false);
     }
