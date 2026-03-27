@@ -30,6 +30,7 @@ import { Auth } from "./components/Auth";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { StudySpacePage } from "./pages/StudySpacePage";
 import { HistoryPage } from "./pages/HistoryPage";
+import MobileHistoryPage from "./pages/MobileHistoryPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
@@ -605,6 +606,7 @@ export default function App() {
       (window.navigator as IOSNavigator).standalone === true
     );
   });
+  const [isMobileViewport, setIsMobileViewport] = useState(() => window.innerWidth < 640);
 
   const pathToPage = (path: string): AppShellPage => {
     if (path === '/history') return 'history';
@@ -674,6 +676,9 @@ export default function App() {
         displayModeQuery.matches || (window.navigator as IOSNavigator).standalone === true
       );
     };
+    const updateViewport = () => {
+      setIsMobileViewport(window.innerWidth < 640);
+    };
 
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -688,11 +693,13 @@ export default function App() {
     updateStandaloneState();
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
     window.addEventListener('appinstalled', onAppInstalled);
+    window.addEventListener('resize', updateViewport);
     displayModeQuery.addEventListener('change', updateStandaloneState);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
       window.removeEventListener('appinstalled', onAppInstalled);
+      window.removeEventListener('resize', updateViewport);
       displayModeQuery.removeEventListener('change', updateStandaloneState);
     };
   }, []);
@@ -763,7 +770,16 @@ export default function App() {
         />
       );
     } else if (page === 'history') {
-      authenticatedPage = (
+      authenticatedPage = isMobileViewport ? (
+        <MobileHistoryPage
+          user={currentUser}
+          onNavigateStudy={(bd) => { setInitialBreakdown(bd ?? null); setPage('study'); }}
+          onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
+        />
+      ) : (
         <HistoryPage
           user={currentUser}
           onNavigateStudy={(bd) => { setInitialBreakdown(bd ?? null); setPage('study'); }}

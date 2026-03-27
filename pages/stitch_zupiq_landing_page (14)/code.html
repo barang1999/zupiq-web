@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Zupiq | Resource Library</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-secondary-container": "#fff5f9",
+              "tertiary-container": "#cafd00",
+              "tertiary-fixed": "#cafd00",
+              "on-surface": "#dee5ff",
+              "surface-tint": "#a1faff",
+              "on-tertiary": "#516700",
+              "inverse-on-surface": "#4d556b",
+              "primary-dim": "#00e5ee",
+              "on-primary": "#006165",
+              "surface-dim": "#060e20",
+              "on-primary-fixed": "#004346",
+              "secondary-fixed-dim": "#ffa6f3",
+              "on-error-container": "#ffa8a3",
+              "outline-variant": "#40485d",
+              "inverse-primary": "#006a6e",
+              "secondary": "#ff51fa",
+              "surface-container-low": "#091328",
+              "surface-container-high": "#141f38",
+              "primary-fixed": "#00f4fe",
+              "on-secondary-fixed": "#620061",
+              "on-primary-container": "#00575b",
+              "surface-bright": "#1f2b49",
+              "tertiary-dim": "#beee00",
+              "secondary-dim": "#ff51fa",
+              "on-secondary-fixed-variant": "#920091",
+              "primary-container": "#00f4fe",
+              "error-container": "#9f0519",
+              "surface-variant": "#192540",
+              "on-surface-variant": "#a3aac4",
+              "surface-container-highest": "#192540",
+              "error": "#ff716c",
+              "on-secondary": "#400040",
+              "surface-container-lowest": "#000000",
+              "secondary-fixed": "#ffbdf3",
+              "secondary-container": "#a900a9",
+              "on-error": "#490006",
+              "tertiary-fixed-dim": "#beee00",
+              "surface": "#060e20",
+              "background": "#060e20",
+              "error-dim": "#d7383b",
+              "on-tertiary-fixed": "#3a4a00",
+              "on-tertiary-container": "#4a5e00",
+              "outline": "#6d758c",
+              "surface-container": "#0f1930",
+              "primary-fixed-dim": "#00e5ee",
+              "inverse-surface": "#faf8ff",
+              "on-background": "#dee5ff",
+              "on-primary-fixed-variant": "#006266",
+              "primary": "#a1faff",
+              "tertiary": "#f3ffca",
+              "on-tertiary-fixed-variant": "#526900"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(25, 37, 64, 0.6);
+            backdrop-filter: blur(20px);
+        }
+        .glow-border {
+            position: relative;
+        }
+        .glow-border::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            background: linear-gradient(45deg, #a1faff, #ff51fa);
+            z-index: -1;
+            border-radius: inherit;
+            opacity: 0.3;
+        }
+        .neural-gradient {
+            background: linear-gradient(135deg, rgba(161, 250, 255, 0.1) 0%, rgba(255, 81, 250, 0.1) 100%);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary selection:text-on-primary">
+<!-- Sidebar Navigation (SideNavBar) -->
+<aside class="h-screen w-64 fixed left-0 top-0 z-40 bg-[#091328] bg-gradient-to-b from-[#091328] to-[#060e20] flex flex-col py-8 hidden md:flex">
+<div class="px-6 mb-10">
+<h1 class="font-headline font-bold text-[#dee5ff] text-2xl tracking-tight">Zupiq</h1>
+<p class="text-on-surface-variant text-xs mt-1">Prismatic Neuralist</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 text-[#a3aac4] hover:text-[#dee5ff] px-6 py-3 transition-colors hover:bg-[#192540]/50" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label text-sm font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 bg-[#192540] text-[#a1faff] rounded-r-full border-l-4 border-[#00F5FF] shadow-[5px_0_15px_rgba(0,245,255,0.1)] px-6 py-3" href="#">
+<span class="material-symbols-outlined" data-icon="auto_stories">auto_stories</span>
+<span class="font-label text-sm font-medium">Resources</span>
+</a>
+<a class="flex items-center gap-3 text-[#a3aac4] hover:text-[#dee5ff] px-6 py-3 transition-colors hover:bg-[#192540]/50" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-label text-sm font-medium">History</span>
+</a>
+<a class="flex items-center gap-3 text-[#a3aac4] hover:text-[#dee5ff] px-6 py-3 transition-colors hover:bg-[#192540]/50" href="#">
+<span class="material-symbols-outlined" data-icon="folder_special">folder_special</span>
+<span class="font-label text-sm font-medium">Collections</span>
+</a>
+<a class="flex items-center gap-3 text-[#a3aac4] hover:text-[#dee5ff] px-6 py-3 transition-colors hover:bg-[#192540]/50" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label text-sm font-medium">Settings</span>
+</a>
+</nav>
+<div class="px-6 mt-auto space-y-4">
+<button class="w-full py-3 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary font-headline font-bold text-sm active:scale-95 transition-transform">
+                New Search
+            </button>
+<div class="pt-6 border-t border-outline-variant/20 space-y-1">
+<a class="flex items-center gap-3 text-[#a3aac4] py-2 hover:text-[#dee5ff] transition-colors" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="help">help</span>
+<span class="font-label text-xs">Help</span>
+</a>
+<a class="flex items-center gap-3 text-[#a3aac4] py-2 hover:text-[#dee5ff] transition-colors" href="#">
+<span class="material-symbols-outlined text-lg" data-icon="logout">logout</span>
+<span class="font-label text-xs">Logout</span>
+</a>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-64 min-h-screen relative overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-0 md:left-64 z-50 h-16 bg-[#192540]/60 backdrop-blur-xl flex justify-between items-center px-8 shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
+<div class="flex items-center flex-1 max-w-xl">
+<div class="relative w-full group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-primary" data-icon="search">search</span>
+<input class="w-full bg-surface-container-high/50 border-none rounded-full pl-10 pr-4 py-2 text-sm focus:ring-1 focus:ring-primary/40 placeholder:text-on-surface-variant" placeholder="Search the Neural Library" type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6 ml-8">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-gradient-to-tr from-primary to-secondary p-[1px]">
+<div class="h-full w-full rounded-full bg-surface-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="professional male portrait avatar with clean lighting and neutral background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBxNSCFPQpKGPloBwaX0V53pUM0jHxeRQYO9FmqaEVN9NY_LhnynG3b2cHN1fwQ4QihLNKg8Zwl90nmmjhWx9y8sw_CAg6GHDQh2BqTCf-DR3zo_UugjiTd_aLjFOLR7g6FCX-F_moflMgcM-PLdXodftbB6DKoAdsC06QVs4-wAjCJ5ef1CeDTMf4S8Q2CorsZ2fr8Edb1sij6hk1wHk5K1bIDcLPtlPva_4_xhsLNmOPUepyxKUGiiZ3J4jVIJc66D4WRS--4qTI"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Library Content -->
+<div class="pt-24 pb-12 px-8 space-y-12">
+<!-- Hero Section -->
+<section class="relative rounded-[2rem] overflow-hidden p-12 bg-surface-container-low min-h-[320px] flex flex-col justify-center">
+<div class="absolute top-0 right-0 w-1/2 h-full opacity-20 pointer-events-none">
+<img class="w-full h-full object-cover" data-alt="abstract 3d neural network visualization with neon glowing lines and connections on dark blue background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCvHS0AQHwEd0NCr8_vIygF_K483voGwC__AJ0RKqnPVaWjYHFzHcmq42IXUqsu7N765b44OR8jxnla-yAFm_XdXKDsldGnwHLKnT6kPj-ABUF3NVRKmCspMsYzMk7rsYOajEtCfi5bMcRHlEUPOPa9v8sD0P6jYzBS7Z4sJOkQ9RS_mYswWTqUYgyRjRp8wmivZL8sIntwUgY3hLuWFBWrpJXmZDPwVCgSRf0V702RUBHPBXVur8EJ6ze3ISZu_E3PrLgtpOW95wY"/>
+</div>
+<div class="relative z-10 space-y-6 max-w-2xl">
+<h2 class="text-5xl font-headline font-bold tracking-tighter text-on-surface leading-none">
+                        Expand Your <span class="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Cognitive Horizon</span>
+</h2>
+<p class="text-lg text-on-surface-variant max-w-lg">Access a synthesized vault of research, neural maps, and cinematic lectures powered by Zupiq's core intelligence.</p>
+<div class="flex flex-wrap gap-3">
+<button class="px-5 py-2 rounded-full bg-surface-container-highest text-primary border border-primary/20 hover:bg-primary hover:text-on-primary transition-all text-sm font-medium">Research Papers</button>
+<button class="px-5 py-2 rounded-full bg-surface-container-highest text-on-surface-variant border border-outline-variant/30 hover:border-primary/50 transition-all text-sm font-medium">Neural Breakdowns</button>
+<button class="px-5 py-2 rounded-full bg-surface-container-highest text-on-surface-variant border border-outline-variant/30 hover:border-primary/50 transition-all text-sm font-medium">Video Lectures</button>
+<button class="px-5 py-2 rounded-full bg-surface-container-highest text-on-surface-variant border border-outline-variant/30 hover:border-primary/50 transition-all text-sm font-medium">Case Studies</button>
+</div>
+</div>
+</section><section class="space-y-6 pt-4">
+<div class="flex items-center gap-4">
+<h3 class="text-2xl font-headline font-bold text-on-surface whitespace-nowrap">Upload Resource</h3>
+<div class="h-[1px] w-full bg-gradient-to-r from-outline-variant/20 to-transparent"></div>
+</div>
+<div class="glass-panel rounded-[2rem] p-8 border border-outline-variant/10 relative overflow-hidden group">
+<div class="flex flex-col md:flex-row items-center gap-8">
+<!-- Drag & Drop Zone -->
+<div class="flex-1 w-full">
+<div class="border-2 border-dashed border-primary/30 rounded-2xl p-10 flex flex-col items-center justify-center bg-surface/30 hover:bg-primary/5 transition-all cursor-pointer group/drop">
+<div class="flex gap-4 mb-4">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="picture_as_pdf">picture_as_pdf</span>
+<span class="material-symbols-outlined text-secondary text-3xl" data-icon="movie">movie</span>
+<span class="material-symbols-outlined text-tertiary text-3xl" data-icon="description">description</span>
+</div>
+<p class="font-headline font-medium text-on-surface text-center mb-1">Drag &amp; Drop your assets here</p>
+<p class="text-xs text-on-surface-variant">Supports PDF, MP4, and Text files</p>
+</div>
+</div>
+<!-- Actions & Status -->
+<div class="w-full md:w-80 space-y-6">
+<div class="space-y-2">
+<div class="flex justify-between text-xs font-bold">
+<span class="text-primary">Processing...</span>
+<span class="text-on-surface-variant">75%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-secondary w-[75%] rounded-full shadow-[0_0_10px_rgba(0,245,255,0.5)] animate-pulse"></div>
+</div>
+</div>
+<button class="w-full py-4 rounded-xl bg-gradient-to-r from-[#00F5FF] to-[#ff51fa] text-on-primary font-headline font-bold text-sm shadow-lg hover:shadow-primary/20 transition-all active:scale-95">
+                    Upload New Resource
+                </button>
+<div class="flex items-center gap-2 text-[10px] text-on-surface-variant justify-center">
+<span class="material-symbols-outlined text-xs" data-icon="shield_lock">shield_lock</span>
+                    Encrypted &amp; Indexed by Neural Engine
+                </div>
+</div>
+</div>
+</div>
+</section>
+<!-- Featured Resources Carousel -->
+<section class="space-y-6">
+<div class="flex justify-between items-end">
+<div>
+<span class="text-secondary font-headline font-bold text-xs tracking-widest uppercase">AI Recommended</span>
+<h3 class="text-3xl font-headline font-bold text-on-surface">Featured Syntheses</h3>
+</div>
+<div class="flex gap-2">
+<button class="h-10 w-10 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="chevron_left">chevron_left</span>
+</button>
+<button class="h-10 w-10 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+<div class="flex gap-6 overflow-x-auto pb-4 no-scrollbar">
+<!-- Resource Card 1 -->
+<div class="min-w-[340px] group bg-surface-container rounded-3xl p-6 glow-border transition-all hover:-translate-y-2">
+<div class="h-40 rounded-2xl overflow-hidden mb-6 relative">
+<img class="w-full h-full object-cover" data-alt="vibrant abstract visualization of quantum particles colliding with prismatic light effects" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0ml2Uyls_nPoqxJir52A7JS9-WaRA-IrIVU_4PU91AHeCqnv7hV-epT-F4FGcD02c09KshdhD9TcyARqjYAJcwTg3PYeOlTNiOZPimk4oJbsKjeQK7_dty-niIry1CCgvFrV544DqAQ7QZad4wX87sMCvP5_uDK2OHLVJ0739YzdNiLk6mwg24oRXgxeT73DO_mvU8zARB_DM2zEtHZ7y1Zr-GqRG6gQlt48E2A_r2aHmw168NCtBHYCsk_OO6bhom1YlhyjLT1Y"/>
+<div class="absolute top-3 right-3 bg-surface-dim/80 backdrop-blur-md p-2 rounded-full cursor-pointer hover:text-secondary">
+<span class="material-symbols-outlined text-sm" data-icon="bookmark">bookmark</span>
+</div>
+</div>
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<span class="px-2 py-1 rounded bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">Physics</span>
+<span class="text-on-surface-variant text-xs flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="schedule">schedule</span> 12 min read
+                                </span>
+</div>
+<h4 class="text-xl font-headline font-bold leading-tight group-hover:text-primary transition-colors">Quantum Entanglement: A Neural Overview</h4>
+<div class="flex items-center justify-between pt-2 border-t border-outline-variant/10">
+<div class="flex items-center gap-2">
+<div class="h-6 w-6 rounded-full bg-tertiary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px] text-tertiary" data-icon="psychology">psychology</span>
+</div>
+<span class="text-xs text-on-surface-variant">Advanced Depth</span>
+</div>
+<button class="text-xs font-bold text-primary flex items-center gap-1 group">
+                                    Explore <span class="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Resource Card 2 -->
+<div class="min-w-[340px] group bg-surface-container rounded-3xl p-6 glow-border transition-all hover:-translate-y-2">
+<div class="h-40 rounded-2xl overflow-hidden mb-6 relative">
+<img class="w-full h-full object-cover" data-alt="stylized 3d model of a human brain with translucent layers and digital data points glowing in magenta and cyan" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDG04M9E0ProIz_9CUhEBr8WkLFIUFoRgkfcafsz9YQ0TshMvF1K5_kcuftd_exvWFmtUKI7u5Rmd7BvzVA8I6WTTXX-TjUyG7kUds0txJyvNLAV67eWk77Itv6UNJCJpXsrIt68PXrOmefnH0DUJuFf6YzzYeq0Gl30_1FullNt5ejOjoNaEipLWOfqO_GXfhqeFAk56gPAqHAppFEpKmFIQSiGfZZVKcgdZLMa29uRPTgwSyHwGx_lfa4IXayb2F_UmjVpsjVZ8A"/>
+<div class="absolute top-3 right-3 bg-surface-dim/80 backdrop-blur-md p-2 rounded-full cursor-pointer hover:text-secondary">
+<span class="material-symbols-outlined text-sm" data-icon="bookmark">bookmark</span>
+</div>
+</div>
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<span class="px-2 py-1 rounded bg-secondary/10 text-secondary text-[10px] font-bold uppercase tracking-wider">Biology</span>
+<span class="text-on-surface-variant text-xs flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="schedule">schedule</span> 8 min read
+                                </span>
+</div>
+<h4 class="text-xl font-headline font-bold leading-tight group-hover:text-secondary transition-colors">Neuroplasticity in the Digital Age</h4>
+<div class="flex items-center justify-between pt-2 border-t border-outline-variant/10">
+<div class="flex items-center gap-2">
+<div class="h-6 w-6 rounded-full bg-tertiary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px] text-tertiary" data-icon="psychology">psychology</span>
+</div>
+<span class="text-xs text-on-surface-variant">Intermediate</span>
+</div>
+<button class="text-xs font-bold text-secondary flex items-center gap-1 group">
+                                    Explore <span class="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Resource Card 3 -->
+<div class="min-w-[340px] group bg-surface-container rounded-3xl p-6 glow-border transition-all hover:-translate-y-2">
+<div class="h-40 rounded-2xl overflow-hidden mb-6 relative">
+<img class="w-full h-full object-cover" data-alt="architectural blueprint of a futuristic city with glowing white lines on a dark blue background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQIFrtqdxdxnspOayNONJXZDaboMUl_IbYFzBtY0V4tO3QIauW3BCDz99vGMQJB4-HAVum4IyqYNPpCpb68z53H2IrkAe94huLebzkPhIns4tb4Xivg9GY0YRleDriwfu99wwdB7Z6_1DfZUPrmR0S1HQ42N1ReS8WmZ89JF7QJnshHq_zzjG146tnXgLeEhjI_j8rHqbW4WfhgwBmuRvvwKCisTDG_eXdc2tl9nLZYIDsujINabxP1r5KF3eqeigikx6ljshx-eY"/>
+<div class="absolute top-3 right-3 bg-surface-dim/80 backdrop-blur-md p-2 rounded-full cursor-pointer hover:text-secondary">
+<span class="material-symbols-outlined text-sm" data-icon="bookmark">bookmark</span>
+</div>
+</div>
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<span class="px-2 py-1 rounded bg-tertiary/10 text-tertiary text-[10px] font-bold uppercase tracking-wider">Art History</span>
+<span class="text-on-surface-variant text-xs flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="schedule">schedule</span> 15 min read
+                                </span>
+</div>
+<h4 class="text-xl font-headline font-bold leading-tight group-hover:text-tertiary transition-colors">Neo-Brutalism: Architectural Evolution</h4>
+<div class="flex items-center justify-between pt-2 border-t border-outline-variant/10">
+<div class="flex items-center gap-2">
+<div class="h-6 w-6 rounded-full bg-tertiary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px] text-tertiary" data-icon="psychology">psychology</span>
+</div>
+<span class="text-xs text-on-surface-variant">Concept Deep Dive</span>
+</div>
+<button class="text-xs font-bold text-tertiary flex items-center gap-1 group">
+                                    Explore <span class="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Grid Layout: Saved Breakdowns & Assistant -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<!-- Saved Breakdowns -->
+<section class="lg:col-span-2 space-y-6">
+<div class="flex justify-between items-center">
+<h3 class="text-2xl font-headline font-bold text-on-surface">Saved Breakdowns</h3>
+<button class="text-xs font-bold text-on-surface-variant hover:text-primary transition-colors flex items-center gap-1">
+                            View All <span class="material-symbols-outlined text-sm" data-icon="open_in_new">open_in_new</span>
+</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Breakdown Item 1 -->
+<div class="glass-panel rounded-2xl p-6 border border-outline-variant/10 hover:border-primary/30 transition-all cursor-pointer group">
+<div class="flex justify-between items-start mb-4">
+<div class="h-10 w-10 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="account_tree">account_tree</span>
+</div>
+<span class="text-[10px] font-bold text-on-surface-variant opacity-60">SAVED 2D AGO</span>
+</div>
+<h5 class="font-headline font-bold text-lg mb-2 group-hover:text-primary">Thermodynamics II: Entropy Neural Map</h5>
+<p class="text-xs text-on-surface-variant line-clamp-2 mb-4">A complete breakdown of the second law including heat engine cycles and statistical mechanics...</p>
+<div class="flex -space-x-2">
+<div class="h-6 w-6 rounded-full border border-surface bg-surface-container-high flex items-center justify-center text-[10px]">P</div>
+<div class="h-6 w-6 rounded-full border border-surface bg-surface-container-high flex items-center justify-center text-[10px]">T</div>
+<div class="h-6 w-6 rounded-full border border-surface bg-surface-container-high flex items-center justify-center text-[10px] text-primary">+3</div>
+</div>
+</div>
+<!-- Breakdown Item 2 -->
+<div class="glass-panel rounded-2xl p-6 border border-outline-variant/10 hover:border-secondary/30 transition-all cursor-pointer group">
+<div class="flex justify-between items-start mb-4">
+<div class="h-10 w-10 rounded-lg bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" data-icon="analytics">analytics</span>
+</div>
+<span class="text-[10px] font-bold text-on-surface-variant opacity-60">SAVED 5D AGO</span>
+</div>
+<h5 class="font-headline font-bold text-lg mb-2 group-hover:text-secondary">Financial Systems: Macro-Symmetry Breakdown</h5>
+<p class="text-xs text-on-surface-variant line-clamp-2 mb-4">Analysis of global currency shifts and the impact of decentralized protocols on trade balance...</p>
+<div class="flex -space-x-2">
+<div class="h-6 w-6 rounded-full border border-surface bg-surface-container-high flex items-center justify-center text-[10px]">E</div>
+<div class="h-6 w-6 rounded-full border border-surface bg-surface-container-high flex items-center justify-center text-[10px]">F</div>
+<div class="h-6 w-6 rounded-full border border-surface bg-surface-container-high flex items-center justify-center text-[10px] text-secondary">+1</div>
+</div>
+</div>
+</div>
+</section>
+<!-- AI Research Assistant Sidebar -->
+<aside class="space-y-6">
+<h3 class="text-2xl font-headline font-bold text-on-surface">AI Assistant</h3>
+<div class="bg-gradient-to-br from-[#0f1930] to-[#192540] rounded-3xl p-8 relative overflow-hidden group">
+<!-- AI Floating Orb (Signature) -->
+<div class="absolute -top-12 -right-12 h-32 w-32 rounded-full bg-primary/20 blur-3xl animate-pulse"></div>
+<div class="absolute top-4 right-4 h-12 w-12 rounded-full bg-primary-container flex items-center justify-center shadow-[0_0_20px_rgba(0,244,254,0.4)]">
+<span class="material-symbols-outlined text-on-primary-container font-variation-settings-fill" data-icon="bolt">bolt</span>
+</div>
+<div class="relative z-10 space-y-6">
+<h4 class="text-xl font-headline font-bold text-on-surface">Neural Synthesizer</h4>
+<p class="text-sm text-on-surface-variant leading-relaxed">Select up to 3 resources to generate a cross-disciplinary summary or "Neural Synthesis".</p>
+<div class="space-y-3">
+<button class="w-full flex items-center justify-between p-4 rounded-2xl bg-surface/50 border border-outline-variant/10 text-left hover:border-primary transition-all">
+<span class="text-sm font-medium">Find more like this</span>
+<span class="material-symbols-outlined text-sm" data-icon="search_spark">search_spark</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 rounded-2xl bg-surface/50 border border-outline-variant/10 text-left hover:border-secondary transition-all">
+<span class="text-sm font-medium">Synthesize sources</span>
+<span class="material-symbols-outlined text-sm" data-icon="temp_preferences_custom">temp_preferences_custom</span>
+</button>
+</div>
+<button class="w-full py-4 rounded-2xl bg-on-surface text-surface font-headline font-bold active:scale-95 transition-transform">
+                                Start Assistant
+                            </button>
+</div>
+</div>
+</aside>
+</div>
+<!-- Resource Categories Grid -->
+<section class="space-y-8 pt-8">
+<div class="flex items-center gap-4">
+<h3 class="text-3xl font-headline font-bold text-on-surface whitespace-nowrap">Explore by Subject</h3>
+<div class="h-[1px] w-full bg-gradient-to-r from-outline-variant/20 to-transparent"></div>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+<!-- Category Item -->
+<div class="group h-40 bg-surface-container rounded-3xl p-6 flex flex-col justify-between hover:bg-surface-container-high transition-all cursor-pointer">
+<div class="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary" data-icon="functions">functions</span>
+</div>
+<span class="font-headline font-bold text-on-surface">Mathematics</span>
+</div>
+<div class="group h-40 bg-surface-container rounded-3xl p-6 flex flex-col justify-between hover:bg-surface-container-high transition-all cursor-pointer">
+<div class="h-10 w-10 rounded-2xl bg-secondary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-secondary" data-icon="biotech">biotech</span>
+</div>
+<span class="font-headline font-bold text-on-surface">Biology</span>
+</div>
+<div class="group h-40 bg-surface-container rounded-3xl p-6 flex flex-col justify-between hover:bg-surface-container-high transition-all cursor-pointer">
+<div class="h-10 w-10 rounded-2xl bg-tertiary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-tertiary" data-icon="history_edu">history_edu</span>
+</div>
+<span class="font-headline font-bold text-on-surface">History</span>
+</div>
+<div class="group h-40 bg-surface-container rounded-3xl p-6 flex flex-col justify-between hover:bg-surface-container-high transition-all cursor-pointer">
+<div class="h-10 w-10 rounded-2xl bg-primary-dim/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-primary-dim" data-icon="architecture">architecture</span>
+</div>
+<span class="font-headline font-bold text-on-surface">Engineering</span>
+</div>
+<div class="group h-40 bg-surface-container rounded-3xl p-6 flex flex-col justify-between hover:bg-surface-container-high transition-all cursor-pointer">
+<div class="h-10 w-10 rounded-2xl bg-secondary-fixed-dim/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-secondary-fixed-dim" data-icon="palette">palette</span>
+</div>
+<span class="font-headline font-bold text-on-surface">Art &amp; Design</span>
+</div>
+<div class="group h-40 bg-surface-container rounded-3xl p-6 flex flex-col justify-between hover:bg-surface-container-high transition-all cursor-pointer">
+<div class="h-10 w-10 rounded-2xl bg-on-surface-variant/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="more_horiz">more_horiz</span>
+</div>
+<span class="font-headline font-bold text-on-surface">View All</span>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- BottomNavBar for Mobile -->
+<nav class="fixed bottom-0 left-0 right-0 h-16 bg-[#192540]/80 backdrop-blur-xl md:hidden z-50 flex items-center justify-around px-4">
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="text-[10px] font-label">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined" data-icon="auto_stories">auto_stories</span>
+<span class="text-[10px] font-label">Library</span>
+</a>
+<div class="h-12 w-12 -mt-10 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center shadow-lg active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-on-primary" data-icon="add">add</span>
+</div>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="folder_special">folder_special</span>
+<span class="text-[10px] font-label">Saves</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="text-[10px] font-label">Settings</span>
+</a>
+</nav>
+</body></html>
