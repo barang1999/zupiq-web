@@ -169,20 +169,10 @@ export const api = {
   delete: <T>(url: string, options?: RequestOptions) =>
     request<T>(url, { ...options, method: "DELETE" }),
 
-  upload: <T>(url: string, formData: FormData, options?: RequestOptions) => {
-    const { headers: customHeaders, ...rest } = options ?? {};
-    // Do NOT set Content-Type for multipart/form-data — browser handles boundary
-    const token = tokenStorage.getAccess();
-    const headers: Record<string, string> = {
-      ...(customHeaders as Record<string, string> ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-    return request<T>(url, {
-      ...rest,
+  upload: <T>(url: string, formData: FormData, options?: RequestOptions) =>
+    request<T>(url, {
+      ...options,
       method: "POST",
       body: formData,
-      headers,
-      skipAuth: true, // we set auth manually above
-    });
-  },
+    }),
 };

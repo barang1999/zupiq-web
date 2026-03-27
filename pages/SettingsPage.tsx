@@ -4,7 +4,7 @@ import {
   User, SlidersHorizontal, Languages, GraduationCap,
   HelpCircle, LogOut, Check, Zap, Pencil, Loader2, ArrowLeft,
 } from 'lucide-react';
-import { api, tokenStorage } from '../lib/api';
+import { ApiError, api, tokenStorage } from '../lib/api';
 import { AppHeader } from '../components/layout/AppHeader';
 import { CustomSelect } from '../components/ui/CustomSelect';
 import type { EducationLevel, Language } from '../types/shared';
@@ -50,6 +50,23 @@ const SIDEBAR_ITEMS = [
   { id: 'academic-level', label: 'Academic Level', Icon: GraduationCap   },
 ];
 
+const AVATAR_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
+const MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024;
+
+function getAvatarUploadErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 0) {
+      return 'Unable to reach avatar upload service. Check API URL, HTTPS/mixed-content, and network access.';
+    }
+    if (err.status === 401) {
+      return 'Your session has expired. Please sign in again and retry.';
+    }
+    return err.message || 'Failed to upload avatar.';
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return 'Failed to upload avatar. Please try again.';
+}
+
 // ─── Toggle ───────────────────────────────────────────────────────────────────
 
 function Toggle({ checked, onChange, color = 'bg-primary' }: {
@@ -84,14 +101,29 @@ export function SettingsPage({ user, onUserUpdate, onSignOut, onBack }: Props) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setAvatarError(null);
+
+    if (!AVATAR_MIME_TYPES.includes(file.type as typeof AVATAR_MIME_TYPES[number])) {
+      setAvatarError('Only JPEG, PNG, WebP, or GIF images are supported.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    if (file.size > MAX_AVATAR_SIZE_BYTES) {
+      setAvatarError('Image must be 5 MB or smaller.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
     // Show local preview immediately
     const objectUrl = URL.createObjectURL(file);
+    if (avatarPreview?.startsWith('blob:')) URL.revokeObjectURL(avatarPreview);
     setAvatarPreview(objectUrl);
 
     setUploadingAvatar(true);
@@ -99,9 +131,13 @@ export function SettingsPage({ user, onUserUpdate, onSignOut, onBack }: Props) {
       const formData = new FormData();
       formData.append('avatar', file);
       const res = await api.upload<{ user: any }>('/api/users/avatar', formData);
+      URL.revokeObjectURL(objectUrl);
+      setAvatarPreview(null);
       onUserUpdate(res.user);
-    } catch {
+    } catch (err) {
+      URL.revokeObjectURL(objectUrl);
       setAvatarPreview(null); // revert preview on error
+      setAvatarError(getAvatarUploadErrorMessage(err));
     } finally {
       setUploadingAvatar(false);
       // Reset input so the same file can be re-selected
@@ -292,6 +328,9 @@ export function SettingsPage({ user, onUserUpdate, onSignOut, onBack }: Props) {
                       : <Pencil className="w-4 h-4" />
                     }
                   </button>
+                  {avatarError && (
+                    <p className="mt-3 max-w-52 text-xs text-error">{avatarError}</p>
+                  )}
                 </div>
 
                 {/* Fields */}
