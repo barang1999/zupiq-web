@@ -61,10 +61,28 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     }
   }
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
-    ...fetchOptions,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${endpoint}`, {
+      ...fetchOptions,
+      headers,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Network request failed";
+    const method = (fetchOptions.method ?? "GET").toUpperCase();
+    throw new ApiError(0, message, {
+      kind: "network_error",
+      endpoint,
+      url: `${BASE_URL}${endpoint}`,
+      method,
+      baseUrl: BASE_URL,
+      errorName: err instanceof Error ? err.name : typeof err,
+      errorMessage: message,
+      origin: typeof window !== "undefined" ? window.location.origin : null,
+      online: typeof navigator !== "undefined" ? navigator.onLine : null,
+      secureContext: typeof window !== "undefined" ? window.isSecureContext : null,
+    });
+  }
 
   // Handle 401 by attempting token refresh
   if (response.status === 401 && !skipAuth) {
@@ -152,12 +170,13 @@ export const api = {
     request<T>(url, { ...options, method: "DELETE" }),
 
   upload: <T>(url: string, formData: FormData, options?: RequestOptions) => {
-    const { headers: _headers, ...rest } = options ?? {};
+    const { headers: customHeaders, ...rest } = options ?? {};
     // Do NOT set Content-Type for multipart/form-data — browser handles boundary
     const token = tokenStorage.getAccess();
-    const headers: Record<string, string> = token
-      ? { Authorization: `Bearer ${token}` }
-      : {};
+    const headers: Record<string, string> = {
+      ...(customHeaders as Record<string, string> ?? {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
     return request<T>(url, {
       ...rest,
       method: "POST",

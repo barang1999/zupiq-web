@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
 import { ProblemComposer } from '../components/ai/ProblemComposer';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 import { MathText } from '../components/ui/MathText';
 import { RichText } from '../components/ui/RichText';
 import { supabase } from '../lib/supabase';
@@ -344,18 +344,60 @@ function resolveApiBaseUrl(): URL | null {
   }
 }
 
-function resolveAttachmentErrorMessage(err: unknown): string {
+function resolveAttachmentErrorMessage(
+  err: unknown,
+  context: {
+    stage: string;
+    traceId: string;
+  }
+): string {
   const raw = err instanceof Error ? err.message : String(err ?? '');
+  const apiUrl = resolveApiBaseUrl();
+  const apiOrigin = apiUrl?.origin ?? 'API';
+  const stageLabel = context.stage || 'unknown-stage';
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return `Core issue: device is offline (stage: ${stageLabel}).`;
+  }
+  if (
+    typeof window !== 'undefined'
+    && window.location.protocol === 'https:'
+    && apiUrl?.protocol === 'http:'
+  ) {
+    return `Core issue: mixed-content blocked (HTTPS site cannot call HTTP API ${apiOrigin}).`;
+  }
+  if (
+    typeof window !== 'undefined'
+    && apiUrl
+    && isLoopbackHost(apiUrl.hostname)
+    && !isLoopbackHost(window.location.hostname)
+  ) {
+    return `Core issue: API points to localhost (${apiOrigin}) from non-localhost client.`;
+  }
+
+  if (err instanceof ApiError) {
+    if (err.status > 0) {
+      return `Core issue: server returned HTTP ${err.status} (stage: ${stageLabel}).`;
+    }
+
+    const data = (err.data ?? {}) as Record<string, unknown>;
+    const method = typeof data.method === 'string' ? data.method : 'REQUEST';
+    const endpoint = typeof data.endpoint === 'string' ? data.endpoint : '';
+    if (/failed to fetch/i.test(raw) || /networkerror/i.test(raw) || /load failed/i.test(raw)) {
+      return `Core issue: browser blocked ${method} ${endpoint} before server response (stage: ${stageLabel}). Likely CORS preflight, TLS certificate, DNS, or edge firewall rule.`;
+    }
+  }
+
   if (/failed to fetch/i.test(raw) || /networkerror/i.test(raw)) {
-    return 'Cannot reach the upload server. Check API domain/SSL/CORS. If site is HTTPS, API must also be HTTPS.';
+    return `Core issue: request failed before server response (stage: ${stageLabel}). Check CORS/SSL/DNS/connectivity to ${apiOrigin}.`;
   }
   if (/cors/i.test(raw)) {
-    return 'Upload blocked by CORS policy. Please allow your current web origin in backend CORS settings.';
+    return `Core issue: CORS blocked request to ${apiOrigin} (stage: ${stageLabel}).`;
   }
   if (/mixed content/i.test(raw)) {
-    return 'Blocked by browser mixed-content policy. Use an HTTPS API URL when the site is served over HTTPS.';
+    return `Core issue: mixed-content blocked (stage: ${stageLabel}).`;
   }
-  return raw || 'Failed to analyze attachment.';
+  return `Core issue: ${raw || 'unknown error'} (stage: ${stageLabel}, trace: ${context.traceId}).`;
 }
 
 function nextAttachmentTraceId(): string {
@@ -1394,7 +1436,15 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
 
       currentStage = 'upload:start';
       logAttach(currentStage, { endpoint: '/api/uploads' });
-      const uploadResponse = await api.upload<{ uploads: Array<{ id: string }> }>('/api/uploads', formData);
+      const uploadResponse = await api.upload<{ uploads: Array<{ id: string }> }>(
+        '/api/uploads',
+        formData,
+        {
+          headers: {
+            'x-attach-trace-id': traceId,
+          },
+        }
+      );
       currentStage = 'upload:done';
       const uploadId = uploadResponse.uploads?.[0]?.id;
       logAttach(currentStage, {
@@ -1419,7 +1469,15 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
         mode: analyzePayload.mode,
         hasQuestion: typeof analyzePayload.question === 'string',
       });
-      const analyzeImageResponse = await api.post<AnalyzeImageResponse>('/api/ai/analyze-image', analyzePayload);
+      const analyzeImageResponse = await api.post<AnalyzeImageResponse>(
+        '/api/ai/analyze-image',
+        analyzePayload,
+        {
+          headers: {
+            'x-attach-trace-id': traceId,
+          },
+        }
+      );
       currentStage = 'analyze:done';
 
       const structured = analyzeImageResponse.analysis_structured;
@@ -1492,7 +1550,24 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
         structuredWarnings: structured?.warnings ?? [],
       });
     } catch (err: any) {
-      const message = resolveAttachmentErrorMessage(err);
+      const message = resolveAttachmentErrorMessage(err, {
+        stage: currentStage,
+        traceId,
+      });
+      console.error('[StudySpace attachment diagnostics]', {
+        traceId,
+        stage: currentStage,
+        message,
+        errorName: err instanceof Error ? err.name : typeof err,
+        errorMessage: err instanceof Error ? err.message : String(err ?? ''),
+        apiErrorStatus: err instanceof ApiError ? err.status : null,
+        apiErrorData: err instanceof ApiError ? err.data : null,
+        webOrigin: typeof window !== 'undefined' ? window.location.origin : null,
+        webProtocol: typeof window !== 'undefined' ? window.location.protocol : null,
+        apiBaseUrl: resolveApiBaseUrl()?.toString() ?? null,
+        apiBaseHost: resolveApiBaseHost(),
+        online: typeof navigator !== 'undefined' ? navigator.onLine : null,
+      });
       console.error('[StudySpace attachment debug] error', {
         traceId,
         stage: currentStage,
