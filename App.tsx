@@ -35,6 +35,11 @@ import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
 
 type AppShellPage = 'study' | 'history' | 'settings' | 'privacy' | 'terms';
+type IOSNavigator = Navigator & { standalone?: boolean };
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
 
 // --- Components ---
 
@@ -587,6 +592,13 @@ export default function App() {
     const u = tokenStorage.getUser();
     return !!u && !u.preferences?.onboarding_completed;
   });
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isStandalone, setIsStandalone] = useState(() => {
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as IOSNavigator).standalone === true
+    );
+  });
 
   const pathToPage = (path: string): AppShellPage => {
     if (path === '/history') return 'history';
@@ -626,26 +638,88 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const displayModeQuery = window.matchMedia('(display-mode: standalone)');
+    const updateStandaloneState = () => {
+      setIsStandalone(
+        displayModeQuery.matches || (window.navigator as IOSNavigator).standalone === true
+      );
+    };
+
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+    };
+
+    const onAppInstalled = () => {
+      setInstallPromptEvent(null);
+      setIsStandalone(true);
+    };
+
+    updateStandaloneState();
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onAppInstalled);
+    displayModeQuery.addEventListener('change', updateStandaloneState);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', onAppInstalled);
+      displayModeQuery.removeEventListener('change', updateStandaloneState);
+    };
+  }, []);
+
+  const showInstallButton = !!installPromptEvent && !isStandalone;
+
+  const handleInstallApp = async () => {
+    if (!installPromptEvent) return;
+
+    await installPromptEvent.prompt();
+    await installPromptEvent.userChoice;
+    setInstallPromptEvent(null);
+  };
+
+  const installButton = showInstallButton ? (
+    <button
+      onClick={handleInstallApp}
+      className="fixed bottom-24 right-4 z-50 rounded-full bg-gradient-to-r from-primary to-secondary px-5 py-3 text-sm font-bold text-on-primary shadow-xl shadow-primary/20 md:bottom-6 md:right-6"
+    >
+      Install App
+    </button>
+  ) : null;
+
   if (page === 'privacy') {
-    return <PrivacyPage onBack={() => setPage('study')} />;
+    return (
+      <>
+        <PrivacyPage onBack={() => setPage('study')} />
+        {installButton}
+      </>
+    );
   }
 
   if (page === 'terms') {
-    return <TermsPage onBack={() => setPage('study')} />;
+    return (
+      <>
+        <TermsPage onBack={() => setPage('study')} />
+        {installButton}
+      </>
+    );
   }
 
   if (showOnboarding && currentUser) {
     return (
-      <OnboardingPage
-        user={currentUser}
-        onComplete={(updatedUser) => {
-          setCurrentUser(updatedUser);
-          setShowOnboarding(false);
-          const access = tokenStorage.getAccess();
-          const refresh = tokenStorage.getRefresh();
-          if (access && refresh) tokenStorage.setTokens(access, refresh, updatedUser);
-        }}
-      />
+      <>
+        <OnboardingPage
+          user={currentUser}
+          onComplete={(updatedUser) => {
+            setCurrentUser(updatedUser);
+            setShowOnboarding(false);
+            const access = tokenStorage.getAccess();
+            const refresh = tokenStorage.getRefresh();
+            if (access && refresh) tokenStorage.setTokens(access, refresh, updatedUser);
+          }}
+        />
+        {installButton}
+      </>
     );
   }
 
@@ -700,6 +774,7 @@ export default function App() {
       <>
         {authenticatedPage}
         <MobileBottomNav page={page} onNavigate={setPage} />
+        {installButton}
       </>
     );
   }
@@ -722,6 +797,7 @@ export default function App() {
       <AnimatePresence>
         {showAuth && <Auth onClose={() => setShowAuth(false)} />}
       </AnimatePresence>
+      {installButton}
     </div>
   );
 }
