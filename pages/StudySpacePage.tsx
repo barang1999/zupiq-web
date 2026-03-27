@@ -358,6 +358,11 @@ function resolveAttachmentErrorMessage(err: unknown): string {
   return raw || 'Failed to analyze attachment.';
 }
 
+function nextAttachmentTraceId(): string {
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `att_${Date.now().toString(36)}_${rand}`;
+}
+
 function computeInitialPositions(nodes: BreakdownNode[], canvasW: number, canvasH: number): Record<string, NodePos> {
   const pos: Record<string, NodePos> = {};
   const roots    = nodes.filter(n => n.type === 'root');
@@ -1193,6 +1198,20 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
   };
 
   const handleAttachProblemFile = async (file: File) => {
+    const traceId = nextAttachmentTraceId();
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let currentStage = 'init';
+    const logAttach = (stage: string, payload: Record<string, unknown> = {}) => {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const elapsedMs = Math.max(0, Math.round(now - startedAt));
+      console.log('[StudySpace attachment debug]', {
+        traceId,
+        stage,
+        elapsedMs,
+        ...payload,
+      });
+    };
+
     const lowerName = file.name.toLowerCase();
     const hasMissingMimeFallback = !file.type && (lowerName.endsWith('.pdf') || lowerName.endsWith('.txt'));
     const normalizedFile = hasMissingMimeFallback
@@ -1206,12 +1225,23 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       )
       : file;
 
+    currentStage = 'file:normalized';
+    logAttach(currentStage, {
+      originalName: file.name,
+      originalType: file.type || '(empty)',
+      normalizedName: normalizedFile.name,
+      normalizedType: normalizedFile.type || '(empty)',
+      sizeBytes: normalizedFile.size,
+      usedMimeFallback: hasMissingMimeFallback,
+    });
+
     const validationError = hasMissingMimeFallback
       ? (normalizedFile.size > MAX_FILE_SIZE_MB * 1024 * 1024
         ? `File must be smaller than ${MAX_FILE_SIZE_MB}MB`
         : null)
       : validateFile(normalizedFile);
     if (validationError) {
+      logAttach('file:validation-error', { validationError });
       setError(validationError);
       return;
     }
@@ -1220,9 +1250,16 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     const isPdfFile = normalizedFile.type === 'application/pdf';
     const isTextFile = normalizedFile.type === 'text/plain';
     if (!isImageFile && !isPdfFile && !isTextFile) {
+      logAttach('file:unsupported-type', {
+        normalizedType: normalizedFile.type,
+      });
       setError('Unsupported file type. Please upload JPG, PNG, WebP, PDF, or TXT.');
       return;
     }
+
+    logAttach('file:type-resolved', {
+      category: isImageFile ? 'image' : isPdfFile ? 'pdf' : 'text',
+    });
 
     debugStudy('attachment:attach:start', {
       name: normalizedFile.name,
@@ -1245,6 +1282,10 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       });
 
       if (!extractedText) {
+        logAttach('text:empty-after-normalize', {
+          uploadId,
+          rawLength: rawExtractedText.length,
+        });
         throw new Error('No readable problem text found in this attachment.');
       }
       if (rawExtractedText !== extractedText) {
@@ -1285,6 +1326,11 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
         return nextValue;
       });
       setShowInput(true);
+      logAttach('composer:inserted', {
+        uploadId,
+        extractedLength: extractedText.length,
+        preview: debugClip(extractedText, 140),
+      });
       debugStudy('attachment:attach:success', {
         uploadId,
         extractedLength: extractedText.length,
@@ -1296,7 +1342,11 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
     setIsImageAnalyzing(true);
     try {
       if (isTextFile) {
+        currentStage = 'text:read-start';
+        logAttach(currentStage);
         const fileText = await normalizedFile.text();
+        currentStage = 'text:read-done';
+        logAttach(currentStage, { textLength: fileText.length });
         insertExtractedText((fileText ?? '').trim(), null, {
           source: 'local:text-file',
         });
@@ -1304,11 +1354,19 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       }
 
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        logAttach('network:offline');
         throw new Error('You are offline. Please reconnect and try again.');
       }
 
       const apiUrl = resolveApiBaseUrl();
       const apiHost = resolveApiBaseHost();
+      logAttach('network:preflight', {
+        webOrigin: typeof window !== 'undefined' ? window.location.origin : null,
+        webProtocol: typeof window !== 'undefined' ? window.location.protocol : null,
+        apiBaseUrl: apiUrl?.toString() ?? null,
+        apiBaseHost: apiHost,
+        online: typeof navigator !== 'undefined' ? navigator.onLine : null,
+      });
       if (
         typeof window !== 'undefined'
         && window.location.protocol === 'https:'
@@ -1334,8 +1392,15 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       formData.append('file', normalizedFile);
       formData.append('context', 'ai_query');
 
+      currentStage = 'upload:start';
+      logAttach(currentStage, { endpoint: '/api/uploads' });
       const uploadResponse = await api.upload<{ uploads: Array<{ id: string }> }>('/api/uploads', formData);
+      currentStage = 'upload:done';
       const uploadId = uploadResponse.uploads?.[0]?.id;
+      logAttach(currentStage, {
+        uploadId: uploadId ?? null,
+        uploadCount: uploadResponse.uploads?.length ?? 0,
+      });
       if (!uploadId) {
         throw new Error('Failed to upload file.');
       }
@@ -1348,7 +1413,14 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
         analyzePayload.question = 'Extract all readable problem text from this PDF as plain text. Preserve equations in KaTeX-friendly LaTeX with $...$ or $$...$$ delimiters.';
       }
 
+      currentStage = 'analyze:start';
+      logAttach(currentStage, {
+        endpoint: '/api/ai/analyze-image',
+        mode: analyzePayload.mode,
+        hasQuestion: typeof analyzePayload.question === 'string',
+      });
       const analyzeImageResponse = await api.post<AnalyzeImageResponse>('/api/ai/analyze-image', analyzePayload);
+      currentStage = 'analyze:done';
 
       const structured = analyzeImageResponse.analysis_structured;
       const structuredText = (structured?.text ?? '').trim();
@@ -1359,6 +1431,13 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
         ?? []
       );
       const reconstructedStructuredText = rebuildFromStructuredOcr(structuredPlainText, structuredMathSegments).trim();
+      logAttach(currentStage, {
+        analysisLength: (analyzeImageResponse.analysis ?? '').trim().length,
+        hasStructured: Boolean(structured),
+        structuredTextLength: structuredText.length,
+        structuredPlainTextLength: structuredPlainText.length,
+        structuredMathSegments: structuredMathSegments.length,
+      });
       console.log('[StudySpace OCR API response shape]', {
         uploadId,
         mimeType: normalizedFile.type,
@@ -1386,6 +1465,11 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
         || reconstructedStructuredText
         || (analyzeImageResponse.analysis ?? '').trim()
       );
+      logAttach('analyze:raw-text-selected', {
+        selectedLength: rawExtractedText.length,
+        usedStructuredText: Boolean(structuredText),
+        usedReconstructedText: !structuredText && Boolean(reconstructedStructuredText),
+      });
 
       if (structuredMathSegments.length) {
         console.log('[StudySpace structured OCR]', {
@@ -1409,9 +1493,17 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
       });
     } catch (err: any) {
       const message = resolveAttachmentErrorMessage(err);
+      console.error('[StudySpace attachment debug] error', {
+        traceId,
+        stage: currentStage,
+        message,
+        error: err,
+      });
       setError(message);
       debugStudy('attachment:attach:error', {
         message,
+        traceId,
+        stage: currentStage,
         rawError: err instanceof Error ? err.message : String(err ?? ''),
         webOrigin: typeof window !== 'undefined' ? window.location.origin : null,
         webProtocol: typeof window !== 'undefined' ? window.location.protocol : null,
@@ -1420,6 +1512,9 @@ export function StudySpacePage({ user, onNavigateHistory, onNavigateSettings, in
         online: typeof navigator !== 'undefined' ? navigator.onLine : null,
       });
     } finally {
+      logAttach('flow:finalize', {
+        isImageAnalyzing: false,
+      });
       setIsImageAnalyzing(false);
     }
   };
