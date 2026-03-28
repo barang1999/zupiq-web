@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { TouchEvent as ReactTouchEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
+  Brain,
   GitFork, History, Users, Archive,
   Plus, X, Loader2, Sparkles,
   Bookmark, Zap, LogOut, HelpCircle, ArrowRight,
@@ -124,9 +125,15 @@ const QUICK_FLASHCARD_DECK_STORAGE_KEY = 'zupiq_flashcard_quick_deck_v1';
 const QUICK_FLASHCARD_DEFAULT_SUBJECT_KEY = '__general__';
 const studyDebugLastEventAt: Record<string, number> = {};
 
-function normalizeQuickDeckSubject(subject: string | null | undefined): string {
+function normalizeQuickDeckSubjectName(subject: string | null | undefined): string {
   const normalized = (subject ?? '').trim().toLowerCase();
   return normalized || QUICK_FLASHCARD_DEFAULT_SUBJECT_KEY;
+}
+
+function getQuickDeckSubjectCacheKey(subjectId: string | null | undefined, subjectName: string | null | undefined): string {
+  const normalizedId = (subjectId ?? '').trim();
+  if (normalizedId) return `sid:${normalizedId}`;
+  return `name:${normalizeQuickDeckSubjectName(subjectName)}`;
 }
 
 function readQuickDeckCache(): Record<string, string> {
@@ -156,24 +163,29 @@ function writeQuickDeckCache(cache: Record<string, string>): void {
   localStorage.setItem(QUICK_FLASHCARD_DECK_STORAGE_KEY, JSON.stringify(cache));
 }
 
-function getQuickDeckIdForSubject(subject: string | null | undefined): string | null {
-  const key = normalizeQuickDeckSubject(subject);
+function getQuickDeckIdForSubject(subjectId: string | null | undefined, subjectName: string | null | undefined): string | null {
+  const key = getQuickDeckSubjectCacheKey(subjectId, subjectName);
   const cache = readQuickDeckCache();
-  return cache[key] ?? null;
+  if (cache[key]) return cache[key];
+  if ((subjectId ?? '').trim()) return null;
+  const legacyNameKey = normalizeQuickDeckSubjectName(subjectName);
+  return cache[legacyNameKey] ?? null;
 }
 
-function setQuickDeckIdForSubject(subject: string | null | undefined, deckId: string): void {
-  const key = normalizeQuickDeckSubject(subject);
+function setQuickDeckIdForSubject(subjectId: string | null | undefined, subjectName: string | null | undefined, deckId: string): void {
+  const key = getQuickDeckSubjectCacheKey(subjectId, subjectName);
   const cache = readQuickDeckCache();
   cache[key] = deckId;
   writeQuickDeckCache(cache);
 }
 
-function clearQuickDeckIdForSubject(subject: string | null | undefined): void {
-  const key = normalizeQuickDeckSubject(subject);
+function clearQuickDeckIdForSubject(subjectId: string | null | undefined, subjectName: string | null | undefined): void {
+  const key = getQuickDeckSubjectCacheKey(subjectId, subjectName);
   const cache = readQuickDeckCache();
-  if (!(key in cache)) return;
+  const legacyNameKey = (subjectId ?? '').trim() ? '' : normalizeQuickDeckSubjectName(subjectName);
+  if (!(key in cache) && (!legacyNameKey || !(legacyNameKey in cache))) return;
   delete cache[key];
+  if (legacyNameKey) delete cache[legacyNameKey];
   writeQuickDeckCache(cache);
 }
 
@@ -755,6 +767,11 @@ interface Props {
   user: any;
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
+  onNavigateQuiz?: (prefill?: {
+    subjectId?: string | null;
+    subjectName?: string | null;
+    specificArea?: string | null;
+  }) => void;
   onNavigatePlan?: () => void;
   onNavigateSettings?: () => void;
   showInstallAppButton?: boolean;
@@ -767,6 +784,7 @@ export function StudySpacePage({
   user,
   onNavigateHistory,
   onNavigateFlashcards,
+  onNavigateQuiz,
   onNavigatePlan,
   onNavigateSettings,
   showInstallAppButton,
@@ -776,6 +794,7 @@ export function StudySpacePage({
 }: Props) {
   const [breakdown,      setBreakdown]      = useState<ProblemBreakdown | null>(null);
   const [sessionId,      setSessionId]      = useState<string | null>(null);
+  const [sessionSubjectId, setSessionSubjectId] = useState<string | null>(null);
   const [positions,      setPositions]      = useState<Record<string, NodePos>>({});
   const [selectedNode,   setSelectedNode]   = useState<BreakdownNode | null>(null);
   const [draggingId,     setDraggingId]     = useState<string | null>(null);
@@ -1117,6 +1136,7 @@ export function StudySpacePage({
       : resolveCollisions(computeInitialPositions(bd.nodes, w, h));
     setBreakdown(bd);
     setSessionId(bd.id ?? null);
+    setSessionSubjectId(null);
     setNodeInsights(bd.nodeInsights ?? {});
     setNodeConversations(bd.nodeConversations ?? {});
     setPositions(restoredPositions);
@@ -1226,11 +1246,12 @@ export function StudySpacePage({
 
     let cancelled = false;
     debugStudy('boot:fetchSessions:start');
-    api.get<{ sessions: Array<{ id: string; breakdown_json: string }> }>('/api/sessions')
+    api.get<{ sessions: Array<{ id: string; breakdown_json: string; subject_id?: string | null }> }>('/api/sessions')
       .then(({ sessions }) => {
         if (cancelled || !sessions?.length) return;
         const lastId = localStorage.getItem('zupiq_lastSessionId');
         const target = (lastId && sessions.find(s => s.id === lastId)) || sessions[0];
+        setSessionSubjectId(target?.subject_id ?? null);
         debugStudy('boot:fetchSessions:success', {
           sessionsCount: sessions.length,
           preferredSessionId: lastId,
@@ -1649,6 +1670,7 @@ export function StudySpacePage({
     setLoading(true);
     setError(null);
     setSessionId(null);
+    setSessionSubjectId(null);
     setNodeInsights({});
     setNodeConversations({});
     setSelectedNode(null);
@@ -1661,8 +1683,9 @@ export function StudySpacePage({
         { problem: trimmedProblem }
       );
       let newSessionId: string | null = null;
+      let newSessionSubjectId: string | null = null;
       try {
-        const { session } = await api.post<{ session: { id: string } }>('/api/sessions', {
+        const { session } = await api.post<{ session: { id: string; subject_id: string | null } }>('/api/sessions', {
           title: bd.title,
           subject: bd.subject,
           problem: trimmedProblem,
@@ -1670,6 +1693,7 @@ export function StudySpacePage({
           breakdown_json: JSON.stringify(bd),
         });
         newSessionId = session.id;
+        newSessionSubjectId = session.subject_id ?? null;
       } catch {
         // Session save is non-blocking; user can still continue
       }
@@ -1686,6 +1710,7 @@ export function StudySpacePage({
         nodeConversations: bd.nodeConversations ?? {},
       });
       setSessionId(newSessionId);
+      setSessionSubjectId(newSessionSubjectId);
       setNodeInsights(bd.nodeInsights ?? {});
       setNodeConversations(bd.nodeConversations ?? {});
       setPositions(resolveCollisions(initial));
@@ -2202,30 +2227,32 @@ export function StudySpacePage({
   const handleAddBranchToFlashcards = useCallback(async (node: BreakdownNode) => {
     if (!breakdown) return;
     setBranchActionBusy('flashcard');
-    const normalizedSubject = normalizeQuickDeckSubject(breakdown.subject);
+    const cacheSubjectKeyId = sessionSubjectId ?? null;
     const createQuickDeck = async () => {
       const { deck } = await api.post<{ deck: { id: string } }>('/api/flashcards/decks', {
         title: 'StudySpace Quick Capture',
         description: 'Cards captured from StudySpace branch actions',
+        subject_id: cacheSubjectKeyId,
         subject: breakdown.subject,
       });
-      setQuickDeckIdForSubject(breakdown.subject, deck.id);
+      setQuickDeckIdForSubject(cacheSubjectKeyId, breakdown.subject, deck.id);
       return deck.id;
     };
     const isDeckSubjectMatch = async (deckId: string) => {
       try {
-        const { deck } = await api.get<{ deck: { subject: string | null } }>(`/api/flashcards/decks/${deckId}`);
-        return normalizeQuickDeckSubject(deck.subject) === normalizedSubject;
+        const { deck } = await api.get<{ deck: { subject_id: string | null; subject_name: string | null } }>(`/api/flashcards/decks/${deckId}`);
+        if (cacheSubjectKeyId) return deck.subject_id === cacheSubjectKeyId;
+        return normalizeQuickDeckSubjectName(deck.subject_name) === normalizeQuickDeckSubjectName(breakdown.subject);
       } catch {
         return false;
       }
     };
     try {
-      let deckId = getQuickDeckIdForSubject(breakdown.subject);
+      let deckId = getQuickDeckIdForSubject(cacheSubjectKeyId, breakdown.subject);
       if (deckId) {
         const matches = await isDeckSubjectMatch(deckId);
         if (!matches) {
-          clearQuickDeckIdForSubject(breakdown.subject);
+          clearQuickDeckIdForSubject(cacheSubjectKeyId, breakdown.subject);
           deckId = null;
         }
       }
@@ -2240,7 +2267,7 @@ export function StudySpacePage({
       try {
         await api.post(`/api/flashcards/decks/${deckId}/cards`, cardPayload);
       } catch {
-        clearQuickDeckIdForSubject(breakdown.subject);
+        clearQuickDeckIdForSubject(cacheSubjectKeyId, breakdown.subject);
         const recreatedDeckId = await createQuickDeck();
         await api.post(`/api/flashcards/decks/${recreatedDeckId}/cards`, cardPayload);
       }
@@ -2253,7 +2280,7 @@ export function StudySpacePage({
     } finally {
       setBranchActionBusy(null);
     }
-  }, [breakdown, showActionToast]);
+  }, [breakdown, sessionSubjectId, showActionToast]);
 
   const handleCopyBranchMath = useCallback(async (node: BreakdownNode) => {
     const raw = (node.mathContent || node.label || '').trim();
@@ -2443,8 +2470,41 @@ Do not repeat content already given.`;
     { id: 'map',         label: 'Neural Map',   Icon: GitFork },
     { id: 'history',     label: 'History',       Icon: History },
     { id: 'flashcards',  label: 'Flashcards',    Icon: Layers },
+    { id: 'quiz',        label: 'Quiz',          Icon: Brain },
     { id: 'collaborate', label: 'Collaborate',   Icon: Users },
   ];
+
+  const navigateToQuiz = useCallback(() => {
+    const prefill = {
+      subjectId: sessionSubjectId ?? null,
+      subjectName: breakdown?.subject ?? null,
+      specificArea: breakdown?.title ?? null,
+    };
+
+    if (onNavigateQuiz) {
+      onNavigateQuiz(prefill);
+      return;
+    }
+
+    const params = new URLSearchParams();
+    const subjectId = prefill.subjectId?.trim();
+    const subjectName = prefill.subjectName?.trim();
+    const specificArea = prefill.specificArea?.trim();
+    if (subjectId) {
+      params.set('subjectId', subjectId);
+    } else if (subjectName) {
+      params.set('subject', subjectName);
+    }
+    if (specificArea) params.set('area', specificArea);
+
+    const query = params.toString();
+    const url = query ? `/quiz?${query}` : '/quiz';
+
+    if (window.location.pathname !== '/quiz' || window.location.search !== (query ? `?${query}` : '')) {
+      window.history.pushState({ page: 'quiz' }, '', url);
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { page: 'quiz' } }));
+    }
+  }, [breakdown?.subject, breakdown?.title, onNavigateQuiz, sessionSubjectId]);
 
   const isBranchSelected = !!selectedNode;
   const activeBranchConversation = selectedNode
@@ -2567,6 +2627,7 @@ Do not repeat content already given.`;
         onSignOut={handleSignOut}
         onNavigateHistory={onNavigateHistory}
         onNavigateFlashcards={onNavigateFlashcards}
+        onNavigateQuiz={navigateToQuiz}
         activeMobileMenu="study"
         showInstallAppButton={showInstallAppButton}
         onInstallAppClick={onInstallApp}
@@ -2626,6 +2687,10 @@ Do not repeat content already given.`;
                   }
                   if (id === 'flashcards') {
                     onNavigateFlashcards?.();
+                    return;
+                  }
+                  if (id === 'quiz') {
+                    navigateToQuiz();
                     return;
                   }
                   setActiveTab(id);

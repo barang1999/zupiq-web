@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown, Check } from 'lucide-react';
 
@@ -13,6 +12,7 @@ interface Props {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  disabled?: boolean;
   /** 'underline' = minimal border-bottom style (Step 1 form fields)
    *  'card'      = full rounded card style (Step 3 language picker) */
   variant?: 'underline' | 'card';
@@ -23,29 +23,16 @@ export function CustomSelect({
   value,
   onChange,
   placeholder = 'Select…',
+  disabled = false,
   variant = 'underline',
 }: Props) {
   const [open, setOpen] = useState(false);
-  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const ref = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const selected = options.find(o => o.value === value);
 
-  const updatePosition = () => {
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    setDropdownStyle({
-      position: 'fixed',
-      top: rect.bottom + 8,
-      left: rect.left,
-      width: rect.width,
-      zIndex: 9999,
-    });
-  };
-
   const handleOpen = () => {
-    updatePosition();
+    if (disabled) return;
     setOpen(o => !o);
   };
 
@@ -70,40 +57,35 @@ export function CustomSelect({
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  // Reposition on scroll/resize
   useEffect(() => {
-    if (!open) return;
-    const handler = () => updatePosition();
-    window.addEventListener('scroll', handler, true);
-    window.addEventListener('resize', handler);
-    return () => {
-      window.removeEventListener('scroll', handler, true);
-      window.removeEventListener('resize', handler);
-    };
-  }, [open]);
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   const triggerClass =
     variant === 'underline'
-      ? `w-full flex items-center justify-between py-3 px-0 border-b-2 transition-colors cursor-pointer ${
-          open ? 'border-primary' : 'border-surface-container-high hover:border-outline-variant'
+      ? `w-full flex items-center justify-between py-3 px-0 border-b-2 transition-colors ${
+          disabled
+            ? 'cursor-not-allowed opacity-60 border-outline-variant'
+            : `cursor-pointer ${open ? 'border-primary' : 'border-surface-container-high hover:border-outline-variant'}`
         }`
-      : `w-full flex items-center justify-between py-4 px-4 rounded-xl bg-surface-container-high transition-colors cursor-pointer border-b-2 ${
-          open ? 'border-primary' : 'border-outline-variant hover:border-outline'
+      : `w-full flex items-center justify-between py-4 px-4 rounded-xl bg-surface-container-high transition-colors border-b-2 ${
+          disabled
+            ? 'cursor-not-allowed opacity-60 border-outline-variant'
+            : `cursor-pointer ${open ? 'border-primary' : 'border-outline-variant hover:border-outline'}`
         }`;
 
   const dropdown = (
     <AnimatePresence>
       {open && (
         <motion.div
-          initial={{ opacity: 0, y: -8, scaleY: 0.92 }}
-          animate={{ opacity: 1, y: 0, scaleY: 1 }}
-          exit={{ opacity: 0, y: -8, scaleY: 0.92 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
           transition={{ duration: 0.18, ease: 'easeOut' }}
-          style={{ ...dropdownStyle, transformOrigin: 'top' }}
-          className="rounded-2xl overflow-hidden shadow-[0_16px_48px_rgba(0,0,0,0.6)] border border-white/5"
+          className="absolute left-0 top-full z-50 mt-2 w-full rounded-2xl overflow-hidden shadow-[0_16px_48px_rgba(0,0,0,0.6)] border border-white/5"
           role="listbox"
         >
-          <div className="bg-surface-container-highest/90 backdrop-blur-xl max-h-60 overflow-y-auto scrollbar-thin">
+          <div className="bg-surface-container-highest max-h-60 overflow-y-auto scrollbar-thin">
             {options.map((opt, i) => {
               const isSelected = opt.value === value;
               return (
@@ -141,12 +123,13 @@ export function CustomSelect({
   return (
     <div ref={ref} className="relative">
       <button
-        ref={triggerRef}
         type="button"
         onClick={handleOpen}
         className={triggerClass}
+        disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-disabled={disabled}
       >
         <span className={`text-lg ${selected ? 'text-on-surface' : 'text-outline-variant'}`}>
           {selected ? selected.label : placeholder}
@@ -160,7 +143,7 @@ export function CustomSelect({
         </motion.span>
       </button>
 
-      {createPortal(dropdown, document.body)}
+      {dropdown}
     </div>
   );
 }

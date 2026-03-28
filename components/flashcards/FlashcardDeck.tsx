@@ -7,6 +7,11 @@ import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { formatRelativeTime } from "../../utils/formatters";
 
+function deckSubjectLabel(deck: FlashcardDeck): string | null {
+  const value = deck.subject_name?.trim();
+  return value && value.length > 0 ? value : null;
+}
+
 interface FlashcardDeckCardProps {
   deck: FlashcardDeck;
   onStudy: (deckId: string) => void;
@@ -14,6 +19,7 @@ interface FlashcardDeckCardProps {
 }
 
 export function FlashcardDeckCard({ deck, onStudy, onDelete }: FlashcardDeckCardProps) {
+  const subjectLabel = deckSubjectLabel(deck);
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -23,7 +29,7 @@ export function FlashcardDeckCard({ deck, onStudy, onDelete }: FlashcardDeckCard
     >
       <Card variant="glass" className="relative overflow-hidden group">
         {/* Subject color accent */}
-        {deck.subject && (
+        {subjectLabel && (
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary to-secondary" />
         )}
 
@@ -34,9 +40,9 @@ export function FlashcardDeckCard({ deck, onStudy, onDelete }: FlashcardDeckCard
             </div>
             <div>
               <h3 className="font-headline font-bold text-on-surface">{deck.title}</h3>
-              {deck.subject && (
+              {subjectLabel && (
                 <Badge variant="primary" size="sm" className="mt-0.5">
-                  {deck.subject}
+                  {subjectLabel}
                 </Badge>
               )}
             </div>
@@ -102,7 +108,7 @@ export function FlashcardDeckGrid({
     const values = Array.from(
       new Set(
         decks
-          .map((deck) => deck.subject?.trim())
+          .map((deck) => deckSubjectLabel(deck))
           .filter((subject): subject is string => Boolean(subject))
       )
     );
@@ -118,13 +124,13 @@ export function FlashcardDeckGrid({
 
   const filteredDecks = useMemo(() => {
     if (selectedSubject === "all") return decks;
-    return decks.filter((deck) => (deck.subject?.trim() ?? "") === selectedSubject);
+    return decks.filter((deck) => (deckSubjectLabel(deck) ?? "") === selectedSubject);
   }, [decks, selectedSubject]);
 
   const subjectCounts = useMemo(
     () =>
       subjects.reduce<Record<string, number>>((acc, subject) => {
-        acc[subject] = decks.filter((deck) => (deck.subject?.trim() ?? "") === subject).length;
+        acc[subject] = decks.filter((deck) => (deckSubjectLabel(deck) ?? "") === subject).length;
         return acc;
       }, {}),
     [decks, subjects]

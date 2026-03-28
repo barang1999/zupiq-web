@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Bell,
+  Brain,
   CreditCard,
   Download,
   GitFork,
@@ -24,7 +25,8 @@ interface AppHeaderProps {
   onNavigateStudy?: () => void;
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
-  activeMobileMenu?: 'study' | 'history' | 'flashcards' | 'settings' | null;
+  onNavigateQuiz?: () => void;
+  activeMobileMenu?: 'study' | 'history' | 'flashcards' | 'quiz' | 'settings' | null;
   showInstallAppButton?: boolean;
   onInstallAppClick?: () => void;
 }
@@ -38,6 +40,7 @@ export function AppHeader({
   onNavigateStudy,
   onNavigateHistory,
   onNavigateFlashcards,
+  onNavigateQuiz,
   activeMobileMenu = null,
   showInstallAppButton = false,
   onInstallAppClick,
@@ -54,14 +57,27 @@ export function AppHeader({
   const [isProPlan, setIsProPlan] = useState(false);
   const { usage: tokenUsage } = useLiveTokenUsage(Boolean(user));
 
+  const navigateToQuiz = () => {
+    if (onNavigateQuiz) {
+      onNavigateQuiz();
+      return;
+    }
+    if (window.location.pathname !== '/quiz') {
+      window.history.pushState({ page: 'quiz' }, '', '/quiz');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { page: 'quiz' } }));
+    }
+    setIsProfileMenuOpen(false);
+  };
+
   const mobileMenuItems = useMemo(
     () => [
       { id: 'study' as const, label: 'Study Space', Icon: GitFork, action: onNavigateStudy },
       { id: 'history' as const, label: 'Learning History', Icon: History, action: onNavigateHistory },
       { id: 'flashcards' as const, label: 'Flashcards', Icon: Layers, action: onNavigateFlashcards },
+      { id: 'quiz' as const, label: 'Quiz', Icon: Brain, action: navigateToQuiz },
       { id: 'settings' as const, label: 'Settings', Icon: Settings, action: onSettingsClick },
     ],
-    [onNavigateFlashcards, onNavigateHistory, onNavigateStudy, onSettingsClick]
+    [navigateToQuiz, onNavigateFlashcards, onNavigateHistory, onNavigateStudy, onSettingsClick]
   );
 
   useEffect(() => {

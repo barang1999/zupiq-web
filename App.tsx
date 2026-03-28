@@ -13,7 +13,7 @@ import {
   Rocket,
   GitFork,
   History as HistoryIcon,
-  Play,
+  Brain,
 } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import { supabase } from "./lib/supabase";
@@ -33,6 +33,7 @@ import { TermsPage } from "./pages/TermsPage";
 import { HowItWorksPage } from "./pages/HowItWorksPage";
 import FlashcardSubjectSelectionPage from "./pages/FlashcardSubjectSelectionPage";
 import FlashcardSessionPage from "./pages/FlashcardSessionPage";
+import QuizPage from "./pages/QuizPage";
 import { PublicHeader } from "./components/layout/PublicHeader";
 import { GrowingTreeAnimation } from "./components/ui/GrowingTreeAnimation";
 
@@ -44,6 +45,7 @@ type AppShellPage =
   | 'billingsubscription'
   | 'flashcards'
   | 'flashcards-session'
+  | 'quiz'
   | 'settings'
   | 'privacy'
   | 'terms'
@@ -408,7 +410,7 @@ const MobileBottomNav = ({
     currentPage: AppShellPage
   ): "study" | "history" | "play" => {
     if (currentPage === "history") return "history";
-    if (currentPage === "flashcards" || currentPage === "flashcards-session") return "play";
+    if (currentPage === "flashcards" || currentPage === "flashcards-session" || currentPage === "quiz") return "play";
     return "study";
   };
 
@@ -423,7 +425,7 @@ const MobileBottomNav = ({
   const navItems = [
     { id: 'study' as const, page: 'study' as const, label: 'Study', Icon: GitFork },
     { id: 'history' as const, page: 'history' as const, label: 'History', Icon: HistoryIcon },
-    { id: 'play' as const, page: 'flashcards' as const, label: 'Play', Icon: Play },
+    { id: 'play' as const, page: 'quiz' as const, label: 'Quiz', Icon: Brain },
   ];
 
   return (
@@ -476,6 +478,7 @@ export default function App() {
     if (path === '/how-it-works') return 'how-it-works';
     if (path === '/flashcards/session') return 'flashcards-session';
     if (path === '/flashcards') return 'flashcards';
+    if (path === '/quiz') return 'quiz';
     if (path === '/settings') return 'settings';
     if (path === '/privacy') return 'privacy';
     if (path === '/terms') return 'terms';
@@ -489,7 +492,15 @@ export default function App() {
   });
   const [initialBreakdown, setInitialBreakdown] = useState<any>(null);
 
-  const setPage = (next: AppShellPage, options?: { subject?: string | null }) => {
+  const setPage = (
+    next: AppShellPage,
+    options?: {
+      subject?: string | null;
+      quizSubjectId?: string | null;
+      quizSubjectName?: string | null;
+      quizArea?: string | null;
+    }
+  ) => {
     let url: string;
     if (next === "study") {
       url = "/";
@@ -503,6 +514,19 @@ export default function App() {
       url = "/how-it-works";
     } else if (next === "flashcards") {
       url = "/flashcards";
+    } else if (next === "quiz") {
+      const quizParams = new URLSearchParams();
+      const quizSubjectId = options?.quizSubjectId?.trim();
+      const quizSubjectName = options?.quizSubjectName?.trim();
+      const quizArea = options?.quizArea?.trim();
+      if (quizSubjectId) {
+        quizParams.set("subjectId", quizSubjectId);
+      } else if (quizSubjectName) {
+        quizParams.set("subject", quizSubjectName);
+      }
+      if (quizArea) quizParams.set("area", quizArea);
+      const query = quizParams.toString();
+      url = query ? `/quiz?${query}` : "/quiz";
     } else if (next === "flashcards-session") {
       const nextSubject = options?.subject ?? flashcardSubject;
       if (options && "subject" in options) {
@@ -675,6 +699,7 @@ export default function App() {
           user={currentUser}
           onNavigateStudy={(bd) => { setInitialBreakdown(bd ?? null); setPage('study'); }}
           onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateQuiz={() => setPage('quiz')}
           onNavigateSettings={() => setPage('settings')}
           showInstallAppButton={showInstallButton}
           onInstallApp={handleInstallApp}
@@ -687,6 +712,7 @@ export default function App() {
           onNavigateStudy={() => setPage('study')}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateQuiz={() => setPage('quiz')}
           onNavigateSettings={() => setPage('settings')}
           showInstallAppButton={showInstallButton}
           onInstallApp={handleInstallApp}
@@ -722,6 +748,7 @@ export default function App() {
           initialSubject={flashcardSubject}
           onNavigateStudy={() => setPage('study')}
           onNavigateHistory={() => setPage('history')}
+          onNavigateQuiz={() => setPage('quiz')}
           onNavigateSettings={() => setPage('settings')}
           showInstallAppButton={showInstallButton}
           onInstallApp={handleInstallApp}
@@ -736,6 +763,7 @@ export default function App() {
           onNavigateStudy={() => setPage('study')}
           onNavigateHistory={() => setPage('history')}
           onNavigateSubjects={() => setPage('flashcards')}
+          onNavigateQuiz={() => setPage('quiz')}
           onNavigateSettings={() => setPage('settings')}
           showInstallAppButton={showInstallButton}
           onInstallApp={handleInstallApp}
@@ -746,10 +774,23 @@ export default function App() {
           initialSubject={flashcardSubject}
           onNavigateStudy={() => setPage('study')}
           onNavigateHistory={() => setPage('history')}
+          onNavigateQuiz={() => setPage('quiz')}
           onNavigateSettings={() => setPage('settings')}
           showInstallAppButton={showInstallButton}
           onInstallApp={handleInstallApp}
           onStartSession={(subject) => setPage('flashcards-session', { subject })}
+        />
+      );
+    } else if (page === 'quiz') {
+      authenticatedPage = (
+        <QuizPage
+          user={currentUser}
+          onNavigateStudy={() => setPage('study')}
+          onNavigateHistory={() => setPage('history')}
+          onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
         />
       );
     } else {
@@ -758,6 +799,11 @@ export default function App() {
           user={currentUser}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateQuiz={(prefill) => setPage('quiz', {
+            quizSubjectId: prefill?.subjectId ?? null,
+            quizSubjectName: prefill?.subjectName ?? null,
+            quizArea: prefill?.specificArea ?? null,
+          })}
           onNavigatePlan={() => setPage('plan')}
           onNavigateSettings={() => setPage('settings')}
           showInstallAppButton={showInstallButton}

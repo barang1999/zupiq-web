@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
   Bot,
+  Brain,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -29,6 +30,7 @@ interface Props {
   onNavigateStudy?: () => void;
   onNavigateHistory?: () => void;
   onNavigateSubjects?: () => void;
+  onNavigateQuiz?: () => void;
   onNavigateSettings?: () => void;
   showInstallAppButton?: boolean;
   onInstallApp?: () => void;
@@ -40,6 +42,7 @@ export default function FlashcardSessionPage({
   onNavigateStudy,
   onNavigateHistory,
   onNavigateSubjects,
+  onNavigateQuiz,
   onNavigateSettings,
   showInstallAppButton,
   onInstallApp,
@@ -77,7 +80,7 @@ export default function FlashcardSessionPage({
   const subjectDecks = useMemo(() => {
     if (!selectedSubject) return decks;
     const target = normalizeSubject(selectedSubject);
-    return decks.filter((deck) => normalizeSubject(deck.subject) === target);
+    return decks.filter((deck) => normalizeSubject(deck.subject_name) === target);
   }, [decks, selectedSubject]);
 
   const loadDeck = useCallback(
@@ -186,10 +189,22 @@ export default function FlashcardSessionPage({
     await firebaseSignOut();
   };
 
+  const navigateToQuiz = () => {
+    if (onNavigateQuiz) {
+      onNavigateQuiz();
+      return;
+    }
+    if (window.location.pathname !== "/quiz") {
+      window.history.pushState({ page: "quiz" }, "", "/quiz");
+      window.dispatchEvent(new PopStateEvent("popstate", { state: { page: "quiz" } }));
+    }
+  };
+
   const NAV_ITEMS = [
     { id: "study", label: "Study Space", Icon: GitFork, action: () => onNavigateStudy?.() },
     { id: "history", label: "Learning History", Icon: History, action: () => onNavigateHistory?.() },
     { id: "flashcards", label: "Flashcards", Icon: Layers, action: () => onNavigateSubjects?.() },
+    { id: "quiz", label: "Quiz", Icon: Brain, action: navigateToQuiz },
     { id: "collab", label: "Collaborate", Icon: Users, action: () => {} },
   ];
 
@@ -205,6 +220,7 @@ export default function FlashcardSessionPage({
         onNavigateStudy={onNavigateStudy}
         onNavigateHistory={onNavigateHistory}
         onNavigateFlashcards={onNavigateSubjects}
+        onNavigateQuiz={navigateToQuiz}
         activeMobileMenu="flashcards"
         showInstallAppButton={showInstallAppButton}
         onInstallAppClick={onInstallApp}

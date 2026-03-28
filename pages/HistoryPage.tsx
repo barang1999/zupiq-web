@@ -100,6 +100,7 @@ interface Props {
   user: any;
   onNavigateStudy?: (breakdown?: ProblemBreakdown) => void;
   onNavigateFlashcards?: () => void;
+  onNavigateQuiz?: () => void;
   onNavigateSettings?: () => void;
   showInstallAppButton?: boolean;
   onInstallApp?: () => void;
@@ -109,6 +110,7 @@ export function HistoryPage({
   user,
   onNavigateStudy,
   onNavigateFlashcards,
+  onNavigateQuiz,
   onNavigateSettings,
   showInstallAppButton,
   onInstallApp,
@@ -140,6 +142,17 @@ export function HistoryPage({
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     await firebaseSignOut();
+  };
+
+  const navigateToQuiz = () => {
+    if (onNavigateQuiz) {
+      onNavigateQuiz();
+      return;
+    }
+    if (window.location.pathname !== '/quiz') {
+      window.history.pushState({ page: 'quiz' }, '', '/quiz');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { page: 'quiz' } }));
+    }
   };
 
   const filtered = sessions.filter(s =>
@@ -231,6 +244,7 @@ export function HistoryPage({
     { id: 'study',   label: 'Study Space',       Icon: GitFork,  action: () => onNavigateStudy?.() },
     { id: 'history', label: 'Learning History',  Icon: History,  action: () => {} },
     { id: 'flashcards', label: 'Flashcards', Icon: Layers, action: () => onNavigateFlashcards?.() },
+    { id: 'quiz', label: 'Quiz', Icon: Brain, action: navigateToQuiz },
     { id: 'collab',  label: 'Collaborate',        Icon: Users,    action: () => {} },
   ];
 
@@ -247,6 +261,7 @@ export function HistoryPage({
         onSignOut={handleSignOut}
         onNavigateStudy={() => onNavigateStudy?.()}
         onNavigateFlashcards={onNavigateFlashcards}
+        onNavigateQuiz={navigateToQuiz}
         activeMobileMenu="history"
         showInstallAppButton={showInstallAppButton}
         onInstallAppClick={onInstallApp}
