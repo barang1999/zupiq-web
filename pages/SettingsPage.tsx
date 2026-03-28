@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import {
   User, SlidersHorizontal, Languages, GraduationCap,
-  HelpCircle, LogOut, Check, Zap, Pencil, Loader2, ArrowLeft,
+  HelpCircle, LogOut, Check, Zap, Pencil, Loader2, ArrowLeft, CreditCard,
 } from 'lucide-react';
 import { ApiError, api, tokenStorage } from '../lib/api';
 import { AppHeader } from '../components/layout/AppHeader';
@@ -19,6 +19,7 @@ interface Props {
   onBack: () => void;
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
+  onNavigateBillingSubscription?: () => void;
   showInstallAppButton?: boolean;
   onInstallApp?: () => void;
 }
@@ -173,6 +174,7 @@ export function SettingsPage({
   onBack,
   onNavigateHistory,
   onNavigateFlashcards,
+  onNavigateBillingSubscription,
   showInstallAppButton,
   onInstallApp,
 }: Props) {
@@ -379,6 +381,13 @@ export function SettingsPage({
               {label}
             </button>
           ))}
+          <button
+            onClick={onNavigateBillingSubscription}
+            className="flex items-center gap-3 py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 hover:translate-x-1 text-left text-on-surface-variant opacity-80 hover:bg-surface-container-highest hover:opacity-100"
+          >
+            <CreditCard className="w-4 h-4" />
+            Billing & Subscription
+          </button>
         </nav>
 
         <div className="pt-4 mt-auto border-t border-outline-variant/20 flex flex-col gap-1">
@@ -418,6 +427,13 @@ export function SettingsPage({
           >
             <LogOut className="w-4 h-4" />
             Log Out
+          </button>
+          <button
+            onClick={onNavigateBillingSubscription}
+            className="sm:hidden mt-3 inline-flex items-center gap-2 rounded-full bg-surface-container-highest px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface border border-outline-variant/30 transition-colors"
+          >
+            <CreditCard className="w-4 h-4" />
+            Billing & Subscription
           </button>
         </header>
 

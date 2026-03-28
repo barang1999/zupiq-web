@@ -22,6 +22,7 @@ import {
 interface Props {
   user: any;
   onNavigateStudy?: () => void;
+  onNavigateBillingSubscription?: () => void;
   onNavigateHowItWorks?: () => void;
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
@@ -72,6 +73,7 @@ export default function PlanPage(props: Props) {
   const {
     user,
     onNavigateStudy,
+    onNavigateBillingSubscription,
     onNavigateHowItWorks,
     onRequireAuth,
   } = props;
@@ -238,13 +240,21 @@ export default function PlanPage(props: Props) {
             )}
 
             {isAuthenticated && accessState && (
-              <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-surface-container-highest/70 border border-outline-variant/20 px-4 py-2 text-xs relative z-10">
-                <span className="text-on-surface-variant">Current plan:</span>
-                <span className="font-bold text-primary">{accessState.effectivePlan.displayName}</span>
-                <span className="text-on-surface-variant">({accessState.subscription.status})</span>
-                {usageState?.limit !== null && (
-                  <span className="text-on-surface-variant">Deep Dive tokens: {usageState?.used ?? 0}/{usageState?.limit}</span>
-                )}
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2 relative z-10">
+                <div className="inline-flex items-center gap-2 rounded-full bg-surface-container-highest/70 border border-outline-variant/20 px-4 py-2 text-xs">
+                  <span className="text-on-surface-variant">Current plan:</span>
+                  <span className="font-bold text-primary">{accessState.effectivePlan.displayName}</span>
+                  <span className="text-on-surface-variant">({accessState.subscription.status})</span>
+                  {usageState?.limit !== null && (
+                    <span className="text-on-surface-variant">Deep Dive tokens: {usageState?.used ?? 0}/{usageState?.limit}</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => onNavigateBillingSubscription?.()}
+                  className="inline-flex items-center rounded-full border border-outline-variant/30 bg-surface-container-highest/55 px-4 py-2 text-xs font-semibold hover:bg-surface-container-highest/80 transition-colors"
+                >
+                  Manage Subscription
+                </button>
               </div>
             )}
 

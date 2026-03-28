@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Zupiq | Quiz Setup</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "secondary-dim": "#ff51fa",
+                "on-primary-container": "#00575b",
+                "on-tertiary-fixed-variant": "#526900",
+                "secondary": "#ff51fa",
+                "on-secondary-container": "#fff5f9",
+                "on-primary-fixed": "#004346",
+                "surface-dim": "#060e20",
+                "tertiary": "#f3ffca",
+                "error": "#ff716c",
+                "tertiary-fixed": "#cafd00",
+                "error-container": "#9f0519",
+                "primary-fixed": "#00f4fe",
+                "surface-variant": "#192540",
+                "surface": "#060e20",
+                "primary": "#a1faff",
+                "outline-variant": "#40485d",
+                "on-background": "#dee5ff",
+                "error-dim": "#d7383b",
+                "on-primary-fixed-variant": "#006266",
+                "inverse-primary": "#006a6e",
+                "tertiary-container": "#cafd00",
+                "primary-fixed-dim": "#00e5ee",
+                "surface-container-lowest": "#000000",
+                "primary-container": "#00f4fe",
+                "surface-bright": "#1f2b49",
+                "on-error-container": "#ffa8a3",
+                "surface-container-low": "#091328",
+                "surface-container-highest": "#192540",
+                "on-tertiary": "#516700",
+                "on-primary": "#006165",
+                "tertiary-dim": "#beee00",
+                "surface-container": "#0f1930",
+                "on-surface-variant": "#a3aac4",
+                "secondary-fixed-dim": "#ffa6f3",
+                "on-tertiary-fixed": "#3a4a00",
+                "inverse-on-surface": "#4d556b",
+                "secondary-fixed": "#ffbdf3",
+                "on-surface": "#dee5ff",
+                "secondary-container": "#a900a9",
+                "background": "#060e20",
+                "on-tertiary-container": "#4a5e00",
+                "surface-tint": "#a1faff",
+                "on-secondary": "#400040",
+                "tertiary-fixed-dim": "#beee00",
+                "outline": "#6d758c",
+                "primary-dim": "#00e5ee",
+                "on-secondary-fixed": "#620061",
+                "surface-container-high": "#141f38",
+                "on-error": "#490006",
+                "inverse-surface": "#faf8ff",
+                "on-secondary-fixed-variant": "#920091"
+              },
+              fontFamily: {
+                "headline": ["Space Grotesk"],
+                "body": ["Inter"],
+                "label": ["Inter"]
+              },
+              borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+            },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(25, 37, 64, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .glow-cyan {
+            box-shadow: 0 0 20px rgba(161, 250, 255, 0.15);
+        }
+        .glow-magenta {
+            box-shadow: 0 0 20px rgba(255, 81, 250, 0.15);
+        }
+        .neural-orb {
+            box-shadow: 0 0 30px rgba(0, 244, 254, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-surface-dim text-on-surface font-body selection:bg-primary/30 min-h-screen overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#192540]/60 backdrop-blur-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)] flex justify-between items-center px-6 py-4">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-[#a1faff] to-[#ff51fa] font-headline">Zupiq</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-[#a3aac4] hover:text-[#dee5ff] font-['Space_Grotesk'] tracking-tight text-sm transition-all duration-300" href="#">Study Hub</a>
+<a class="text-[#a1faff] border-b-2 border-[#a1faff] pb-1 font-['Space_Grotesk'] tracking-tight text-sm" href="#">Quiz</a>
+<a class="text-[#a3aac4] hover:text-[#dee5ff] font-['Space_Grotesk'] tracking-tight text-sm transition-all duration-300" href="#">Progress</a>
+<a class="text-[#a3aac4] hover:text-[#dee5ff] font-['Space_Grotesk'] tracking-tight text-sm transition-all duration-300" href="#">Vault</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-[#dee5ff] hover:bg-[#192540] transition-all duration-300 rounded-full active:scale-95">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+<button class="p-2 text-[#dee5ff] hover:bg-[#192540] transition-all duration-300 rounded-full active:scale-95">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+</header>
+<!-- SideNavBar (Desktop Only) -->
+<aside class="fixed left-0 top-0 pt-20 h-screen w-64 hidden lg:flex flex-col border-r border-[#40485d]/20 bg-[#091328]">
+<div class="px-6 py-8">
+<h2 class="font-['Space_Grotesk'] text-[#a1faff] text-xs uppercase tracking-[0.2em] mb-1">Learning Path</h2>
+<p class="text-on-surface-variant text-sm font-medium">Quantum Level 4</p>
+</div>
+<nav class="flex-1 space-y-2 px-3">
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-[#a3aac4] hover:bg-[#192540]/40 hover:translate-x-1 transition-all duration-300 font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span>Study Hub</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg bg-gradient-to-r from-[#a1faff]/10 to-[#ff51fa]/10 text-[#a1faff] border-l-4 border-[#a1faff] font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">psychology</span>
+<span>Practice</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-[#a3aac4] hover:bg-[#192540]/40 hover:translate-x-1 transition-all duration-300 font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">insights</span>
+<span>Progress</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 rounded-lg text-[#a3aac4] hover:bg-[#192540]/40 hover:translate-x-1 transition-all duration-300 font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span>Vault</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content Canvas -->
+<main class="lg:pl-64 pt-24 pb-32 min-h-screen relative">
+<!-- Background Accents -->
+<div class="absolute top-20 right-0 w-[500px] h-[500px] bg-secondary-container/10 blur-[120px] rounded-full pointer-events-none"></div>
+<div class="absolute bottom-0 left-0 w-[400px] h-[400px] bg-primary/5 blur-[100px] rounded-full pointer-events-none"></div>
+<div class="max-w-5xl mx-auto px-6 lg:px-12 relative z-10">
+<!-- Header Section -->
+<header class="mb-12">
+<h1 class="font-headline text-5xl md:text-6xl font-bold tracking-tighter text-on-surface mb-4">Quiz Setup</h1>
+<p class="text-on-surface-variant text-lg max-w-xl">Configure your neural link. Choose your cognitive load intensity for today's deep-learning session.</p>
+</header>
+<!-- Main Glassmorphic Card -->
+<section class="glass-panel rounded-[32px] p-8 md:p-12 mb-8 relative overflow-hidden">
+<!-- Signature Glow Corner -->
+<div class="absolute top-0 right-0 w-32 h-32 bg-tertiary/10 blur-3xl rounded-full"></div>
+<h3 class="font-headline text-2xl font-bold mb-8 flex items-center gap-3">
+<span class="w-2 h-2 rounded-full bg-primary neural-orb"></span>
+                    Select Proficiency Target
+                </h3>
+<!-- Level Selection Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+<!-- Conceptual -->
+<button class="group relative flex flex-col items-start p-6 rounded-3xl bg-surface-container hover:bg-surface-container-highest transition-all duration-300 text-left glow-cyan border border-outline-variant/10 active:scale-95">
+<span class="material-symbols-outlined text-primary mb-4 text-3xl" data-icon="lightbulb">lightbulb</span>
+<h4 class="font-headline text-xl font-bold text-on-surface mb-2">Conceptual</h4>
+<p class="text-on-surface-variant text-sm leading-relaxed mb-4">Core definitions, basic relations, and foundational principles.</p>
+<span class="text-xs font-bold uppercase tracking-widest text-primary/60 group-hover:text-primary">Lvl: Easy</span>
+</button>
+<!-- Applied -->
+<button class="group relative flex flex-col items-start p-6 rounded-3xl bg-surface-container hover:bg-surface-container-highest transition-all duration-300 text-left border-2 border-primary/40 shadow-[0_0_20px_rgba(161,250,255,0.1)] active:scale-95">
+<div class="absolute -top-3 right-6 bg-primary text-on-primary text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-tighter">Recommended</div>
+<span class="material-symbols-outlined text-primary mb-4 text-3xl" data-icon="rocket_launch">rocket_launch</span>
+<h4 class="font-headline text-xl font-bold text-on-surface mb-2">Applied</h4>
+<p class="text-on-surface-variant text-sm leading-relaxed mb-4">Scenario-based problems requiring multi-step logical reasoning.</p>
+<span class="text-xs font-bold uppercase tracking-widest text-primary">Lvl: Medium</span>
+</button>
+<!-- Mastery -->
+<button class="group relative flex flex-col items-start p-6 rounded-3xl bg-surface-container hover:bg-surface-container-highest transition-all duration-300 text-left glow-magenta border border-outline-variant/10 active:scale-95">
+<span class="material-symbols-outlined text-secondary mb-4 text-3xl" data-icon="model_training">model_training</span>
+<h4 class="font-headline text-xl font-bold text-on-surface mb-2">Mastery</h4>
+<p class="text-on-surface-variant text-sm leading-relaxed mb-4">Advanced synthesis of concepts under complex constraints.</p>
+<span class="text-xs font-bold uppercase tracking-widest text-secondary/60 group-hover:text-secondary">Lvl: Hard</span>
+</button>
+</div>
+<!-- Neural Context (Asymmetric Layout) -->
+<div class="bg-surface-container-low rounded-2xl p-6 md:p-8 flex flex-col md:flex-row gap-8 items-start">
+<div class="md:w-1/3">
+<h4 class="font-headline text-lg font-bold text-on-surface mb-2">Neural Context</h4>
+<p class="text-on-surface-variant text-xs leading-relaxed">Topics aggregated from your last 3 sessions and identified knowledge gaps.</p>
+</div>
+<div class="md:w-2/3 flex flex-wrap gap-3">
+<span class="px-4 py-2 rounded-full bg-surface-container-highest text-primary text-sm font-medium flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                            Quantum Mechanics
+                        </span>
+<span class="px-4 py-2 rounded-full bg-surface-container-highest text-secondary text-sm font-medium flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                            Multivariable Optimization
+                        </span>
+<span class="px-4 py-2 rounded-full bg-surface-container-highest text-on-surface-variant text-sm font-medium flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+                            Wave-Particle Duality
+                        </span>
+<span class="px-4 py-2 rounded-full bg-surface-container-highest text-on-surface-variant text-sm font-medium flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+                            Probability Density
+                        </span>
+<button class="px-4 py-2 rounded-full border border-outline-variant/30 text-xs text-on-surface-variant hover:text-on-surface hover:border-primary/50 transition-colors">
+                            + Edit Topics
+                        </button>
+</div>
+</div>
+</section>
+<!-- Final Action Area -->
+<div class="flex flex-col md:flex-row items-center justify-between gap-8 py-8 px-4">
+<div class="flex items-center gap-6">
+<div class="text-right">
+<p class="text-xs text-on-surface-variant uppercase tracking-widest font-bold">Duration</p>
+<p class="text-xl font-headline font-bold">25 Minutes</p>
+</div>
+<div class="w-[1px] h-10 bg-outline-variant/30"></div>
+<div class="text-left">
+<p class="text-xs text-on-surface-variant uppercase tracking-widest font-bold">Questions</p>
+<p class="text-xl font-headline font-bold">15 Units</p>
+</div>
+</div>
+<button class="relative group px-12 py-5 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary font-headline font-bold text-lg shadow-[0_0_30px_rgba(0,244,254,0.3)] hover:shadow-[0_0_50px_rgba(255,81,250,0.4)] transition-all duration-500 active:scale-95 overflow-hidden">
+<span class="relative z-10 flex items-center gap-3">
+                        Start Session
+                        <span class="material-symbols-outlined" data-icon="bolt">bolt</span>
+</span>
+<div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+</button>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="fixed bottom-0 w-full z-50 lg:hidden rounded-t-[32px] bg-[#192540]/60 backdrop-blur-2xl shadow-[0_-10px_30px_rgba(0,0,0,0.5)] border-t border-[#40485d]/10 flex justify-around items-center px-4 pb-6 pt-2">
+<a class="flex flex-col items-center justify-center text-[#a3aac4] p-3 hover:text-[#ff51fa] active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-gradient-to-b from-[#a1faff]/20 to-transparent text-[#a1faff] rounded-full p-3 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="bolt">bolt</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Quiz</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#a3aac4] p-3 hover:text-[#ff51fa] active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="bar_chart">bar_chart</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Stats</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#a3aac4] p-3 hover:text-[#ff51fa] active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Profile</span>
+</a>
+</nav>
+<!-- Decor Elements -->
+<div class="fixed top-1/4 -left-20 w-64 h-64 bg-primary/5 blur-[100px] rounded-full pointer-events-none"></div>
+<div class="fixed bottom-1/4 -right-20 w-80 h-80 bg-secondary/5 blur-[120px] rounded-full pointer-events-none"></div>
+</body></html>

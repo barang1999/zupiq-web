@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Bell,
+  CreditCard,
   Download,
   GitFork,
   History,
@@ -12,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLiveTokenUsage } from '../../hooks/useLiveTokenUsage';
+import { getBillingSubscription } from '../../lib/billing';
 
 interface AppHeaderProps {
   user: any;
@@ -49,6 +51,7 @@ export function AppHeader({
     .toUpperCase();
   const [imgError, setImgError] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isProPlan, setIsProPlan] = useState(false);
   const { usage: tokenUsage } = useLiveTokenUsage(Boolean(user));
 
   const mobileMenuItems = useMemo(
@@ -87,6 +90,30 @@ export function AppHeader({
     };
   }, [isProfileMenuOpen]);
 
+  useEffect(() => {
+    const userId = user?.id ?? user?.sub ?? user?.user_id ?? null;
+    if (!userId) {
+      setIsProPlan(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    void getBillingSubscription()
+      .then((response) => {
+        if (cancelled) return;
+        setIsProPlan(response.access.effectivePlanKey === 'pro');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setIsProPlan(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.sub, user?.user_id]);
+
   const runAndClose = (action?: () => void) => {
     if (!action) return;
     setIsProfileMenuOpen(false);
@@ -97,6 +124,13 @@ export function AppHeader({
     if (window.location.pathname !== '/plan') {
       window.history.pushState({ page: 'plan' }, '', '/plan');
       window.dispatchEvent(new PopStateEvent('popstate', { state: { page: 'plan' } }));
+    }
+  };
+
+  const handleOpenBillingSubscription = () => {
+    if (window.location.pathname !== '/billingsubscription') {
+      window.history.pushState({ page: 'billingsubscription' }, '', '/billingsubscription');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { page: 'billingsubscription' } }));
     }
   };
 
@@ -263,13 +297,23 @@ export function AppHeader({
               </nav>
 
               <div className="mt-8 border-t border-outline-variant/20 pt-6">
+                {!isProPlan && (
+                  <button
+                    type="button"
+                    onClick={() => runAndClose(handleUpgradeToPro)}
+                    className="mb-3 flex w-full items-center gap-3 rounded-full px-5 py-3 text-left bg-gradient-to-r from-primary/20 to-secondary/20 border border-primary/30 text-primary transition-colors hover:from-primary/30 hover:to-secondary/30"
+                  >
+                    <Sparkles className="h-5 w-5" />
+                    <span className="font-headline text-lg font-medium">Upgrade to Pro</span>
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => runAndClose(handleUpgradeToPro)}
-                  className="mb-3 flex w-full items-center gap-3 rounded-full px-5 py-3 text-left bg-gradient-to-r from-primary/20 to-secondary/20 border border-primary/30 text-primary transition-colors hover:from-primary/30 hover:to-secondary/30"
+                  onClick={() => runAndClose(handleOpenBillingSubscription)}
+                  className="mb-3 flex w-full items-center gap-3 rounded-full px-5 py-3 text-left text-on-surface-variant transition-colors hover:bg-surface-container-highest/70 hover:text-on-surface"
                 >
-                  <Sparkles className="h-5 w-5" />
-                  <span className="font-headline text-lg font-medium">Upgrade to Pro</span>
+                  <CreditCard className="h-5 w-5" />
+                  <span className="font-headline text-lg font-medium">Billing & Subscription</span>
                 </button>
                 {showInstallAppButton && onInstallAppClick && (
                   <button

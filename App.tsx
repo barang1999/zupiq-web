@@ -26,6 +26,7 @@ import { HistoryPage } from "./pages/HistoryPage";
 import MobileHistoryPage from "./pages/MobileHistoryPage";
 import ArchivePage from "./pages/ArchivePage";
 import PlanPage from "./pages/PlanPage";
+import BillingSubscriptionPage from "./pages/BillingSubscriptionPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
@@ -35,7 +36,18 @@ import FlashcardSessionPage from "./pages/FlashcardSessionPage";
 import { PublicHeader } from "./components/layout/PublicHeader";
 import { GrowingTreeAnimation } from "./components/ui/GrowingTreeAnimation";
 
-type AppShellPage = 'study' | 'history' | 'archive' | 'plan' | 'flashcards' | 'flashcards-session' | 'settings' | 'privacy' | 'terms' | 'how-it-works';
+type AppShellPage =
+  | 'study'
+  | 'history'
+  | 'archive'
+  | 'plan'
+  | 'billingsubscription'
+  | 'flashcards'
+  | 'flashcards-session'
+  | 'settings'
+  | 'privacy'
+  | 'terms'
+  | 'how-it-works';
 type IOSNavigator = Navigator & { standalone?: boolean };
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -460,6 +472,7 @@ export default function App() {
     if (path === '/history') return 'history';
     if (path === '/archive') return 'archive';
     if (path === '/plan') return 'plan';
+    if (path === '/billingsubscription' || path === '/billing-subscription') return 'billingsubscription';
     if (path === '/how-it-works') return 'how-it-works';
     if (path === '/flashcards/session') return 'flashcards-session';
     if (path === '/flashcards') return 'flashcards';
@@ -484,6 +497,8 @@ export default function App() {
       url = "/archive";
     } else if (next === "plan") {
       url = "/plan";
+    } else if (next === "billingsubscription") {
+      url = "/billingsubscription";
     } else if (next === "how-it-works") {
       url = "/how-it-works";
     } else if (next === "flashcards") {
@@ -640,6 +655,7 @@ export default function App() {
           onBack={() => setPage('study')}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateBillingSubscription={() => setPage('billingsubscription')}
           showInstallAppButton={showInstallButton}
           onInstallApp={handleInstallApp}
         />
@@ -681,12 +697,22 @@ export default function App() {
         <PlanPage
           user={currentUser}
           onNavigateStudy={() => setPage('study')}
+          onNavigateBillingSubscription={() => setPage('billingsubscription')}
           onNavigateHowItWorks={() => setPage('how-it-works')}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
           onNavigateSettings={() => setPage('settings')}
           showInstallAppButton={showInstallButton}
           onInstallApp={handleInstallApp}
+        />
+      );
+    } else if (page === 'billingsubscription') {
+      authenticatedPage = (
+        <BillingSubscriptionPage
+          user={currentUser}
+          onNavigateStudy={() => setPage('study')}
+          onNavigatePlan={() => setPage('plan')}
+          onNavigateHowItWorks={() => setPage('how-it-works')}
         />
       );
     } else if (page === 'flashcards') {
@@ -745,7 +771,7 @@ export default function App() {
     return (
       <>
         {authenticatedPage}
-        {page !== 'plan' && <MobileBottomNav page={page} onNavigate={setPage} />}
+        {page !== 'plan' && page !== 'billingsubscription' && <MobileBottomNav page={page} onNavigate={setPage} />}
       </>
     );
   }
@@ -756,12 +782,30 @@ export default function App() {
         <PlanPage
           user={currentUser}
           onNavigateStudy={() => setPage("study")}
+          onNavigateBillingSubscription={() => setPage("billingsubscription")}
           onNavigateHowItWorks={() => setPage("how-it-works")}
           onNavigateHistory={() => setShowAuth(true)}
           onNavigateFlashcards={() => setShowAuth(true)}
           onNavigateSettings={() => setShowAuth(true)}
           showInstallAppButton={showInstallButton}
           onInstallApp={handleInstallApp}
+          onRequireAuth={() => setShowAuth(true)}
+        />
+        <AnimatePresence>
+          {showAuth && <Auth onClose={() => setShowAuth(false)} />}
+        </AnimatePresence>
+      </>
+    );
+  }
+
+  if (page === "billingsubscription") {
+    return (
+      <>
+        <BillingSubscriptionPage
+          user={currentUser}
+          onNavigateStudy={() => setPage("study")}
+          onNavigatePlan={() => setPage("plan")}
+          onNavigateHowItWorks={() => setPage("how-it-works")}
           onRequireAuth={() => setShowAuth(true)}
         />
         <AnimatePresence>
