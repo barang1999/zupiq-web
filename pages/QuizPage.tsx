@@ -25,6 +25,8 @@ import { CustomSelect } from "../components/ui/CustomSelect";
 import { supabase } from "../lib/supabase";
 import { firebaseSignOut } from "../lib/firebase";
 import { api } from "../lib/api";
+import { getSessionsCached } from "../lib/sessions";
+import { getSubjectsCached } from "../lib/subjects";
 import { useQuiz } from "../hooks/useQuiz";
 import type {
   MasteryItem,
@@ -240,20 +242,20 @@ export default function QuizPage({
 
     const loadSubjects = async () => {
       try {
-        const response = await api.get<{ subjects: Subject[] }>("/api/subjects");
+        const response = await getSubjectsCached();
         if (cancelled) return;
-        setSubjects(response.subjects ?? []);
+        setSubjects(response ?? []);
 
         const byRequestedId = quizPrefill.subjectId
-          ? response.subjects?.find((subject) => subject.id === quizPrefill.subjectId)?.id
+          ? response?.find((subject) => subject.id === quizPrefill.subjectId)?.id
           : "";
         const normalizedRequestedName = quizPrefill.subjectName.toLowerCase();
         const byRequestedName = normalizedRequestedName
-          ? response.subjects?.find((subject) => subject.name.trim().toLowerCase() === normalizedRequestedName)?.id ?? ""
+          ? response?.find((subject) => subject.name.trim().toLowerCase() === normalizedRequestedName)?.id ?? ""
           : "";
-        const initialSubjectId = byRequestedId || byRequestedName || response.subjects?.[0]?.id || "";
+        const initialSubjectId = byRequestedId || byRequestedName || response?.[0]?.id || "";
         setSelectedSubjectId((current) => {
-          if (current && response.subjects?.some((subject) => subject.id === current)) return current;
+          if (current && response?.some((subject) => subject.id === current)) return current;
           return initialSubjectId;
         });
       } catch {
@@ -274,16 +276,9 @@ export default function QuizPage({
 
     const loadSessionTitles = async () => {
       try {
-        const response = await api.get<{
-          sessions: Array<{
-            title?: string | null;
-            subject_id?: string | null;
-            subject?: string | null;
-            created_at?: string | null;
-          }>;
-        }>("/api/sessions");
+        const response = await getSessionsCached();
         if (cancelled) return;
-        const mapped = (response.sessions ?? [])
+        const mapped = (response ?? [])
           .map((row) => ({
             title: String(row.title ?? "").trim(),
             subject_id: row.subject_id ?? null,

@@ -12,8 +12,8 @@ export interface SessionRow {
   subject_id?: string | null;
 }
 
-const SESSIONS_CACHE_TTL_MS = 20_000;
-const SESSIONS_RATE_LIMIT_COOLDOWN_MS = 30_000;
+const SESSIONS_CACHE_TTL_MS = 60_000;
+const SESSIONS_RATE_LIMIT_COOLDOWN_MS = 60_000;
 
 let sessionsCache: {
   accessToken: string | null;
@@ -71,4 +71,3 @@ export async function getSessionsCached(): Promise<SessionRow[]> {
 
   return sessionsInFlight;
 }
-

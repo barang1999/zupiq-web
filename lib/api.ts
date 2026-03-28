@@ -40,6 +40,47 @@ function buildRequestUrl(endpoint: string): string {
 }
 
 const BASE_URL = resolveBaseUrl();
+const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 30_000;
+const MAX_RATE_LIMIT_COOLDOWN_MS = 15 * 60_000;
+const endpointRateLimitUntil = new Map<string, number>();
+
+function parseRetryAfterMs(headerValue: string | null): number | null {
+  if (!headerValue) return null;
+  const trimmed = headerValue.trim();
+  if (!trimmed) return null;
+
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.max(0, Math.floor(seconds * 1000));
+  }
+
+  const timestamp = Date.parse(trimmed);
+  if (!Number.isFinite(timestamp)) return null;
+  return Math.max(0, timestamp - Date.now());
+}
+
+function toRateLimitKey(method: string, requestUrl: string): string {
+  try {
+    const url = new URL(
+      requestUrl,
+      typeof window !== "undefined" ? window.location.origin : "http://localhost"
+    );
+    return `${method.toUpperCase()} ${url.pathname}`;
+  } catch {
+    return `${method.toUpperCase()} ${requestUrl}`;
+  }
+}
+
+function markRateLimited(key: string, response: Response): number {
+  const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
+  const cooldownMs = Math.min(
+    MAX_RATE_LIMIT_COOLDOWN_MS,
+    Math.max(DEFAULT_RATE_LIMIT_COOLDOWN_MS, retryAfterMs ?? 0)
+  );
+  const retryAt = Date.now() + cooldownMs;
+  endpointRateLimitUntil.set(key, retryAt);
+  return retryAt;
+}
 
 // ─── Token storage ────────────────────────────────────────────────────────────
 
@@ -85,6 +126,7 @@ interface RequestOptions extends RequestInit {
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { skipAuth, ...fetchOptions } = options;
+  const method = (fetchOptions.method ?? "GET").toUpperCase();
 
   // Don't force application/json for FormData — the browser must set
   // the multipart boundary automatically when no Content-Type is given.
@@ -102,6 +144,17 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 
   let response: Response;
   const requestUrl = buildRequestUrl(endpoint);
+  const rateLimitKey = toRateLimitKey(method, requestUrl);
+  const retryNotBefore = endpointRateLimitUntil.get(rateLimitKey) ?? 0;
+  if (Date.now() < retryNotBefore) {
+    throw new ApiError(429, "Too many requests. Please try again later.", {
+      kind: "client_rate_limit_cooldown",
+      endpoint,
+      method,
+      retryAt: new Date(retryNotBefore).toISOString(),
+    });
+  }
+
   try {
     response = await fetch(requestUrl, {
       ...fetchOptions,
@@ -109,7 +162,6 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Network request failed";
-    const method = (fetchOptions.method ?? "GET").toUpperCase();
     throw new ApiError(0, message, {
       kind: "network_error",
       endpoint,
@@ -134,8 +186,17 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
         ...fetchOptions,
         headers,
       });
+      if (retryResponse.status === 429) {
+        markRateLimited(rateLimitKey, retryResponse);
+      }
       return parseResponse<T>(retryResponse);
     }
+  }
+
+  if (response.status === 429) {
+    markRateLimited(rateLimitKey, response);
+  } else if (response.ok) {
+    endpointRateLimitUntil.delete(rateLimitKey);
   }
 
   return parseResponse<T>(response);

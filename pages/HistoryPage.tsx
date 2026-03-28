@@ -58,6 +58,10 @@ function formatDuration(secs: number | null): string {
   return `${m}m`;
 }
 
+function toSingleLinePreview(value: string): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
 function subjectColor(subject: string): { bg: string; text: string; bar: string } {
   const s = subject.toLowerCase();
   if (s.includes('math') || s.includes('calculus') || s.includes('algebra') || s.includes('geometry')) {
@@ -619,7 +623,7 @@ export function HistoryPage({
                           <span className="text-[10px] font-label text-on-surface-variant">{formatRelative(session.created_at)}</span>
                         </div>
                         <h4 className={`text-lg sm:text-xl font-bold mb-2 group-hover:${color} transition-colors relative z-10 line-clamp-2`}>
-                          <MathText>{session.title}</MathText>
+                          <MathText>{toSingleLinePreview(session.title)}</MathText>
                         </h4>
                         <p className="text-sm text-on-surface-variant mb-6 relative z-10">
                           Subject: {session.subject} • {session.node_count} nodes
@@ -674,10 +678,10 @@ export function HistoryPage({
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
                                 <h4 className="font-bold text-on-surface line-clamp-2">
-                                  <MathText>{session.title}</MathText>
+                                  <MathText>{toSingleLinePreview(session.title)}</MathText>
                                 </h4>
                                 <p className="mt-1 text-xs text-on-surface-variant line-clamp-1">
-                                  <MathText>{session.problem}</MathText>
+                                  <MathText>{toSingleLinePreview(session.problem)}</MathText>
                                 </p>
                               </div>
                               <span className="shrink-0 text-[10px] text-on-surface-variant">{formatDate(session.created_at)}</span>
@@ -736,10 +740,10 @@ export function HistoryPage({
                               <td className="px-8 py-6 text-sm text-on-surface-variant">{formatDate(session.created_at)}</td>
                               <td className="px-8 py-6 font-bold text-on-surface max-w-xs">
                                 <span className="line-clamp-1 block">
-                                  <MathText>{session.title}</MathText>
+                                  <MathText>{toSingleLinePreview(session.title)}</MathText>
                                 </span>
                                 <span className="block text-xs text-on-surface-variant font-normal mt-0.5 line-clamp-1">
-                                  <MathText>{session.problem}</MathText>
+                                  <MathText>{toSingleLinePreview(session.problem)}</MathText>
                                 </span>
                               </td>
                               <td className="px-8 py-6">

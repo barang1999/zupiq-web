@@ -60,6 +60,11 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
+// Keep the raw browser install event out of React hook state/ref to avoid
+// dev-mode object inspection touching cross-origin Window internals.
+let deferredInstallPromptEvent: BeforeInstallPromptEvent | null = null;
+const ENABLE_CUSTOM_INSTALL_PROMPT = !import.meta.env.DEV;
+
 // --- Components ---
 
 const Hero = ({ onAuthClick }: { onAuthClick: () => void }) => {
@@ -472,7 +477,7 @@ export default function App() {
     const u = tokenStorage.getUser();
     return !!u && !u.preferences?.onboarding_completed;
   });
-  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [canInstallApp, setCanInstallApp] = useState(false);
   const [isStandalone, setIsStandalone] = useState(() => {
     return (
       window.matchMedia('(display-mode: standalone)').matches ||
@@ -595,36 +600,47 @@ export default function App() {
 
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
-      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+      deferredInstallPromptEvent = event as BeforeInstallPromptEvent;
+      setCanInstallApp(true);
     };
 
     const onAppInstalled = () => {
-      setInstallPromptEvent(null);
+      deferredInstallPromptEvent = null;
+      setCanInstallApp(false);
       setIsStandalone(true);
     };
 
     updateStandaloneState();
-    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
-    window.addEventListener('appinstalled', onAppInstalled);
     window.addEventListener('resize', updateViewport);
     displayModeQuery.addEventListener('change', updateStandaloneState);
+    if (ENABLE_CUSTOM_INSTALL_PROMPT) {
+      window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.addEventListener('appinstalled', onAppInstalled);
+    } else {
+      deferredInstallPromptEvent = null;
+      setCanInstallApp(false);
+    }
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', onAppInstalled);
+      if (ENABLE_CUSTOM_INSTALL_PROMPT) {
+        window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+        window.removeEventListener('appinstalled', onAppInstalled);
+      }
       window.removeEventListener('resize', updateViewport);
       displayModeQuery.removeEventListener('change', updateStandaloneState);
     };
   }, []);
 
-  const showInstallButton = !!installPromptEvent && !isStandalone;
+  const showInstallButton = ENABLE_CUSTOM_INSTALL_PROMPT && canInstallApp && !isStandalone;
 
   const handleInstallApp = async () => {
+    const installPromptEvent = deferredInstallPromptEvent;
     if (!installPromptEvent) return;
 
     await installPromptEvent.prompt();
     await installPromptEvent.userChoice;
-    setInstallPromptEvent(null);
+    deferredInstallPromptEvent = null;
+    setCanInstallApp(false);
   };
 
   if (page === 'privacy') {

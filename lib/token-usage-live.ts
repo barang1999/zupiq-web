@@ -23,10 +23,13 @@ let streamAbortController: AbortController | null = null;
 let reconnectTimeoutId: number | null = null;
 let reconnectAttempt = 0;
 let streamRetryNotBefore = 0;
+let consecutiveRateLimitedAttempts = 0;
 
 const DEFAULT_RECONNECT_MS = 3_000;
-const MAX_RECONNECT_MS = 60_000;
-const RATE_LIMIT_MIN_RECONNECT_MS = 30_000;
+const MAX_RECONNECT_MS = 15 * 60_000;
+const RATE_LIMIT_MIN_RECONNECT_MS = 2 * 60_000;
+const RATE_LIMIT_HARD_PAUSE_AFTER = 3;
+const RATE_LIMIT_HARD_PAUSE_MS = 15 * 60_000;
 
 interface StreamConnectError {
   status?: number;
@@ -184,19 +187,25 @@ async function connectStream() {
         retryAfterMs,
       };
       if (response.status === 429) {
-        const cooldownMs = Math.min(MAX_RECONNECT_MS, Math.max(RATE_LIMIT_MIN_RECONNECT_MS, retryAfterMs ?? 0));
+        consecutiveRateLimitedAttempts += 1;
+        let cooldownMs = Math.min(MAX_RECONNECT_MS, Math.max(RATE_LIMIT_MIN_RECONNECT_MS, retryAfterMs ?? 0));
+        if (consecutiveRateLimitedAttempts >= RATE_LIMIT_HARD_PAUSE_AFTER) {
+          cooldownMs = Math.max(cooldownMs, RATE_LIMIT_HARD_PAUSE_MS);
+          reconnectAttempt = 0;
+        }
         streamRetryNotBefore = Date.now() + cooldownMs;
       }
       throw new Error(`Failed usage stream request (${response.status})`);
     }
 
     reconnectAttempt = 0;
+    consecutiveRateLimitedAttempts = 0;
     streamRetryNotBefore = 0;
     setState({ connected: true });
     await readEventStream(response.body, controller.signal);
   } catch {
     if (controller.signal.aborted) return;
-    setState({ connected: false });
+    setState({ connected: false, loading: false });
   } finally {
     if (streamAbortController === controller) {
       streamAbortController = null;

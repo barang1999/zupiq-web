@@ -18,6 +18,7 @@ import { RichText } from '../components/ui/RichText';
 import { ActionPopover } from '../components/ui/ActionPopover';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
+import { getSessionsCached } from '../lib/sessions';
 import { MAX_FILE_SIZE_MB, validateFile } from '../utils/validators';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1314,8 +1315,8 @@ export function StudySpacePage({
 
     let cancelled = false;
     debugStudy('boot:fetchSessions:start');
-    api.get<{ sessions: Array<{ id: string; breakdown_json: string; subject_id?: string | null }> }>('/api/sessions')
-      .then(({ sessions }) => {
+    getSessionsCached()
+      .then((sessions) => {
         if (cancelled || !sessions?.length) return;
         const lastId = localStorage.getItem('zupiq_lastSessionId');
         const target = (lastId && sessions.find(s => s.id === lastId)) || sessions[0];

@@ -64,6 +64,10 @@ function formatDuration(secs: number | null): string {
   return `${m}m`;
 }
 
+function toSingleLinePreview(value: string): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
 function subjectStyle(subject: string): { badge: string; accent: string } {
   const s = subject.toLowerCase();
   if (s.includes('math') || s.includes('calculus') || s.includes('algebra')) {
@@ -268,10 +272,10 @@ export default function MobileHistoryPage({
                       <span className="text-on-surface-variant text-[10px]">{formatRelative(session.created_at)}</span>
                     </div>
                     <h4 className="font-headline font-bold mb-1 line-clamp-1">
-                      <MathText>{session.title}</MathText>
+                      <MathText>{toSingleLinePreview(session.title)}</MathText>
                     </h4>
                     <p className="text-xs text-on-surface-variant mb-4 line-clamp-1">
-                      <MathText>{session.problem}</MathText>
+                      <MathText>{toSingleLinePreview(session.problem)}</MathText>
                     </p>
                     <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-tertiary">
                       <span>{session.node_count} nodes</span>
@@ -313,8 +317,8 @@ export default function MobileHistoryPage({
                         <Icon className="w-4 h-4 text-primary" />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-bold text-sm line-clamp-1">
-                          <MathText>{session.title}</MathText>
+                        <p className="font-bold text-sm truncate">
+                          <MathText>{toSingleLinePreview(session.title)}</MathText>
                         </p>
                         <p className="text-[10px] text-on-surface-variant uppercase tracking-widest font-medium">
                           {formatDate(session.created_at)} • {formatDuration(session.duration_seconds)}

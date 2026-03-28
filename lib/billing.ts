@@ -80,8 +80,8 @@ export interface BillingSubscriptionResponse {
   usage: UsageSnapshot;
 }
 
-const BILLING_SUBSCRIPTION_CACHE_TTL_MS = 30_000;
-const BILLING_SUBSCRIPTION_RATE_LIMIT_COOLDOWN_MS = 30_000;
+const BILLING_SUBSCRIPTION_CACHE_TTL_MS = 60_000;
+const BILLING_SUBSCRIPTION_RATE_LIMIT_COOLDOWN_MS = 60_000;
 let billingSubscriptionCache: {
   accessToken: string | null;
   fetchedAt: number;

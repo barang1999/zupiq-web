@@ -15,6 +15,7 @@ import { AppHeader } from "../components/layout/AppHeader";
 import { AppSidebar } from "../components/layout/AppSidebar";
 import { api } from "../lib/api";
 import { getSessionsCached } from "../lib/sessions";
+import { getSubjectsCached } from "../lib/subjects";
 import { supabase } from "../lib/supabase";
 import { firebaseSignOut } from "../lib/firebase";
 import type { Subject } from "../types/subject.types";
@@ -187,7 +188,7 @@ export default function KnowledgeMapPage({
       setError(null);
       try {
         const [subjectResponse, sessionResponse] = await Promise.all([
-          api.get<{ subjects: Subject[] }>("/api/subjects"),
+          getSubjectsCached(),
           getSessionsCached(),
         ]);
         if (cancelled) return;
@@ -203,7 +204,7 @@ export default function KnowledgeMapPage({
           .filter((row) => row.title.length > 0)
           .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
 
-        setSubjects(subjectResponse.subjects ?? []);
+        setSubjects(subjectResponse ?? []);
         setSessions(mappedSessions);
       } catch {
         if (cancelled) return;
