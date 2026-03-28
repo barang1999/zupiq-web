@@ -3,7 +3,7 @@ import type { TouchEvent as ReactTouchEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Brain,
-  GitFork, History, Trophy, Archive,
+  GitFork, History, Trophy, Archive, Network,
   Plus, X, Loader2, Sparkles,
   Bookmark, Zap, ArrowRight,
   ChevronLeft, ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers,
@@ -768,6 +768,7 @@ interface Props {
   user: any;
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
+  onNavigateKnowledgeMap?: () => void;
   onNavigateAchievements?: () => void;
   onNavigateQuiz?: (prefill?: {
     subjectId?: string | null;
@@ -786,6 +787,7 @@ export function StudySpacePage({
   user,
   onNavigateHistory,
   onNavigateFlashcards,
+  onNavigateKnowledgeMap,
   onNavigateAchievements,
   onNavigateQuiz,
   onNavigatePlan,
@@ -2469,11 +2471,23 @@ Do not repeat content already given.`;
 
   const NAV_ITEMS = [
     { id: 'map',         label: 'Neural Map',   Icon: GitFork },
+    { id: 'knowledge-map', label: 'Knowledge Map', Icon: Network },
     { id: 'history',     label: 'History',       Icon: History },
     { id: 'flashcards',  label: 'Flashcards',    Icon: Layers },
     { id: 'quiz',        label: 'Quiz',          Icon: Brain },
     { id: 'achievements', label: 'Achievements',   Icon: Trophy },
   ];
+
+  const navigateToKnowledgeMap = useCallback(() => {
+    if (onNavigateKnowledgeMap) {
+      onNavigateKnowledgeMap();
+      return;
+    }
+    if (typeof window !== 'undefined' && window.location.pathname !== '/knowledge-map') {
+      window.history.pushState({ page: 'knowledge-map' }, '', '/knowledge-map');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { page: 'knowledge-map' } }));
+    }
+  }, [onNavigateKnowledgeMap]);
 
   const navigateToQuiz = useCallback(() => {
     const prefill = {
@@ -2518,6 +2532,10 @@ Do not repeat content already given.`;
           onNavigateHistory?.();
           return;
         }
+        if (id === 'knowledge-map') {
+          navigateToKnowledgeMap();
+          return;
+        }
         if (id === 'flashcards') {
           onNavigateFlashcards?.();
           return;
@@ -2533,7 +2551,7 @@ Do not repeat content already given.`;
         setActiveTab(id);
       },
     }))
-  ), [activeTab, navigateToQuiz, onNavigateAchievements, onNavigateFlashcards, onNavigateHistory]);
+  ), [activeTab, navigateToKnowledgeMap, navigateToQuiz, onNavigateAchievements, onNavigateFlashcards, onNavigateHistory]);
 
   const isBranchSelected = !!selectedNode;
   const activeBranchConversation = selectedNode
@@ -2654,6 +2672,7 @@ Do not repeat content already given.`;
         user={user}
         onSettingsClick={onNavigateSettings}
         onSignOut={handleSignOut}
+        onNavigateKnowledgeMap={onNavigateKnowledgeMap}
         onNavigateHistory={onNavigateHistory}
         onNavigateFlashcards={onNavigateFlashcards}
         onNavigateAchievements={onNavigateAchievements}

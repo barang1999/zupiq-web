@@ -35,6 +35,7 @@ import FlashcardSubjectSelectionPage from "./pages/FlashcardSubjectSelectionPage
 import FlashcardSessionPage from "./pages/FlashcardSessionPage";
 import QuizPage from "./pages/QuizPage";
 import AchievementPage from "./pages/AchievementPage";
+import KnowledgeMapPage from "./pages/KnowledgeMapPage";
 import { PublicHeader } from "./components/layout/PublicHeader";
 import { GrowingTreeAnimation } from "./components/ui/GrowingTreeAnimation";
 
@@ -47,6 +48,7 @@ type AppShellPage =
   | 'flashcards'
   | 'flashcards-session'
   | 'quiz'
+  | 'knowledge-map'
   | 'achievements'
   | 'settings'
   | 'privacy'
@@ -486,6 +488,7 @@ export default function App() {
     if (path === '/flashcards/session') return 'flashcards-session';
     if (path === '/flashcards') return 'flashcards';
     if (path === '/quiz') return 'quiz';
+    if (path === '/knowledge-map') return 'knowledge-map';
     if (path === '/achievements') return 'achievements';
     if (path === '/settings') return 'settings';
     if (path === '/privacy') return 'privacy';
@@ -535,6 +538,8 @@ export default function App() {
       if (quizArea) quizParams.set("area", quizArea);
       const query = quizParams.toString();
       url = query ? `/quiz?${query}` : "/quiz";
+    } else if (next === "knowledge-map") {
+      url = "/knowledge-map";
     } else if (next === "achievements") {
       url = "/achievements";
     } else if (next === "flashcards-session") {
@@ -796,8 +801,23 @@ export default function App() {
         <QuizPage
           user={currentUser}
           onNavigateStudy={(bd) => { setInitialBreakdown(bd ?? null); setPage('study'); }}
+          onNavigateKnowledgeMap={() => setPage('knowledge-map')}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateAchievements={() => setPage('achievements')}
+          onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
+        />
+      );
+    } else if (page === 'knowledge-map') {
+      authenticatedPage = (
+        <KnowledgeMapPage
+          user={currentUser}
+          onNavigateStudy={(bd) => { setInitialBreakdown(bd ?? null); setPage('study'); }}
+          onNavigateHistory={() => setPage('history')}
+          onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateQuiz={() => setPage('quiz')}
           onNavigateAchievements={() => setPage('achievements')}
           onNavigateSettings={() => setPage('settings')}
           showInstallAppButton={showInstallButton}
@@ -809,6 +829,7 @@ export default function App() {
         <AchievementPage
           user={currentUser}
           onNavigateStudy={() => setPage('study')}
+          onNavigateKnowledgeMap={() => setPage('knowledge-map')}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
           onNavigateQuiz={() => setPage('quiz')}
@@ -821,6 +842,7 @@ export default function App() {
       authenticatedPage = (
         <StudySpacePage
           user={currentUser}
+          onNavigateKnowledgeMap={() => setPage('knowledge-map')}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
           onNavigateAchievements={() => setPage('achievements')}

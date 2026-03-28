@@ -7,6 +7,7 @@ import {
   History,
   Layers,
   Loader2,
+  Network,
   Sparkles,
   Target,
   Trophy,
@@ -24,6 +25,7 @@ interface Props {
   onNavigateStudy?: () => void;
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
+  onNavigateKnowledgeMap?: () => void;
   onNavigateQuiz?: () => void;
   onNavigateSettings?: () => void;
   showInstallAppButton?: boolean;
@@ -79,6 +81,7 @@ export default function AchievementPage({
   onNavigateStudy,
   onNavigateHistory,
   onNavigateFlashcards,
+  onNavigateKnowledgeMap,
   onNavigateQuiz,
   onNavigateSettings,
   showInstallAppButton,
@@ -221,12 +224,13 @@ export default function AchievementPage({
   const navItems = useMemo(
     () => [
       { id: "study", label: "Study Space", Icon: GitFork, active: false, onClick: onNavigateStudy },
+      { id: "knowledge-map", label: "Knowledge Map", Icon: Network, active: false, onClick: onNavigateKnowledgeMap },
       { id: "history", label: "Learning History", Icon: History, active: false, onClick: onNavigateHistory },
       { id: "flashcards", label: "Flashcards", Icon: Layers, active: false, onClick: onNavigateFlashcards },
       { id: "quiz", label: "Quiz", Icon: Brain, active: false, onClick: navigateToQuiz },
       { id: "achievements", label: "Achievements", Icon: Trophy, active: true, onClick: undefined },
     ],
-    [onNavigateFlashcards, onNavigateHistory, onNavigateStudy]
+    [navigateToQuiz, onNavigateFlashcards, onNavigateHistory, onNavigateKnowledgeMap, onNavigateStudy]
   );
 
   return (
@@ -239,6 +243,7 @@ export default function AchievementPage({
         onSettingsClick={onNavigateSettings}
         onSignOut={handleSignOut}
         onNavigateStudy={onNavigateStudy}
+        onNavigateKnowledgeMap={onNavigateKnowledgeMap}
         onNavigateHistory={onNavigateHistory}
         onNavigateFlashcards={onNavigateFlashcards}
         onNavigateQuiz={navigateToQuiz}

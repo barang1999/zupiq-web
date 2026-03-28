@@ -9,6 +9,7 @@ import {
   History,
   Layers,
   LogOut,
+  Network,
   Settings,
   Sparkles,
   Trophy,
@@ -27,8 +28,9 @@ interface AppHeaderProps {
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
   onNavigateQuiz?: () => void;
+  onNavigateKnowledgeMap?: () => void;
   onNavigateAchievements?: () => void;
-  activeMobileMenu?: 'study' | 'history' | 'flashcards' | 'quiz' | 'achievements' | 'settings' | null;
+  activeMobileMenu?: 'study' | 'history' | 'flashcards' | 'quiz' | 'knowledge-map' | 'achievements' | 'settings' | null;
   showInstallAppButton?: boolean;
   onInstallAppClick?: () => void;
 }
@@ -43,6 +45,7 @@ export function AppHeader({
   onNavigateHistory,
   onNavigateFlashcards,
   onNavigateQuiz,
+  onNavigateKnowledgeMap,
   onNavigateAchievements,
   activeMobileMenu = null,
   showInstallAppButton = false,
@@ -84,16 +87,37 @@ export function AppHeader({
     setIsProfileMenuOpen(false);
   };
 
+  const navigateToKnowledgeMap = () => {
+    if (onNavigateKnowledgeMap) {
+      onNavigateKnowledgeMap();
+      return;
+    }
+    if (window.location.pathname !== '/knowledge-map') {
+      window.history.pushState({ page: 'knowledge-map' }, '', '/knowledge-map');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { page: 'knowledge-map' } }));
+    }
+    setIsProfileMenuOpen(false);
+  };
+
   const mobileMenuItems = useMemo(
     () => [
       { id: 'study' as const, label: 'Study Space', Icon: GitFork, action: onNavigateStudy },
+      { id: 'knowledge-map' as const, label: 'Knowledge Map', Icon: Network, action: navigateToKnowledgeMap },
       { id: 'history' as const, label: 'Learning History', Icon: History, action: onNavigateHistory },
       { id: 'flashcards' as const, label: 'Flashcards', Icon: Layers, action: onNavigateFlashcards },
       { id: 'quiz' as const, label: 'Quiz', Icon: Brain, action: navigateToQuiz },
       { id: 'achievements' as const, label: 'Achievements', Icon: Trophy, action: navigateToAchievements },
       { id: 'settings' as const, label: 'Settings', Icon: Settings, action: onSettingsClick },
     ],
-    [navigateToAchievements, navigateToQuiz, onNavigateFlashcards, onNavigateHistory, onNavigateStudy, onSettingsClick]
+    [
+      navigateToAchievements,
+      navigateToKnowledgeMap,
+      navigateToQuiz,
+      onNavigateFlashcards,
+      onNavigateHistory,
+      onNavigateStudy,
+      onSettingsClick,
+    ]
   );
 
   useEffect(() => {
