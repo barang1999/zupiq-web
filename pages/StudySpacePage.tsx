@@ -379,7 +379,37 @@ function splitMathPreviewLines(raw: string): string[] {
     extracted.push(line);
   });
 
-  return extracted.filter(Boolean);
+  const normalizedLines = extracted
+    .map((line) => normalizeMathPreviewLineForRender(line))
+    .filter(Boolean);
+
+  // If OCR/model splits a dangling brace into its own line, re-attach it.
+  const merged: string[] = [];
+  normalizedLines.forEach((line) => {
+    if (/^[)\]}]+$/.test(line) && merged.length > 0) {
+      merged[merged.length - 1] = `${merged[merged.length - 1]}${line}`;
+      return;
+    }
+    merged.push(line);
+  });
+
+  return merged;
+}
+
+function normalizeMathPreviewLineForRender(line: string): string {
+  const t = (line ?? '').trim();
+  if (!t) return '';
+  if (t.includes('$')) return t;
+  if (looksLikeMathPreviewExpression(t)) return `$${t}$`;
+  return t;
+}
+
+function looksLikeMathPreviewExpression(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  if (/\\[a-zA-Z]+/.test(t) && /[=+\-*/^_]/.test(t)) return true;
+  if (/^[A-Za-zα-ωΑ-Ω][A-Za-z0-9_]*\s*=\s*[A-Za-z0-9α-ωΑ-Ω_+\-*/^()]+$/.test(t)) return true;
+  return false;
 }
 
 function wrapInlineMathCandidates(text: string): string {
