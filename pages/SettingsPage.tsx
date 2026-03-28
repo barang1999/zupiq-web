@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import {
   User, SlidersHorizontal, Languages, GraduationCap,
@@ -7,6 +7,7 @@ import {
 import { ApiError, api, tokenStorage } from '../lib/api';
 import { AppHeader } from '../components/layout/AppHeader';
 import { CustomSelect } from '../components/ui/CustomSelect';
+import { getBillingSubscription, type UsageSnapshot } from '../lib/billing';
 import type { EducationLevel, Language } from '../types/shared';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -115,7 +116,31 @@ export function SettingsPage({
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [tokenUsage, setTokenUsage] = useState<UsageSnapshot | null>(null);
+  const [loadingTokenUsage, setLoadingTokenUsage] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadUsage = async () => {
+      setLoadingTokenUsage(true);
+      try {
+        const res = await getBillingSubscription();
+        if (active) setTokenUsage(res.usage ?? null);
+      } catch {
+        if (active) setTokenUsage(null);
+      } finally {
+        if (active) setLoadingTokenUsage(false);
+      }
+    };
+
+    void loadUsage();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -428,6 +453,35 @@ export function SettingsPage({
 
           {/* ── Right Column ────────────────────────────────────────────── */}
           <section className="lg:col-span-4 space-y-8">
+            {/* Daily Token Usage */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="glass-card p-6 rounded-3xl border border-primary/20"
+            >
+              <h3 className="font-headline text-lg font-bold text-on-surface mb-2">Daily Token Usage</h3>
+              {loadingTokenUsage ? (
+                <p className="text-sm text-on-surface-variant">Loading usage...</p>
+              ) : tokenUsage ? (
+                <>
+                  <p className="text-2xl font-bold text-primary">
+                    {tokenUsage.used}
+                    <span className="text-base text-on-surface-variant font-medium">
+                      /{tokenUsage.limit ?? 'Unlimited'}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-sm text-on-surface-variant">
+                    {tokenUsage.limit === null || tokenUsage.remaining === null
+                      ? 'Unlimited daily allocation'
+                      : `${Math.max(0, tokenUsage.remaining)} tokens left today`}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-on-surface-variant">Unable to load current token usage.</p>
+              )}
+            </motion.div>
+
             {/* Academic Level */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}

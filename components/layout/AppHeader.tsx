@@ -11,6 +11,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { getBillingSubscription, type UsageSnapshot } from '../../lib/billing';
 
 interface AppHeaderProps {
   user: any;
@@ -48,6 +49,7 @@ export function AppHeader({
     .toUpperCase();
   const [imgError, setImgError] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [tokenUsage, setTokenUsage] = useState<UsageSnapshot | null>(null);
 
   const mobileMenuItems = useMemo(
     () => [
@@ -58,6 +60,28 @@ export function AppHeader({
     ],
     [onNavigateFlashcards, onNavigateHistory, onNavigateStudy, onSettingsClick]
   );
+
+  useEffect(() => {
+    let active = true;
+    const loadUsage = async () => {
+      if (!user) {
+        if (active) setTokenUsage(null);
+        return;
+      }
+      try {
+        const subscription = await getBillingSubscription();
+        if (active) setTokenUsage(subscription.usage ?? null);
+      } catch {
+        if (active) setTokenUsage(null);
+      }
+    };
+
+    void loadUsage();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, user?.email]);
 
   useEffect(() => {
     if (!isProfileMenuOpen) return;
@@ -103,6 +127,18 @@ export function AppHeader({
     setIsProfileMenuOpen(true);
   };
 
+  const tokenUsageText = useMemo(() => {
+    if (!tokenUsage) return null;
+    if (tokenUsage.limit === null) return `Tokens used: ${tokenUsage.used}`;
+    return `Tokens: ${tokenUsage.used}/${tokenUsage.limit}`;
+  }, [tokenUsage]);
+
+  const tokenUsageRemainingText = useMemo(() => {
+    if (!tokenUsage) return null;
+    if (tokenUsage.limit === null || tokenUsage.remaining === null) return 'Unlimited daily allocation';
+    return `${Math.max(0, tokenUsage.remaining)} left today`;
+  }, [tokenUsage]);
+
   return (
     <>
       <header className="fixed top-0 w-full z-50 bg-surface-container-highest/60 backdrop-blur-xl flex justify-between items-center px-6 h-14 shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
@@ -114,6 +150,12 @@ export function AppHeader({
         </div>
         <div className="flex items-center gap-2">
           {actions}
+          {tokenUsageText && (
+            <div className="hidden sm:flex flex-col items-end rounded-xl border border-outline-variant/40 bg-surface-container-low px-3 py-1">
+              <span className="text-[11px] font-semibold text-on-surface">{tokenUsageText}</span>
+              <span className="text-[10px] text-on-surface-variant">{tokenUsageRemainingText}</span>
+            </div>
+          )}
           <div className="flex items-center gap-1 text-on-surface-variant">
             <button className="p-2 rounded-full hover:bg-surface-container-highest transition-colors">
               <Bell className="w-5 h-5" />
@@ -209,6 +251,14 @@ export function AppHeader({
                   <p className="text-[10px] uppercase tracking-[0.18em] text-on-surface-variant">Mobile Control Menu</p>
                 </div>
               </div>
+
+              {tokenUsageText && (
+                <div className="mb-8 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 to-secondary/10 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.16em] text-primary">Deep Dive Tokens</p>
+                  <p className="mt-1 text-sm font-semibold text-on-surface">{tokenUsageText}</p>
+                  <p className="mt-1 text-xs text-on-surface-variant">{tokenUsageRemainingText}</p>
+                </div>
+              )}
 
               <nav className="flex flex-col gap-2">
                 {mobileMenuItems

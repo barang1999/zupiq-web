@@ -41,13 +41,13 @@ const PLAN_MARKETING: Record<PlanKey, PlanMarketingCopy> = {
   free: {
     cta: 'Start Learning',
     description: 'Fundamental AI access for new learners exploring Zupiq.',
-    features: ['Basic Breakdowns', '3 Deep Dive chats per day', 'Standard Response Queue'],
+    features: ['Basic Breakdowns', '12,000 Deep Dive tokens / day', 'Standard Response Queue'],
   },
   core: {
     cta: 'Upgrade to Builder',
     description: 'Best for regular student workflows and daily study sessions.',
     features: [
-      'Unlimited Deep Dive chats',
+      '120,000 Deep Dive tokens / day',
       'Knowledge Maps enabled',
       'AI Tutor access',
       'Faster generation speed',
@@ -59,6 +59,7 @@ const PLAN_MARKETING: Record<PlanKey, PlanMarketingCopy> = {
     description: 'For heavy daily use with priority processing and full exports.',
     features: [
       'Everything in Builder',
+      '500,000 Deep Dive tokens / day',
       'Knowledge map export',
       'Priority processing',
       'Full premium model tier',
@@ -239,7 +240,7 @@ export default function PlanPage(props: Props) {
                 <span className="font-bold text-primary">{accessState.effectivePlan.displayName}</span>
                 <span className="text-on-surface-variant">({accessState.subscription.status})</span>
                 {usageState?.limit !== null && (
-                  <span className="text-on-surface-variant">Deep Dive: {usageState?.used ?? 0}/{usageState?.limit}</span>
+                  <span className="text-on-surface-variant">Deep Dive tokens: {usageState?.used ?? 0}/{usageState?.limit}</span>
                 )}
               </div>
             )}

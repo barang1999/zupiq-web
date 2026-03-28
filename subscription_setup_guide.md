@@ -93,7 +93,7 @@ Each plan should resolve to a set of entitlements.
 Use stable machine-friendly keys like:
 	•	basic_breakdowns
 	•	deep_dive_access
-	•	daily_deep_dive_limit
+	•	daily_deep_dive_token_limit
 	•	knowledge_maps
 	•	knowledge_map_export
 	•	ai_tutor
@@ -107,7 +107,7 @@ Use stable machine-friendly keys like:
 Free (free)
 	•	basic_breakdowns: true
 	•	deep_dive_access: true
-	•	daily_deep_dive_limit: 3
+	•	daily_deep_dive_token_limit: 12000
 	•	knowledge_maps: false or limited preview
 	•	knowledge_map_export: false
 	•	ai_tutor: false or limited
@@ -119,7 +119,7 @@ Free (free)
 Core (core)
 	•	basic_breakdowns: true
 	•	deep_dive_access: true
-	•	daily_deep_dive_limit: null or unlimited
+	•	daily_deep_dive_token_limit: 120000
 	•	knowledge_maps: true
 	•	knowledge_map_export: false
 	•	ai_tutor: true
@@ -131,7 +131,7 @@ Core (core)
 Pro (pro)
 	•	basic_breakdowns: true
 	•	deep_dive_access: true
-	•	daily_deep_dive_limit: null or unlimited
+	•	daily_deep_dive_token_limit: 500000
 	•	knowledge_maps: true
 	•	knowledge_map_export: true
 	•	ai_tutor: true
@@ -167,7 +167,7 @@ This is the internal product catalog.
   "entitlements": {
     "basic_breakdowns": true,
     "deep_dive_access": true,
-    "daily_deep_dive_limit": null,
+    "daily_deep_dive_token_limit": 120000,
     "knowledge_maps": true,
     "knowledge_map_export": false,
     "ai_tutor": true,
@@ -232,7 +232,7 @@ Instead, use a centralized access function.
 6.1 Example access interface
 
 canAccess(user, 'knowledge_maps')
-getUsageLimit(user, 'daily_deep_dive_limit')
+getUsageLimit(user, 'daily_deep_dive_token_limit')
 getEffectivePlan(user)
 
 6.2 Rules
@@ -295,7 +295,7 @@ Some entitlements may be boolean, some numeric, some tiered.
 
 Types of limits
 	•	Boolean access: knowledge_maps = true
-	•	Numeric quota: daily_deep_dive_limit = 3
+	•	Numeric quota: daily_deep_dive_token_limit = 12000
 	•	Tier label: premium_models = standard | full
 
 Recommendation
@@ -303,7 +303,7 @@ Recommendation
 Maintain a separate usage-tracking system from the subscription definition.
 
 Example usage counters:
-	•	daily deep dives used
+	•	daily deep dive tokens used
 	•	maps created
 	•	exports generated
 	•	active projects count
@@ -414,7 +414,7 @@ export const PLAN_CATALOG = {
     entitlements: {
       basic_breakdowns: true,
       deep_dive_access: true,
-      daily_deep_dive_limit: 3,
+      daily_deep_dive_token_limit: 12000,
       knowledge_maps: false,
       knowledge_map_export: false,
       ai_tutor: false,
@@ -434,7 +434,7 @@ export const PLAN_CATALOG = {
     entitlements: {
       basic_breakdowns: true,
       deep_dive_access: true,
-      daily_deep_dive_limit: null,
+      daily_deep_dive_token_limit: 120000,
       knowledge_maps: true,
       knowledge_map_export: false,
       ai_tutor: true,
@@ -454,7 +454,7 @@ export const PLAN_CATALOG = {
     entitlements: {
       basic_breakdowns: true,
       deep_dive_access: true,
-      daily_deep_dive_limit: null,
+      daily_deep_dive_token_limit: 500000,
       knowledge_maps: true,
       knowledge_map_export: true,
       ai_tutor: true,
