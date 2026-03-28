@@ -785,7 +785,7 @@ export default function App() {
       authenticatedPage = (
         <QuizPage
           user={currentUser}
-          onNavigateStudy={() => setPage('study')}
+          onNavigateStudy={(bd) => { setInitialBreakdown(bd ?? null); setPage('study'); }}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
           onNavigateSettings={() => setPage('settings')}

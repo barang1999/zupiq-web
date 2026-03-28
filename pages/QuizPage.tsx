@@ -7,11 +7,9 @@ import {
   Clock3,
   FlaskConical,
   GitFork,
-  HelpCircle,
   History,
   Layers,
   Loader2,
-  LogOut,
   Sigma,
   Sparkles,
   Target,
@@ -21,6 +19,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { AppHeader } from "../components/layout/AppHeader";
+import { AppSidebar } from "../components/layout/AppSidebar";
 import { CustomSelect } from "../components/ui/CustomSelect";
 import { supabase } from "../lib/supabase";
 import { firebaseSignOut } from "../lib/firebase";
@@ -52,9 +51,23 @@ interface StudySessionTopicOption {
   created_at: string;
 }
 
+interface StudyBreakdownPayload {
+  id?: string;
+  title: string;
+  subject: string;
+  nodes: Array<Record<string, unknown>>;
+  insights: {
+    simpleBreakdown: string;
+    keyFormula: string;
+  };
+  nodeInsights?: Record<string, { simpleBreakdown: string; keyFormula: string }>;
+  nodeConversations?: Record<string, Array<{ role: string; content: string; createdAt: string }>>;
+  nodePositions?: Record<string, { x: number; y: number }>;
+}
+
 interface Props {
   user: any;
-  onNavigateStudy?: () => void;
+  onNavigateStudy?: (breakdown?: StudyBreakdownPayload | null) => void;
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
   onNavigateSettings?: () => void;
@@ -144,6 +157,9 @@ export default function QuizPage({
   const [uploadingQuestionId, setUploadingQuestionId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [resumingQuizId, setResumingQuizId] = useState<string | null>(null);
+  const [convertingAnswerId, setConvertingAnswerId] = useState<string | null>(null);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 640 : false));
 
   const selectedSubject = useMemo(
     () => subjects.find((subject) => subject.id === selectedSubjectId) ?? null,
@@ -194,14 +210,24 @@ export default function QuizPage({
     ],
     [onNavigateFlashcards, onNavigateHistory, onNavigateStudy]
   );
-
-  const selectedAreaSuggestions = useMemo(() => {
-    const values = availableTopicTitles.slice(0, 8);
-    if (selectedTopicTitle) values.unshift(selectedTopicTitle);
-    return Array.from(new Set(values)).slice(0, 6);
-  }, [availableTopicTitles, selectedTopicTitle]);
+  const sidebarNavItems = useMemo(
+    () => navItems.map(({ id, label, Icon, action }) => ({
+      id,
+      label,
+      Icon,
+      active: id === "quiz",
+      onClick: action,
+    })),
+    [navItems]
+  );
 
   const activeQuestions = activeQuiz?.questions ?? [];
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -514,6 +540,55 @@ export default function QuizPage({
     setResult(null);
   };
 
+  const handleLearnQuestionInStudy = async (answer: QuizAttemptResult["answers"][number]) => {
+    if (!result) return;
+    setConvertingAnswerId(answer.id);
+
+    try {
+      const sourceQuestion = result.questions.find((question) => question.id === answer.question_id);
+      const questionText = sourceQuestion?.question_text?.trim() || answer.question_text?.trim() || "";
+      if (!questionText) return;
+
+      const instructions = sourceQuestion?.instructions?.trim() || "";
+      const correction = answer.correction?.trim() || "";
+      const problemText = [questionText, instructions ? `Instructions:\n${instructions}` : "", correction ? `Expected answer:\n${correction}` : ""]
+        .filter(Boolean)
+        .join("\n\n");
+
+      const { breakdown } = await api.post<{ breakdown: StudyBreakdownPayload }>("/api/ai/breakdown", {
+        problem: problemText,
+      });
+
+      let sessionId: string | null = null;
+      try {
+        const { session } = await api.post<{ session: { id: string } }>("/api/sessions", {
+          title: breakdown.title,
+          subject: breakdown.subject,
+          problem: problemText,
+          node_count: breakdown.nodes.length,
+          breakdown_json: JSON.stringify(breakdown),
+        });
+        sessionId = session.id;
+      } catch {
+        // Saving the session is non-blocking for navigation.
+      }
+
+      const hydratedBreakdown: StudyBreakdownPayload = {
+        ...breakdown,
+        id: sessionId ?? breakdown.id,
+      };
+
+      if (onNavigateStudy) {
+        onNavigateStudy(hydratedBreakdown);
+        return;
+      }
+    } catch {
+      // Error state is handled by existing page-level error banner when possible.
+    } finally {
+      setConvertingAnswerId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-surface-dim text-on-surface overflow-x-hidden">
       <div className="fixed top-20 right-0 h-[480px] w-[480px] rounded-full bg-secondary-container/10 blur-[120px] pointer-events-none" />
@@ -536,71 +611,41 @@ export default function QuizPage({
           </div>
         )}
       />
+      <AppSidebar
+        brandTitle="Practice Grid"
+        brandSubtitle="Adaptive Quiz System"
+        brandIcon={Brain}
+        navItems={sidebarNavItems}
+        onSignOut={handleSignOut}
+        collapsible
+        defaultPinned={false}
+        onExpandedChange={setSidebarExpanded}
+      />
 
-      <aside className="fixed left-0 top-0 z-40 hidden h-full w-64 flex-col bg-surface-container-low pt-20 pb-6 sm:flex">
-        <div className="px-6 pb-8">
-          <h2 className="font-headline text-lg font-bold text-primary">Practice Grid</h2>
-          <p className="text-xs uppercase tracking-[0.16em] text-on-surface-variant">Adaptive Quiz System</p>
-        </div>
-
-        <nav className="flex-1 space-y-1 px-2">
-          {navItems.map(({ id, label, Icon, action }) => {
-            const isActive = id === "quiz";
-            return (
-              <button
-                key={id}
-                onClick={action}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all ${
-                  isActive
-                    ? "bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-4 border-primary"
-                    : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-                <span>{label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="mt-auto border-t border-outline-variant/20 px-3 pt-4">
-          <a
-            href="#"
-            className="mb-2 flex items-center gap-3 rounded-xl px-3 py-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface"
-          >
-            <HelpCircle className="h-4 w-4" />
-            <span className="text-sm">Support</span>
-          </a>
-          <button
-            onClick={handleSignOut}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-error"
-          >
-            <LogOut className="h-4 w-4" />
-            <span className="text-sm">Sign Out</span>
-          </button>
-        </div>
-      </aside>
-
-      <main className="relative z-10 px-6 pb-32 pt-24 sm:ml-64 sm:px-10 sm:pt-28">
+      <motion.main
+        animate={{ marginLeft: isMobile ? 0 : (sidebarExpanded ? 256 : 64) }}
+        transition={{ duration: 0.25, ease: "easeInOut" }}
+        className="relative z-10 px-4 pb-32 pt-20 sm:px-10 sm:pt-28"
+      >
         <div className="mx-auto max-w-6xl">
           {step === "setup" && (
             <>
-              <header className="mb-12">
-                <h1 className="font-headline text-5xl font-bold tracking-tight md:text-6xl">Quiz Setup</h1>
-                <p className="mt-4 max-w-2xl text-lg text-on-surface-variant">
+              <header className={`${isMobile ? "mb-6" : "mb-12"}`}>
+                <h1 className={`font-headline font-bold tracking-tight ${isMobile ? "text-3xl" : "text-5xl md:text-6xl"}`}>Quiz Setup</h1>
+                <p className={`mt-3 max-w-2xl text-on-surface-variant ${isMobile ? "text-sm" : "text-lg"}`}>
                   Choose a subject, optionally narrow it by topic, then set level, mode, and question count.
                 </p>
               </header>
 
-              <section className="glass-card relative overflow-hidden rounded-[2rem] p-8 md:p-10">
+              <section className={`glass-card relative overflow-hidden ${isMobile ? "rounded-[1.5rem] p-4" : "rounded-[2rem] p-8 md:p-10"}`}>
                 <div className="absolute right-0 top-0 h-36 w-36 rounded-full bg-tertiary/10 blur-3xl" />
 
-                <h2 className="mb-7 flex items-center gap-3 font-headline text-2xl font-bold">
+                <h2 className={`flex items-center gap-3 font-headline font-bold ${isMobile ? "mb-4 text-xl" : "mb-7 text-2xl"}`}>
                   <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_20px_rgba(161,250,255,0.8)]" />
                   Select Proficiency Target
                 </h2>
 
-                <div className="mb-10 grid grid-cols-1 gap-5 md:grid-cols-3">
+                <div className={isMobile ? "mb-6 flex gap-3 overflow-x-auto pb-1" : "mb-10 grid grid-cols-1 gap-5 md:grid-cols-3"}>
                   {[
                     {
                       id: "easy",
@@ -626,14 +671,14 @@ export default function QuizPage({
                       <button
                         key={levelCard.id}
                         onClick={() => setQuizLevel(levelCard.id as QuizLevel)}
-                        className={`rounded-3xl border p-6 text-left transition-all ${
+                        className={`${isMobile ? "min-w-[240px] p-4" : "p-6"} rounded-3xl border text-left transition-all ${
                           active
                             ? "border-primary/50 bg-surface-container-highest shadow-[0_0_25px_rgba(161,250,255,0.18)]"
                             : "border-outline-variant/20 bg-surface-container hover:bg-surface-container-high"
                         }`}
                       >
                         <div className={`mb-4 text-sm uppercase tracking-[0.18em] ${levelCard.tone}`}>{levelCard.id}</div>
-                        <h3 className="font-headline text-2xl font-bold">{levelCard.title}</h3>
+                        <h3 className={`font-headline font-bold ${isMobile ? "text-xl" : "text-2xl"}`}>{levelCard.title}</h3>
                         <p className="mt-2 text-sm text-on-surface-variant">{levelCard.subtitle}</p>
                       </button>
                     );
@@ -679,20 +724,9 @@ export default function QuizPage({
                     placeholder="e.g. linear equations, wave-particle duality"
                     className="w-full rounded-2xl border border-outline-variant/30 bg-surface-container-high px-4 py-3 text-on-surface placeholder:text-on-surface-variant/70 focus:border-primary/70 focus:outline-none"
                   />
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {selectedAreaSuggestions.map((item) => (
-                      <button
-                        key={item}
-                        onClick={() => setSpecificArea(item)}
-                        className="rounded-full bg-surface-container-highest px-3 py-1 text-xs text-on-surface-variant transition-colors hover:text-primary"
-                      >
-                        {item}
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
-                <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div className={`grid grid-cols-1 gap-5 md:grid-cols-2 ${isMobile ? "mt-5" : "mt-6"}`}>
                   <div>
                     <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-on-surface-variant">Quiz Mode</label>
                     <div className="flex flex-wrap gap-2">
@@ -731,10 +765,26 @@ export default function QuizPage({
                       onChange={(event) => setQuestionCount(Number(event.target.value))}
                       className="w-full accent-primary"
                     />
+                    {isMobile ? (
+                      <div className="mt-3 flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setQuestionCount((prev) => sanitizeQuestionCount(prev - 1))}
+                          className="rounded-full bg-surface-container-high px-3 py-1 text-xs uppercase tracking-[0.12em] text-on-surface-variant"
+                        >
+                          -1
+                        </button>
+                        <button
+                          onClick={() => setQuestionCount((prev) => sanitizeQuestionCount(prev + 1))}
+                          className="rounded-full bg-surface-container-high px-3 py-1 text-xs uppercase tracking-[0.12em] text-on-surface-variant"
+                        >
+                          +1
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
-                <div className="mt-10 flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+                <div className={`flex flex-col items-start justify-between gap-6 md:flex-row md:items-center ${isMobile ? "mt-7" : "mt-10"}`}>
                   <div className="flex items-center gap-6">
                     <div>
                       <p className="text-xs uppercase tracking-[0.16em] text-on-surface-variant">Duration</p>
@@ -750,7 +800,7 @@ export default function QuizPage({
                   <button
                     onClick={() => void handleGenerateQuiz()}
                     disabled={isLoading}
-                    className="rounded-full bg-gradient-to-r from-primary to-secondary px-10 py-4 font-headline text-lg font-bold text-on-primary shadow-[0_0_30px_rgba(0,244,254,0.25)] transition-all hover:shadow-[0_0_45px_rgba(255,81,250,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+                    className={`${isMobile ? "w-full px-6 py-3 text-base" : "px-10 py-4 text-lg"} rounded-full bg-gradient-to-r from-primary to-secondary font-headline font-bold text-on-primary shadow-[0_0_30px_rgba(0,244,254,0.25)] transition-all hover:shadow-[0_0_45px_rgba(255,81,250,0.35)] disabled:cursor-not-allowed disabled:opacity-60`}
                   >
                     <span className="inline-flex items-center gap-2">
                       {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
@@ -764,9 +814,9 @@ export default function QuizPage({
                 )}
               </section>
 
-              <section className="mt-9 grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className="glass-card rounded-[1.75rem] p-6">
-                  <h3 className="font-headline text-2xl font-bold">Recent Quiz History</h3>
+              <section className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${isMobile ? "mt-6" : "mt-9"}`}>
+                <div className={`glass-card ${isMobile ? "rounded-[1.25rem] p-4" : "rounded-[1.75rem] p-6"}`}>
+                  <h3 className={`font-headline font-bold ${isMobile ? "text-xl" : "text-2xl"}`}>Recent Quiz History</h3>
                   {history.length === 0 ? (
                     <p className="mt-3 text-sm text-on-surface-variant">No quiz history yet. Generate your first session.</p>
                   ) : (
@@ -821,8 +871,8 @@ export default function QuizPage({
                   )}
                 </div>
 
-                <div className="glass-card rounded-[1.75rem] p-6">
-                  <h3 className="font-headline text-2xl font-bold">Mastery Overview</h3>
+                <div className={`glass-card ${isMobile ? "rounded-[1.25rem] p-4" : "rounded-[1.75rem] p-6"}`}>
+                  <h3 className={`font-headline font-bold ${isMobile ? "text-xl" : "text-2xl"}`}>Mastery Overview</h3>
                   {mastery.length === 0 ? (
                     <p className="mt-3 text-sm text-on-surface-variant">Mastery scores appear after graded attempts.</p>
                   ) : (
@@ -850,14 +900,14 @@ export default function QuizPage({
 
           {step === "taking" && activeQuiz && (
             <>
-              <header className="mb-8 flex flex-col justify-between gap-6 md:flex-row md:items-end">
+              <header className={`flex flex-col justify-between gap-4 md:flex-row md:items-end ${isMobile ? "mb-5" : "mb-8"}`}>
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-on-surface-variant">Active Session</p>
-                  <h1 className="font-headline text-4xl font-bold md:text-5xl">{activeQuiz.quiz.title}</h1>
-                  <p className="mt-2 text-on-surface-variant">{activeQuiz.quiz.description}</p>
+                  <h1 className={`font-headline font-bold ${isMobile ? "text-2xl" : "text-4xl md:text-5xl"}`}>{activeQuiz.quiz.title}</h1>
+                  <p className={`mt-2 text-on-surface-variant ${isMobile ? "text-sm" : ""}`}>{activeQuiz.quiz.description}</p>
                 </div>
 
-                <div className="flex items-center gap-4 rounded-2xl bg-surface-container px-4 py-3">
+                <div className={`flex items-center gap-4 rounded-2xl bg-surface-container px-4 py-3 ${isMobile ? "self-start" : ""}`}>
                   <div className="flex items-center gap-2 text-sm text-on-surface-variant">
                     <Clock3 className="h-4 w-4 text-primary" />
                     {activeQuestions.length} Questions
@@ -883,7 +933,7 @@ export default function QuizPage({
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.04 }}
-                      className="glass-card rounded-[1.5rem] p-6"
+                      className={`glass-card ${isMobile ? "rounded-[1.1rem] p-4" : "rounded-[1.5rem] p-6"}`}
                     >
                       <div className="mb-5 flex items-start justify-between gap-3">
                         <div>
@@ -995,11 +1045,11 @@ export default function QuizPage({
                 })}
               </div>
 
-              <div className="mt-8 flex justify-end">
+              <div className={`${isMobile ? "sticky bottom-14 z-20 mt-6 -mx-4 border-t border-outline-variant/20 bg-surface-dim/90 px-4 py-3 backdrop-blur" : "mt-8 flex justify-end"}`}>
                 <button
                   onClick={() => void handleSubmitQuiz()}
                   disabled={submitting || isLoading}
-                  className="rounded-full bg-gradient-to-r from-primary to-secondary px-10 py-4 font-headline text-lg font-bold text-on-primary disabled:opacity-60"
+                  className={`${isMobile ? "w-full px-6 py-3 text-base" : "px-10 py-4 text-lg"} rounded-full bg-gradient-to-r from-primary to-secondary font-headline font-bold text-on-primary disabled:opacity-60`}
                 >
                   <span className="inline-flex items-center gap-2">
                     {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRight className="h-5 w-5" />}
@@ -1012,22 +1062,22 @@ export default function QuizPage({
 
           {step === "result" && result && (
             <>
-              <header className="mb-10 rounded-[2rem] bg-gradient-to-br from-surface-container-highest/80 to-surface-container/70 p-8">
+              <header className={`${isMobile ? "mb-6 rounded-[1.25rem] p-5" : "mb-10 rounded-[2rem] p-8"} bg-gradient-to-br from-surface-container-highest/80 to-surface-container/70`}>
                 <p className="text-xs uppercase tracking-[0.16em] text-on-surface-variant">Quiz Result</p>
-                <h1 className="mt-2 font-headline text-5xl font-bold">{Math.round(result.attempt.percentage)}%</h1>
-                <p className="mt-2 text-on-surface-variant">
+                <h1 className={`mt-2 font-headline font-bold ${isMobile ? "text-4xl" : "text-5xl"}`}>{Math.round(result.attempt.percentage)}%</h1>
+                <p className={`mt-2 text-on-surface-variant ${isMobile ? "text-sm" : ""}`}>
                   {result.attempt.feedback_summary || "Quiz graded successfully."}
                 </p>
-                <div className="mt-5 flex flex-wrap gap-6 text-sm text-on-surface-variant">
+                <div className={`text-on-surface-variant ${isMobile ? "mt-4 grid grid-cols-1 gap-1 text-xs" : "mt-5 flex flex-wrap gap-6 text-sm"}`}>
                   <span>{result.attempt.score} / {result.attempt.total_marks} marks</span>
                   <span>{result.questions.length} questions</span>
                   <span>Graded {formatDate(result.attempt.graded_at)}</span>
                 </div>
               </header>
 
-              <section className="mb-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
-                <div className="glass-card rounded-[1.5rem] p-6">
-                  <h2 className="font-headline text-2xl font-bold">Strengths</h2>
+              <section className={`grid grid-cols-1 gap-5 lg:grid-cols-2 ${isMobile ? "mb-5" : "mb-6"}`}>
+                <div className={`glass-card ${isMobile ? "rounded-[1.1rem] p-4" : "rounded-[1.5rem] p-6"}`}>
+                  <h2 className={`font-headline font-bold ${isMobile ? "text-xl" : "text-2xl"}`}>Strengths</h2>
                   <ul className="mt-3 space-y-2 text-sm text-on-surface-variant">
                     {(result.attempt.strengths ?? []).map((item, idx) => (
                       <li key={`${item}-${idx}`} className="flex items-start gap-2">
@@ -1038,8 +1088,8 @@ export default function QuizPage({
                   </ul>
                 </div>
 
-                <div className="glass-card rounded-[1.5rem] p-6">
-                  <h2 className="font-headline text-2xl font-bold">Improvement Areas</h2>
+                <div className={`glass-card ${isMobile ? "rounded-[1.1rem] p-4" : "rounded-[1.5rem] p-6"}`}>
+                  <h2 className={`font-headline font-bold ${isMobile ? "text-xl" : "text-2xl"}`}>Improvement Areas</h2>
                   <ul className="mt-3 space-y-2 text-sm text-on-surface-variant">
                     {(result.attempt.improvement_areas ?? []).map((item, idx) => (
                       <li key={`${item}-${idx}`} className="flex items-start gap-2">
@@ -1051,26 +1101,27 @@ export default function QuizPage({
                 </div>
               </section>
 
-              <section className="space-y-4">
-                <h2 className="font-headline text-3xl font-bold">Per-Question Review</h2>
+              <section className={`${isMobile ? "space-y-3" : "space-y-4"}`}>
+                <h2 className={`font-headline font-bold ${isMobile ? "text-2xl" : "text-3xl"}`}>Per-Question Review</h2>
                 {result.answers
                   .slice()
                   .sort((a, b) => (a.question_order ?? 0) - (b.question_order ?? 0))
                   .map((answer) => {
                     const isCorrect = Boolean(answer.is_correct);
+                    const isConverting = convertingAnswerId === answer.id;
                     return (
-                      <div key={answer.id} className="glass-card rounded-[1.25rem] p-5">
+                      <div key={answer.id} className={`glass-card ${isMobile ? "rounded-[1rem] p-4" : "rounded-[1.25rem] p-5"}`}>
                         <div className="mb-2 flex items-start justify-between gap-3">
                           <p className="font-semibold text-on-surface">
                             Q{answer.question_order ?? "-"}: {answer.question_text}
                           </p>
-                          <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${
+                          <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-xs ${
                             isCorrect
                               ? "bg-primary/20 text-primary"
                               : "bg-error/20 text-red-200"
                           }`}>
                             {isCorrect ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-                            {answer.awarded_marks} / {answer.question_marks}
+                            {answer.awarded_marks}/{answer.question_marks}
                           </span>
                         </div>
                         {answer.ai_feedback && (
@@ -1079,21 +1130,31 @@ export default function QuizPage({
                         {answer.correction && !isCorrect && (
                           <p className="mt-2 text-xs text-tertiary">Suggested correction: {answer.correction}</p>
                         )}
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            onClick={() => void handleLearnQuestionInStudy(answer)}
+                            disabled={isConverting || isLoading}
+                            className={`inline-flex items-center gap-2 rounded-full bg-surface-container-high px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-on-surface-variant transition-colors hover:text-primary disabled:cursor-not-allowed disabled:opacity-60 ${isMobile ? "w-full justify-center" : ""}`}
+                          >
+                            {isConverting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitFork className="h-3.5 w-3.5" />}
+                            Learn In Study Space
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
               </section>
 
-              <div className="mt-10 flex flex-wrap gap-3">
+              <div className={`mt-10 flex gap-3 ${isMobile ? "flex-col" : "flex-wrap"}`}>
                 <button
                   onClick={resetToSetup}
-                  className="rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold uppercase tracking-[0.16em] text-on-primary"
+                  className={`rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-3 text-sm font-bold uppercase tracking-[0.16em] text-on-primary ${isMobile ? "w-full" : ""}`}
                 >
                   Start New Quiz
                 </button>
                 <button
                   onClick={onNavigateStudy}
-                  className="rounded-full bg-surface-container-high px-8 py-3 text-sm font-bold uppercase tracking-[0.16em] text-on-surface-variant"
+                  className={`rounded-full bg-surface-container-high px-8 py-3 text-sm font-bold uppercase tracking-[0.16em] text-on-surface-variant ${isMobile ? "w-full" : ""}`}
                 >
                   Back To Study
                 </button>
@@ -1101,7 +1162,7 @@ export default function QuizPage({
             </>
           )}
         </div>
-      </main>
+      </motion.main>
     </div>
   );
 }

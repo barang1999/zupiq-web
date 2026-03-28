@@ -5,10 +5,11 @@ import {
   Brain,
   GitFork, History, Users, Archive,
   Plus, X, Loader2, Sparkles,
-  Bookmark, Zap, LogOut, HelpCircle, ArrowRight,
+  Bookmark, Zap, ArrowRight,
   ChevronLeft, ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
+import { AppSidebar } from '../components/layout/AppSidebar';
 import { ProblemComposer } from '../components/ai/ProblemComposer';
 import SweepText from '../components/ui/SweepText.jsx';
 import { api, ApiError } from '../lib/api';
@@ -817,8 +818,7 @@ export function StudySpacePage({
   const [isInsightSwipeDragging, setIsInsightSwipeDragging] = useState(false);
   const [composerInput,  setComposerInput]  = useState('');
   const [activeTab,      setActiveTab]      = useState<string>('map');
-  const [sidebarOpen,    setSidebarOpen]    = useState(false);
-  const [sidebarHovered, setSidebarHovered] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [scale,          setScale]          = useState(1);
   const [isMobile,       setIsMobile]       = useState(() => typeof window !== 'undefined' ? window.innerWidth < 640 : false);
   const [isViewportReady, setIsViewportReady] = useState(false);
@@ -826,7 +826,6 @@ export function StudySpacePage({
     () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugStudy') === '1'
   );
   const [debugEntries, setDebugEntries] = useState<StudyDebugEntry[]>([]);
-  const isExpanded = sidebarOpen || sidebarHovered;
   const lastOcrInsertRef = useRef<string | null>(null);
   const branchLongPressTimerRef = useRef<number | null>(null);
   const branchTouchGestureRef = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
@@ -2506,6 +2505,30 @@ Do not repeat content already given.`;
     }
   }, [breakdown?.subject, breakdown?.title, onNavigateQuiz, sessionSubjectId]);
 
+  const sidebarNavItems = useMemo(() => (
+    NAV_ITEMS.map(({ id, label, Icon }) => ({
+      id,
+      label,
+      Icon,
+      active: activeTab === id,
+      onClick: () => {
+        if (id === 'history') {
+          onNavigateHistory?.();
+          return;
+        }
+        if (id === 'flashcards') {
+          onNavigateFlashcards?.();
+          return;
+        }
+        if (id === 'quiz') {
+          navigateToQuiz();
+          return;
+        }
+        setActiveTab(id);
+      },
+    }))
+  ), [activeTab, navigateToQuiz, onNavigateFlashcards, onNavigateHistory]);
+
   const isBranchSelected = !!selectedNode;
   const activeBranchConversation = selectedNode
     ? (nodeConversations[selectedNode.id] ?? [])
@@ -2652,112 +2675,21 @@ Do not repeat content already given.`;
         }
       />
 
-      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <motion.aside
-        animate={{ width: isExpanded ? 256 : 64 }}
-        transition={{ duration: 0.25, ease: 'easeInOut' }}
-        onMouseEnter={() => setSidebarHovered(true)}
-        onMouseLeave={() => setSidebarHovered(false)}
-        className="fixed left-0 h-full z-40 bg-surface-container-low hidden sm:flex flex-col pt-20 pb-6 text-sm font-medium overflow-hidden"
-        style={{ width: isExpanded ? 256 : 64 }}
-      >
-        {/* Brand */}
-        <div className={`mb-8 overflow-hidden transition-all duration-200 ${isExpanded ? 'px-6' : 'px-0 flex justify-center'}`}>
-          {isExpanded ? (
-            <div>
-              <h2 className="font-headline font-bold text-lg text-secondary leading-tight whitespace-nowrap">Neural Breakdown</h2>
-              <p className="text-on-surface-variant text-xs uppercase tracking-widest opacity-70 mt-1 whitespace-nowrap">Quantum Prism Engine</p>
-            </div>
-          ) : (
-            <GitFork className="w-5 h-5 text-secondary" />
-          )}
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 space-y-0.5 px-2">
-          {NAV_ITEMS.map(({ id, label, Icon }) => {
-            const isActive = activeTab === id;
-            return (
-              <button
-                key={id}
-                onClick={() => {
-                  if (id === 'history') {
-                    onNavigateHistory?.();
-                    return;
-                  }
-                  if (id === 'flashcards') {
-                    onNavigateFlashcards?.();
-                    return;
-                  }
-                  if (id === 'quiz') {
-                    navigateToQuiz();
-                    return;
-                  }
-                  setActiveTab(id);
-                }}
-                title={!isExpanded ? label : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-3 transition-all duration-200 text-left ${
-                  isActive
-                    ? isExpanded
-                      ? 'rounded-r-full bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-4 border-primary'
-                      : 'rounded-xl bg-primary/15 text-primary'
-                    : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface rounded-xl'
-                } ${!isExpanded ? 'justify-center' : ''}`}
-              >
-                <Icon className="w-5 h-5 shrink-0" />
-                {isExpanded && <span className="overflow-hidden whitespace-nowrap">{label}</span>}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Bottom */}
-        <div className="mt-auto space-y-4 px-2">
-          {isExpanded && (
-            <button
-              onClick={handleUpgradeToPro}
-              className="w-full py-3 px-4 rounded-xl bg-surface-container-highest border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest hover:bg-primary/10 transition-all whitespace-nowrap overflow-hidden"
-            >
-              Upgrade to Pro
-            </button>
-          )}
-          <div className={`pt-4 border-t border-outline-variant/20 flex flex-col gap-2 ${!isExpanded ? 'items-center' : ''}`}>
-            <a
-              href="#"
-              title={!isExpanded ? 'Support' : undefined}
-              className={`flex items-center gap-3 text-on-surface-variant hover:text-on-surface transition-colors ${!isExpanded ? 'justify-center p-2 rounded-xl hover:bg-surface-container' : 'px-1'}`}
-            >
-              <HelpCircle className="w-4 h-4 shrink-0" />
-              {isExpanded && <span className="text-xs overflow-hidden whitespace-nowrap">Support</span>}
-            </a>
-            <button
-              onClick={handleSignOut}
-              title={!isExpanded ? 'Log Out' : undefined}
-              className={`flex items-center gap-3 text-on-surface-variant hover:text-on-surface transition-colors ${!isExpanded ? 'justify-center p-2 rounded-xl hover:bg-surface-container' : 'px-1'}`}
-            >
-              <LogOut className="w-4 h-4 shrink-0" />
-              {isExpanded && <span className="text-xs overflow-hidden whitespace-nowrap">Log Out</span>}
-            </button>
-          </div>
-        </div>
-      </motion.aside>
-
-      {/* ── Sidebar pin toggle (outside aside to avoid overflow-hidden clip) ── */}
-      <motion.button
-        animate={{ left: isExpanded ? 244 : 52 }}
-        transition={{ duration: 0.25, ease: 'easeInOut' }}
-        onClick={() => setSidebarOpen(o => !o)}
-        title={sidebarOpen ? 'Unpin sidebar' : 'Pin sidebar open'}
-        className="fixed top-[72px] z-50 w-6 h-6 rounded-full bg-surface-container-highest border border-outline-variant/40 hidden sm:flex items-center justify-center text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors shadow-md"
-      >
-        <motion.div animate={{ rotate: sidebarOpen ? 0 : 180 }} transition={{ duration: 0.25 }}>
-          <ChevronLeft className="w-3.5 h-3.5" />
-        </motion.div>
-      </motion.button>
+      <AppSidebar
+        brandTitle="Neural Breakdown"
+        brandSubtitle="Quantum Prism Engine"
+        brandIcon={GitFork}
+        navItems={sidebarNavItems}
+        primaryAction={{ label: 'Upgrade to Pro', onClick: handleUpgradeToPro }}
+        onSignOut={handleSignOut}
+        collapsible
+        defaultPinned={false}
+        onExpandedChange={setSidebarExpanded}
+      />
 
       {/* ── Main Canvas ─────────────────────────────────────────────────── */}
       <motion.main
-        animate={{ paddingLeft: isMobile ? 0 : (isExpanded ? 256 : 64) }}
+        animate={{ paddingLeft: isMobile ? 0 : (sidebarExpanded ? 256 : 64) }}
         transition={{ duration: 0.25, ease: 'easeInOut' }}
         className="pt-14 h-screen flex relative overflow-hidden pb-14 sm:pb-0"
       >
