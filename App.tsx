@@ -34,6 +34,7 @@ import { HowItWorksPage } from "./pages/HowItWorksPage";
 import FlashcardSubjectSelectionPage from "./pages/FlashcardSubjectSelectionPage";
 import FlashcardSessionPage from "./pages/FlashcardSessionPage";
 import QuizPage from "./pages/QuizPage";
+import AchievementPage from "./pages/AchievementPage";
 import { PublicHeader } from "./components/layout/PublicHeader";
 import { GrowingTreeAnimation } from "./components/ui/GrowingTreeAnimation";
 
@@ -46,6 +47,7 @@ type AppShellPage =
   | 'flashcards'
   | 'flashcards-session'
   | 'quiz'
+  | 'achievements'
   | 'settings'
   | 'privacy'
   | 'terms'
@@ -410,7 +412,12 @@ const MobileBottomNav = ({
     currentPage: AppShellPage
   ): "study" | "history" | "play" => {
     if (currentPage === "history") return "history";
-    if (currentPage === "flashcards" || currentPage === "flashcards-session" || currentPage === "quiz") return "play";
+    if (
+      currentPage === "flashcards" ||
+      currentPage === "flashcards-session" ||
+      currentPage === "quiz" ||
+      currentPage === "achievements"
+    ) return "play";
     return "study";
   };
 
@@ -479,6 +486,7 @@ export default function App() {
     if (path === '/flashcards/session') return 'flashcards-session';
     if (path === '/flashcards') return 'flashcards';
     if (path === '/quiz') return 'quiz';
+    if (path === '/achievements') return 'achievements';
     if (path === '/settings') return 'settings';
     if (path === '/privacy') return 'privacy';
     if (path === '/terms') return 'terms';
@@ -527,6 +535,8 @@ export default function App() {
       if (quizArea) quizParams.set("area", quizArea);
       const query = quizParams.toString();
       url = query ? `/quiz?${query}` : "/quiz";
+    } else if (next === "achievements") {
+      url = "/achievements";
     } else if (next === "flashcards-session") {
       const nextSubject = options?.subject ?? flashcardSubject;
       if (options && "subject" in options) {
@@ -788,6 +798,20 @@ export default function App() {
           onNavigateStudy={(bd) => { setInitialBreakdown(bd ?? null); setPage('study'); }}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateAchievements={() => setPage('achievements')}
+          onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
+        />
+      );
+    } else if (page === 'achievements') {
+      authenticatedPage = (
+        <AchievementPage
+          user={currentUser}
+          onNavigateStudy={() => setPage('study')}
+          onNavigateHistory={() => setPage('history')}
+          onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateQuiz={() => setPage('quiz')}
           onNavigateSettings={() => setPage('settings')}
           showInstallAppButton={showInstallButton}
           onInstallApp={handleInstallApp}
@@ -799,6 +823,7 @@ export default function App() {
           user={currentUser}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateAchievements={() => setPage('achievements')}
           onNavigateQuiz={(prefill) => setPage('quiz', {
             quizSubjectId: prefill?.subjectId ?? null,
             quizSubjectName: prefill?.subjectName ?? null,

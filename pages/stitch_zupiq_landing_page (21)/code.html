@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Zupiq | Knowledge Map</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-container": "#a900a9",
+              "inverse-surface": "#faf8ff",
+              "primary-dim": "#00e5ee",
+              "tertiary-dim": "#beee00",
+              "secondary": "#ff51fa",
+              "surface-variant": "#192540",
+              "surface-tint": "#a1faff",
+              "on-secondary-fixed-variant": "#920091",
+              "secondary-fixed": "#ffbdf3",
+              "surface": "#060e20",
+              "on-error": "#490006",
+              "on-secondary-fixed": "#620061",
+              "on-primary-fixed": "#004346",
+              "background": "#060e20",
+              "on-tertiary": "#516700",
+              "tertiary": "#f3ffca",
+              "surface-container-low": "#091328",
+              "error-dim": "#d7383b",
+              "on-tertiary-fixed": "#3a4a00",
+              "error": "#ff716c",
+              "secondary-dim": "#ff51fa",
+              "tertiary-fixed": "#cafd00",
+              "outline": "#6d758c",
+              "outline-variant": "#40485d",
+              "inverse-on-surface": "#4d556b",
+              "on-surface-variant": "#a3aac4",
+              "surface-bright": "#1f2b49",
+              "on-primary": "#006165",
+              "inverse-primary": "#006a6e",
+              "on-background": "#dee5ff",
+              "surface-container-high": "#141f38",
+              "surface-container-lowest": "#000000",
+              "on-surface": "#dee5ff",
+              "surface-container": "#0f1930",
+              "secondary-fixed-dim": "#ffa6f3",
+              "on-tertiary-fixed-variant": "#526900",
+              "surface-dim": "#060e20",
+              "on-tertiary-container": "#4a5e00",
+              "primary-fixed-dim": "#00e5ee",
+              "surface-container-highest": "#192540",
+              "on-secondary-container": "#fff5f9",
+              "on-secondary": "#400040",
+              "on-primary-container": "#00575b",
+              "on-error-container": "#ffa8a3",
+              "primary": "#a1faff",
+              "tertiary-fixed-dim": "#beee00",
+              "on-primary-fixed-variant": "#006266",
+              "error-container": "#9f0519",
+              "primary-fixed": "#00f4fe",
+              "primary-container": "#00f4fe",
+              "tertiary-container": "#cafd00"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .node-pulse {
+            box-shadow: 0 0 15px rgba(255, 81, 250, 0.6);
+        }
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            background: rgba(25, 37, 64, 0.6);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-primary/30 overflow-hidden">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full flex flex-col h-screen w-64 border-r border-[#40485d]/20 bg-[#091328]/60 backdrop-blur-xl font-['Space_Grotesk'] tracking-tight shadow-[0_20px_40px_rgba(0,0,0,0.4)] z-50">
+<div class="p-8">
+<h1 class="text-2xl font-bold bg-gradient-to-r from-[#a1faff] to-[#ff51fa] bg-clip-text text-transparent">Zupiq</h1>
+<p class="text-on-surface-variant text-xs mt-1">Quantum Learner</p>
+</div>
+<nav class="flex-1 px-4 space-y-2">
+<!-- Dashboard -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 hover:bg-[#192540]/50 text-[#a3aac4] hover:text-[#dee5ff] active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<!-- Knowledge Map (ACTIVE) -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 active:scale-95 duration-200 bg-gradient-to-r from-[#a1faff]/20 to-[#ff51fa]/20 text-[#dee5ff] border-r-2 border-[#00F5FF]" href="#">
+<span class="material-symbols-outlined" data-icon="hub">hub</span>
+<span>Knowledge Map</span>
+</a>
+<!-- Study Space -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 hover:bg-[#192540]/50 text-[#a3aac4] hover:text-[#dee5ff] active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span>Study Space</span>
+</a>
+<!-- Flashcards -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 hover:bg-[#192540]/50 text-[#a3aac4] hover:text-[#dee5ff] active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="quiz">quiz</span>
+<span>Flashcards</span>
+</a>
+<!-- Settings -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 hover:bg-[#192540]/50 text-[#a3aac4] hover:text-[#dee5ff] active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="p-4 mt-auto">
+<button class="w-full py-3 px-4 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary font-bold text-sm tracking-wide active:scale-95 transition-transform">
+                New Study Session
+            </button>
+</div>
+</aside>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-64 flex justify-between items-center px-8 z-40 bg-[#060e20]/40 backdrop-blur-md w-full h-16 font-['Space_Grotesk'] font-medium">
+<div class="flex items-center gap-4">
+<span class="text-xl font-bold text-[#dee5ff]">Knowledge Map</span>
+<div class="h-4 w-[1px] bg-outline-variant/30"></div>
+<span class="text-primary text-sm tracking-widest uppercase">Global Neural Network</span>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative group">
+<input class="bg-surface-container-high/40 border-none rounded-full px-5 py-1.5 text-sm w-64 focus:ring-1 focus:ring-primary transition-all placeholder:text-on-surface-variant/50" placeholder="Search knowledge..." type="text"/>
+<span class="material-symbols-outlined absolute right-3 top-1.5 text-on-surface-variant text-sm" data-icon="search">search</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary cursor-pointer hover:text-secondary-fixed transition-colors" data-icon="bolt">bolt</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-on-surface transition-colors" data-icon="notifications_active">notifications_active</span>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant/20 overflow-hidden">
+<img alt="User Profile" data-alt="close up headshot portrait of a professional digital avatar with glowing cyan highlights on dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCax6XU-q5GwnyM5Vb07PvTmn7O4vuDjb5tIyyrGFzYn0uQWll37uB8cgfG1jEoHbjCwkTyzM6s_BhKvHNF1duhY-v7QlxOgqKgN5ok2EWQWDMw0V3_pdsdkhK_vErScYr4YqIK1uzaDF1Xal-YjqDbYq0pIdgG8NrdD93mUuMVy0uo-VVd6mUnq8h1oBrn8l8p0GwD7tR3twGyULrTdeLtE9iyQgRa_5ZxEDh14vHaUG6Uqal74EVmvUQRynqmQyLbUGNBvb8H8z0"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Canvas: Constellation Map -->
+<main class="ml-64 mt-16 h-[calc(100vh-64px)] relative bg-surface-dim overflow-hidden">
+<!-- Background Glow Blobs -->
+<div class="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px]"></div>
+<div class="absolute bottom-1/4 right-1/3 w-[400px] h-[400px] bg-secondary/5 rounded-full blur-[100px]"></div>
+<!-- The Map -->
+<div class="absolute inset-0 p-12">
+<svg class="w-full h-full" viewbox="0 0 1000 800">
+<!-- Connections (Lines) -->
+<g stroke="currentColor" stroke-opacity="0.15" stroke-width="1.5">
+<line class="text-primary-dim" x1="200" x2="400" y1="200" y2="250"></line>
+<line class="text-primary-dim" x1="200" x2="300" y1="200" y2="400"></line>
+<line class="text-secondary" x1="400" x2="600" y1="250" y2="200"></line>
+<line class="text-secondary" x1="600" x2="800" y1="200" y2="300"></line>
+<line class="text-primary-dim" x1="400" x2="550" y1="250" y2="450"></line>
+<line class="text-primary-dim" x1="300" x2="550" y1="400" y2="450"></line>
+<line class="text-secondary" x1="550" x2="750" y1="450" y2="550"></line>
+<line class="text-secondary" x1="800" x2="750" y1="300" y2="550"></line>
+</g>
+<!-- Mastery Nodes (Cyan) -->
+<g class="cursor-pointer group">
+<circle class="group-hover:fill-opacity-40 transition-all" cx="200" cy="200" fill="#00f4fe" fill-opacity="0.2" r="14"></circle>
+<circle cx="200" cy="200" fill="#00f4fe" r="6"></circle>
+<text class="fill-on-surface font-headline text-xs font-bold tracking-tight" text-anchor="middle" x="200" y="235">Calculus</text>
+</g>
+<g class="cursor-pointer group">
+<circle cx="300" cy="400" fill="#00f4fe" fill-opacity="0.2" r="12"></circle>
+<circle cx="300" cy="400" fill="#00f4fe" r="5"></circle>
+<text class="fill-on-surface font-headline text-xs font-bold tracking-tight" text-anchor="middle" x="300" y="430">Linear Algebra</text>
+</g>
+<g class="cursor-pointer group">
+<circle cx="400" cy="250" fill="#00f4fe" fill-opacity="0.2" r="16"></circle>
+<circle cx="400" cy="250" fill="#00f4fe" r="8"></circle>
+<text class="fill-on-surface font-headline text-xs font-bold tracking-tight" text-anchor="middle" x="400" y="285">Derivatives</text>
+</g>
+<!-- Gap Nodes (Fuchsia/Pulsing) -->
+<g class="cursor-pointer group">
+<circle class="node-pulse animate-pulse" cx="600" cy="200" fill="#ff51fa" fill-opacity="0.2" r="18"></circle>
+<circle cx="600" cy="200" fill="#ff51fa" r="9"></circle>
+<text class="fill-on-surface font-headline text-xs font-bold tracking-tight" text-anchor="middle" x="600" y="240">Transformers</text>
+</g>
+<g class="cursor-pointer group">
+<circle class="node-pulse animate-pulse" cx="800" cy="300" fill="#ff51fa" fill-opacity="0.2" r="14"></circle>
+<circle cx="800" cy="300" fill="#ff51fa" r="6"></circle>
+<text class="fill-on-surface font-headline text-xs font-bold tracking-tight" text-anchor="middle" x="800" y="335">Attention Mechanisms</text>
+</g>
+<g class="cursor-pointer group">
+<circle cx="550" cy="450" fill="#00f4fe" fill-opacity="0.2" r="15"></circle>
+<circle cx="550" cy="450" fill="#00f4fe" r="7"></circle>
+<text class="fill-on-surface font-headline text-xs font-bold tracking-tight" text-anchor="middle" x="550" y="485">Backpropagation</text>
+</g>
+<g class="cursor-pointer group">
+<circle class="node-pulse animate-pulse" cx="750" cy="550" fill="#ff51fa" fill-opacity="0.2" r="20"></circle>
+<circle cx="750" cy="550" fill="#ff51fa" r="10"></circle>
+<text class="fill-on-surface font-headline text-xs font-bold tracking-tight" text-anchor="middle" x="750" y="595">Multi-Head Latency</text>
+</g>
+</svg>
+</div>
+<!-- Floating Info Panel (Right) -->
+<div class="absolute top-8 right-8 w-80 glass-panel border border-outline-variant/20 rounded-3xl shadow-2xl p-6 flex flex-col gap-6">
+<header class="flex justify-between items-start">
+<div>
+<span class="text-[10px] uppercase tracking-widest text-secondary font-bold">In-Focus Gap</span>
+<h2 class="text-2xl font-headline font-bold text-on-surface leading-tight mt-1">Transformers</h2>
+</div>
+<button class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="close">close</span>
+</button>
+</header>
+<div class="space-y-4">
+<div>
+<div class="flex justify-between text-xs mb-2">
+<span class="text-on-surface-variant">Mastery Level</span>
+<span class="text-secondary font-bold">32%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[32%] rounded-full"></div>
+</div>
+</div>
+<div class="p-4 bg-surface-container rounded-2xl relative overflow-hidden">
+<div class="absolute top-0 right-0 p-2 opacity-20">
+<span class="material-symbols-outlined text-tertiary" data-icon="auto_awesome">auto_awesome</span>
+</div>
+<h3 class="text-xs font-bold text-on-surface mb-2 uppercase tracking-tight">Critical Insight</h3>
+<p class="text-sm text-on-surface-variant leading-relaxed">
+                        Mastery is hindered by partial understanding of <span class="text-primary font-medium">Backpropagation</span> in the context of self-attention.
+                    </p>
+</div>
+</div>
+<div class="space-y-3">
+<h3 class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Suggested Materials</h3>
+<div class="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-container-highest transition-colors cursor-pointer group">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="play_circle">play_circle</span>
+</div>
+<div>
+<p class="text-xs font-semibold text-on-surface">Architecture Deep Dive</p>
+<p class="text-[10px] text-on-surface-variant">12 min video • Interactive</p>
+</div>
+</div>
+<div class="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-container-highest transition-colors cursor-pointer">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="quiz">quiz</span>
+</div>
+<div>
+<p class="text-xs font-semibold text-on-surface">Attention Mechanism Quiz</p>
+<p class="text-[10px] text-on-surface-variant">15 cards • Logic Drill</p>
+</div>
+</div>
+</div>
+<button class="w-full py-4 rounded-2xl bg-surface-container-highest text-on-surface font-bold text-sm flex items-center justify-center gap-2 hover:bg-surface-bright transition-colors group">
+                Jump to Study Space
+                <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+<!-- Legend and Zoom Controls (Bottom Right) -->
+<div class="absolute bottom-8 right-8 flex flex-col gap-4 items-end">
+<div class="glass-panel px-4 py-3 rounded-2xl border border-outline-variant/10 flex items-center gap-6">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(161,250,255,0.6)]"></div>
+<span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-tighter">Mastered</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(255,81,250,0.6)]"></div>
+<span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-tighter">Gap Area</span>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="w-10 h-10 rounded-xl glass-panel flex items-center justify-center hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="add">add</span>
+</button>
+<button class="w-10 h-10 rounded-xl glass-panel flex items-center justify-center hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="remove">remove</span>
+</button>
+<button class="w-10 h-10 rounded-xl glass-panel flex items-center justify-center hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="filter_center_focus">filter_center_focus</span>
+</button>
+</div>
+</div>
+<!-- AI Orb Indicator (Bottom Left) -->
+<div class="absolute bottom-8 left-8 flex items-center gap-4 group">
+<div class="w-12 h-12 rounded-full bg-primary-container flex items-center justify-center relative shadow-[0_0_20px_rgba(0,244,254,0.3)]">
+<div class="absolute inset-0 rounded-full border border-primary animate-ping opacity-20"></div>
+<span class="material-symbols-outlined text-on-primary-container" data-icon="psychology">psychology</span>
+</div>
+<div class="opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0 bg-surface-container px-4 py-2 rounded-xl">
+<p class="text-xs font-bold text-primary tracking-tight">AI Constellation Engine Active</p>
+<p class="text-[10px] text-on-surface-variant">Real-time synaptic mapping</p>
+</div>
+</div>
+</main>
+</body></html>

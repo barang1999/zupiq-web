@@ -13,8 +13,8 @@ import {
   Sigma,
   Sparkles,
   Target,
+  Trophy,
   Upload,
-  Users,
   Waves,
   XCircle,
 } from "lucide-react";
@@ -70,6 +70,7 @@ interface Props {
   onNavigateStudy?: (breakdown?: StudyBreakdownPayload | null) => void;
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
+  onNavigateAchievements?: () => void;
   onNavigateSettings?: () => void;
   showInstallAppButton?: boolean;
   onInstallApp?: () => void;
@@ -106,6 +107,7 @@ export default function QuizPage({
   onNavigateStudy,
   onNavigateHistory,
   onNavigateFlashcards,
+  onNavigateAchievements,
   onNavigateSettings,
   showInstallAppButton,
   onInstallApp,
@@ -206,9 +208,9 @@ export default function QuizPage({
       { id: "history", label: "Learning History", Icon: History, action: onNavigateHistory },
       { id: "flashcards", label: "Flashcards", Icon: Layers, action: onNavigateFlashcards },
       { id: "quiz", label: "Quiz", Icon: Brain, action: undefined },
-      { id: "collab", label: "Collaborate", Icon: Users, action: undefined },
+      { id: "achievements", label: "Achievements", Icon: Trophy, action: onNavigateAchievements },
     ],
-    [onNavigateFlashcards, onNavigateHistory, onNavigateStudy]
+    [onNavigateAchievements, onNavigateFlashcards, onNavigateHistory, onNavigateStudy]
   );
   const sidebarNavItems = useMemo(
     () => navItems.map(({ id, label, Icon, action }) => ({
@@ -602,6 +604,7 @@ export default function QuizPage({
         onNavigateHistory={onNavigateHistory}
         onNavigateFlashcards={onNavigateFlashcards}
         activeMobileMenu="quiz"
+        onNavigateAchievements={onNavigateAchievements}
         showInstallAppButton={showInstallAppButton}
         onInstallAppClick={onInstallApp}
         left={(

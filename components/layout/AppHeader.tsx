@@ -11,6 +11,7 @@ import {
   LogOut,
   Settings,
   Sparkles,
+  Trophy,
   X,
 } from 'lucide-react';
 import { useLiveTokenUsage } from '../../hooks/useLiveTokenUsage';
@@ -26,7 +27,8 @@ interface AppHeaderProps {
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
   onNavigateQuiz?: () => void;
-  activeMobileMenu?: 'study' | 'history' | 'flashcards' | 'quiz' | 'settings' | null;
+  onNavigateAchievements?: () => void;
+  activeMobileMenu?: 'study' | 'history' | 'flashcards' | 'quiz' | 'achievements' | 'settings' | null;
   showInstallAppButton?: boolean;
   onInstallAppClick?: () => void;
 }
@@ -41,6 +43,7 @@ export function AppHeader({
   onNavigateHistory,
   onNavigateFlashcards,
   onNavigateQuiz,
+  onNavigateAchievements,
   activeMobileMenu = null,
   showInstallAppButton = false,
   onInstallAppClick,
@@ -69,15 +72,28 @@ export function AppHeader({
     setIsProfileMenuOpen(false);
   };
 
+  const navigateToAchievements = () => {
+    if (onNavigateAchievements) {
+      onNavigateAchievements();
+      return;
+    }
+    if (window.location.pathname !== '/achievements') {
+      window.history.pushState({ page: 'achievements' }, '', '/achievements');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { page: 'achievements' } }));
+    }
+    setIsProfileMenuOpen(false);
+  };
+
   const mobileMenuItems = useMemo(
     () => [
       { id: 'study' as const, label: 'Study Space', Icon: GitFork, action: onNavigateStudy },
       { id: 'history' as const, label: 'Learning History', Icon: History, action: onNavigateHistory },
       { id: 'flashcards' as const, label: 'Flashcards', Icon: Layers, action: onNavigateFlashcards },
       { id: 'quiz' as const, label: 'Quiz', Icon: Brain, action: navigateToQuiz },
+      { id: 'achievements' as const, label: 'Achievements', Icon: Trophy, action: navigateToAchievements },
       { id: 'settings' as const, label: 'Settings', Icon: Settings, action: onSettingsClick },
     ],
-    [navigateToQuiz, onNavigateFlashcards, onNavigateHistory, onNavigateStudy, onSettingsClick]
+    [navigateToAchievements, navigateToQuiz, onNavigateFlashcards, onNavigateHistory, onNavigateStudy, onSettingsClick]
   );
 
   useEffect(() => {

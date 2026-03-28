@@ -3,7 +3,7 @@ import type { TouchEvent as ReactTouchEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Brain,
-  GitFork, History, Users, Archive,
+  GitFork, History, Trophy, Archive,
   Plus, X, Loader2, Sparkles,
   Bookmark, Zap, ArrowRight,
   ChevronLeft, ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers,
@@ -768,6 +768,7 @@ interface Props {
   user: any;
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
+  onNavigateAchievements?: () => void;
   onNavigateQuiz?: (prefill?: {
     subjectId?: string | null;
     subjectName?: string | null;
@@ -785,6 +786,7 @@ export function StudySpacePage({
   user,
   onNavigateHistory,
   onNavigateFlashcards,
+  onNavigateAchievements,
   onNavigateQuiz,
   onNavigatePlan,
   onNavigateSettings,
@@ -2470,7 +2472,7 @@ Do not repeat content already given.`;
     { id: 'history',     label: 'History',       Icon: History },
     { id: 'flashcards',  label: 'Flashcards',    Icon: Layers },
     { id: 'quiz',        label: 'Quiz',          Icon: Brain },
-    { id: 'collaborate', label: 'Collaborate',   Icon: Users },
+    { id: 'achievements', label: 'Achievements',   Icon: Trophy },
   ];
 
   const navigateToQuiz = useCallback(() => {
@@ -2524,10 +2526,14 @@ Do not repeat content already given.`;
           navigateToQuiz();
           return;
         }
+        if (id === 'achievements') {
+          onNavigateAchievements?.();
+          return;
+        }
         setActiveTab(id);
       },
     }))
-  ), [activeTab, navigateToQuiz, onNavigateFlashcards, onNavigateHistory]);
+  ), [activeTab, navigateToQuiz, onNavigateAchievements, onNavigateFlashcards, onNavigateHistory]);
 
   const isBranchSelected = !!selectedNode;
   const activeBranchConversation = selectedNode
@@ -2650,6 +2656,7 @@ Do not repeat content already given.`;
         onSignOut={handleSignOut}
         onNavigateHistory={onNavigateHistory}
         onNavigateFlashcards={onNavigateFlashcards}
+        onNavigateAchievements={onNavigateAchievements}
         onNavigateQuiz={navigateToQuiz}
         activeMobileMenu="study"
         showInstallAppButton={showInstallAppButton}
