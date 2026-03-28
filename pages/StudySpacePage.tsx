@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
 import { ProblemComposer } from '../components/ai/ProblemComposer';
+import SweepText from '../components/ui/SweepText.jsx';
 import { api, ApiError } from '../lib/api';
 import { MathText } from '../components/ui/MathText';
 import { RichText } from '../components/ui/RichText';
@@ -2763,8 +2764,18 @@ Do not repeat content already given.`;
                     <div className="absolute inset-0 rounded-full border border-primary/20 animate-ping" />
                   </div>
                   <div className="text-center">
-                    <p className="font-headline font-bold text-on-surface">Neural Analysis Active</p>
-                    <p className="text-xs text-on-surface-variant tracking-widest uppercase mt-1">Building concept tree…</p>
+                    <SweepText
+                      text="Building concept tree..."
+                      duration={1550}
+                      dimColor="rgba(255,255,255,0.42)"
+                      brightColor="rgba(161,250,255,0.98)"
+                      style={{
+                        fontSize: '0.75rem',
+                        letterSpacing: '0.2em',
+                        textTransform: 'uppercase',
+                      }}
+                      containerStyle={{ marginTop: '0.3rem' }}
+                    />
                   </div>
                 </motion.div>
               )}
