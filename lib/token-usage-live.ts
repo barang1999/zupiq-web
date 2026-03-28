@@ -22,6 +22,7 @@ let subscribers = 0;
 let streamAbortController: AbortController | null = null;
 let reconnectTimeoutId: number | null = null;
 let reconnectAttempt = 0;
+let streamRetryNotBefore = 0;
 
 const DEFAULT_RECONNECT_MS = 3_000;
 const MAX_RECONNECT_MS = 60_000;
@@ -143,6 +144,17 @@ async function readEventStream(body: ReadableStream<Uint8Array>, signal: AbortSi
 async function connectStream() {
   if (streamAbortController || subscribers <= 0) return;
 
+  const now = Date.now();
+  if (now < streamRetryNotBefore) {
+    const waitMs = Math.max(250, streamRetryNotBefore - now);
+    resetReconnectTimeout();
+    reconnectTimeoutId = window.setTimeout(() => {
+      reconnectTimeoutId = null;
+      void connectStream();
+    }, waitMs);
+    return;
+  }
+
   const accessToken = tokenStorage.getAccess();
   if (!accessToken) {
     setState({ usage: null, loading: false, connected: false });
@@ -166,14 +178,20 @@ async function connectStream() {
     });
 
     if (!response.ok || !response.body) {
+      const retryAfterMs = parseRetryAfterToMs(response.headers.get("retry-after"));
       reconnectError = {
         status: response.status,
-        retryAfterMs: parseRetryAfterToMs(response.headers.get("retry-after")),
+        retryAfterMs,
       };
+      if (response.status === 429) {
+        const cooldownMs = Math.min(MAX_RECONNECT_MS, Math.max(RATE_LIMIT_MIN_RECONNECT_MS, retryAfterMs ?? 0));
+        streamRetryNotBefore = Date.now() + cooldownMs;
+      }
       throw new Error(`Failed usage stream request (${response.status})`);
     }
 
     reconnectAttempt = 0;
+    streamRetryNotBefore = 0;
     setState({ connected: true });
     await readEventStream(response.body, controller.signal);
   } catch {
@@ -187,7 +205,10 @@ async function connectStream() {
 
   if (subscribers > 0) {
     reconnectAttempt = Math.min(reconnectAttempt + 1, 8);
-    const reconnectDelayMs = computeReconnectDelayMs(reconnectError);
+    const reconnectDelayMs = Math.max(
+      computeReconnectDelayMs(reconnectError),
+      Math.max(0, streamRetryNotBefore - Date.now())
+    );
     resetReconnectTimeout();
     reconnectTimeoutId = window.setTimeout(() => {
       reconnectTimeoutId = null;

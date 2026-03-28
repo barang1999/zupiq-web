@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Brain,
@@ -14,6 +14,7 @@ import {
 import { AppHeader } from "../components/layout/AppHeader";
 import { AppSidebar } from "../components/layout/AppSidebar";
 import { api } from "../lib/api";
+import { getSessionsCached } from "../lib/sessions";
 import { supabase } from "../lib/supabase";
 import { firebaseSignOut } from "../lib/firebase";
 import type { Subject } from "../types/subject.types";
@@ -171,7 +172,6 @@ export default function KnowledgeMapPage({
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 640 : false));
   const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
-  const subjectModalRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 640);
@@ -188,19 +188,11 @@ export default function KnowledgeMapPage({
       try {
         const [subjectResponse, sessionResponse] = await Promise.all([
           api.get<{ subjects: Subject[] }>("/api/subjects"),
-          api.get<{
-            sessions: Array<{
-              id: string;
-              title?: string | null;
-              subject_id?: string | null;
-              subject?: string | null;
-              created_at?: string | null;
-            }>;
-          }>("/api/sessions"),
+          getSessionsCached(),
         ]);
         if (cancelled) return;
 
-        const mappedSessions = (sessionResponse.sessions ?? [])
+        const mappedSessions = (sessionResponse ?? [])
           .map((row) => ({
             id: row.id,
             title: String(row.title ?? "").trim(),
@@ -299,20 +291,6 @@ export default function KnowledgeMapPage({
       setIsSubjectModalOpen(false);
     }
   }, [selectedSubjectId, subjectClusters]);
-
-  useEffect(() => {
-    if (!isSubjectModalOpen) return;
-
-    const handleOutsidePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (subjectModalRef.current?.contains(target)) return;
-      setIsSubjectModalOpen(false);
-    };
-
-    document.addEventListener("pointerdown", handleOutsidePointerDown);
-    return () => document.removeEventListener("pointerdown", handleOutsidePointerDown);
-  }, [isSubjectModalOpen]);
 
   const selectedSubject = useMemo(
     () => subjectClusters.find((cluster) => cluster.id === selectedSubjectId) ?? null,
@@ -502,7 +480,17 @@ export default function KnowledgeMapPage({
 
           {!loading && !error && subjectClusters.length > 0 ? (
             <section className="mt-6">
-              <div className="relative min-h-[620px] overflow-hidden p-5">
+              <div
+                className="relative min-h-[620px] overflow-hidden p-5"
+                onClick={() => {
+                  if (!selectedSubjectId) return;
+                  if (isSubjectModalOpen) {
+                    setIsSubjectModalOpen(false);
+                    return;
+                  }
+                  setSelectedSubjectId("");
+                }}
+              >
                 <div className="pointer-events-none absolute inset-0">
                   <svg className="h-full w-full" viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} preserveAspectRatio="none">
                     {subjectLinks.map((link, index) => {
@@ -574,7 +562,8 @@ export default function KnowledgeMapPage({
                   return (
                     <button
                       key={cluster.id}
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation();
                         if (selectedSubjectId === cluster.id) {
                           setSelectedSubjectId("");
                           setIsSubjectModalOpen(false);
@@ -681,8 +670,8 @@ export default function KnowledgeMapPage({
                 <AnimatePresence>
                   {selectedSubject && isSubjectModalOpen ? (
                     <motion.aside
-                      ref={subjectModalRef}
                       key={`subject-popup-${selectedSubject.id}`}
+                      onClick={(event) => event.stopPropagation()}
                       initial={{ opacity: 0, y: 18, scale: 0.97 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 10, scale: 0.97 }}

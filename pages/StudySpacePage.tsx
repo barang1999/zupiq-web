@@ -1120,7 +1120,6 @@ export function StudySpacePage({
     insightSwipeLatestDx.current = dx;
     setInsightSwipeOffsetX(Math.min(INSIGHT_SWIPE_MAX_OFFSET, dx));
     if (!isInsightSwipeDragging) setIsInsightSwipeDragging(true);
-    if (typeof e.preventDefault === 'function') e.preventDefault();
   }, [isInsightSwipeDragging]);
 
   const handleInsightSwipeEnd = useCallback(() => {
@@ -1211,7 +1210,7 @@ export function StudySpacePage({
     setPositions(restoredPositions);
     const rootNode = normalized.nodes.find((n: BreakdownNode) => n.type === 'root') ?? null;
     setSelectedNode(rootNode);
-    setIsInsightPanelOpen(!!rootNode);
+    setIsInsightPanelOpen(false);
     setShowInput(false);
     setComposerInput('');
     if (normalized.id) localStorage.setItem('zupiq_lastSessionId', normalized.id);
@@ -1240,7 +1239,7 @@ export function StudySpacePage({
       : null;
     const focusedNode = selected ?? bd.nodes.find((n: BreakdownNode) => n.type === 'root') ?? null;
     setSelectedNode(focusedNode);
-    setIsInsightPanelOpen(!!focusedNode);
+    setIsInsightPanelOpen(false);
     setActiveTab(snapshot.activeTab || 'map');
     setShowInput(false);
     setComposerInput('');

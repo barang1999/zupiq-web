@@ -1,4 +1,4 @@
-import { api, tokenStorage } from "./api";
+import { api, ApiError, tokenStorage } from "./api";
 
 export type PlanKey = "free" | "core" | "pro";
 export type SubscriptionStatus =
@@ -81,12 +81,14 @@ export interface BillingSubscriptionResponse {
 }
 
 const BILLING_SUBSCRIPTION_CACHE_TTL_MS = 30_000;
+const BILLING_SUBSCRIPTION_RATE_LIMIT_COOLDOWN_MS = 30_000;
 let billingSubscriptionCache: {
   accessToken: string | null;
   fetchedAt: number;
   value: BillingSubscriptionResponse;
 } | null = null;
 let billingSubscriptionInFlight: Promise<BillingSubscriptionResponse> | null = null;
+let billingSubscriptionRetryNotBefore = 0;
 
 export async function getBillingCatalog(): Promise<BillingCatalogResponse> {
   return api.get<BillingCatalogResponse>("/api/billing/catalog");
@@ -106,6 +108,13 @@ export async function getBillingSubscription(): Promise<BillingSubscriptionRespo
 
   if (billingSubscriptionInFlight) return billingSubscriptionInFlight;
 
+  if (now < billingSubscriptionRetryNotBefore) {
+    if (billingSubscriptionCache && billingSubscriptionCache.accessToken === accessToken) {
+      return billingSubscriptionCache.value;
+    }
+    throw new ApiError(429, "Too many requests. Please try again later.");
+  }
+
   billingSubscriptionInFlight = api
     .get<BillingSubscriptionResponse>("/api/billing/subscription")
     .then((response) => {
@@ -114,7 +123,17 @@ export async function getBillingSubscription(): Promise<BillingSubscriptionRespo
         fetchedAt: Date.now(),
         value: response,
       };
+      billingSubscriptionRetryNotBefore = 0;
       return response;
+    })
+    .catch((err) => {
+      if (err instanceof ApiError && err.status === 429) {
+        billingSubscriptionRetryNotBefore = Date.now() + BILLING_SUBSCRIPTION_RATE_LIMIT_COOLDOWN_MS;
+        if (billingSubscriptionCache && billingSubscriptionCache.accessToken === accessToken) {
+          return billingSubscriptionCache.value;
+        }
+      }
+      throw err;
     })
     .finally(() => {
       billingSubscriptionInFlight = null;

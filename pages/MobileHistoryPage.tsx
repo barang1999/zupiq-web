@@ -8,7 +8,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
-import { api } from '../lib/api';
+import { MathText } from '../components/ui/MathText';
+import { getSessionsCached } from '../lib/sessions';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
 
@@ -93,11 +94,20 @@ export default function MobileHistoryPage({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api
-      .get<{ sessions: StudySession[] }>('/api/sessions')
-      .then(({ sessions: rows }) => setSessions(rows))
+    let cancelled = false;
+    getSessionsCached()
+      .then((rows) => {
+        if (cancelled) return;
+        setSessions(rows as StudySession[]);
+      })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const totalSessions = sessions.length;
@@ -257,8 +267,12 @@ export default function MobileHistoryPage({
                       </span>
                       <span className="text-on-surface-variant text-[10px]">{formatRelative(session.created_at)}</span>
                     </div>
-                    <h4 className="font-headline font-bold mb-1 line-clamp-1">{session.title}</h4>
-                    <p className="text-xs text-on-surface-variant mb-4 line-clamp-1">{session.problem}</p>
+                    <h4 className="font-headline font-bold mb-1 line-clamp-1">
+                      <MathText>{session.title}</MathText>
+                    </h4>
+                    <p className="text-xs text-on-surface-variant mb-4 line-clamp-1">
+                      <MathText>{session.problem}</MathText>
+                    </p>
                     <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-tertiary">
                       <span>{session.node_count} nodes</span>
                       <span>•</span>
@@ -299,7 +313,9 @@ export default function MobileHistoryPage({
                         <Icon className="w-4 h-4 text-primary" />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-bold text-sm line-clamp-1">{session.title}</p>
+                        <p className="font-bold text-sm line-clamp-1">
+                          <MathText>{session.title}</MathText>
+                        </p>
                         <p className="text-[10px] text-on-surface-variant uppercase tracking-widest font-medium">
                           {formatDate(session.created_at)} • {formatDuration(session.duration_seconds)}
                         </p>

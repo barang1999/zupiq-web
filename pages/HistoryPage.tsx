@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
 import { MathText } from '../components/ui/MathText';
-import { api } from '../lib/api';
+import { getSessionsCached } from '../lib/sessions';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
 
@@ -127,10 +127,20 @@ export function HistoryPage({
 
 
   useEffect(() => {
-    api.get<{ sessions: StudySession[] }>('/api/sessions')
-      .then(({ sessions: s }) => setSessions(s))
+    let cancelled = false;
+    getSessionsCached()
+      .then((rows) => {
+        if (cancelled) return;
+        setSessions(rows as StudySession[]);
+      })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
