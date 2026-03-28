@@ -15,6 +15,9 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    optimizeDeps: {
+      include: ['recharts', 'react-is'],
+    },
     server: {
       port: 5180,
       hmr: process.env.DISABLE_HMR !== 'true',

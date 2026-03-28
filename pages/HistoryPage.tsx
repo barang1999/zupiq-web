@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   GitFork, History, Users,
   Search, ArrowRight, Zap, ChevronLeft,
@@ -75,6 +76,24 @@ function subjectIcon(subject: string) {
   return Brain;
 }
 
+function toMonthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function toMonthLabel(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+}
+
+function includesAny(source: string, keywords: string[]): boolean {
+  return keywords.some(keyword => source.includes(keyword));
+}
+
+function formatDelta(current: number, previous: number): string {
+  const diff = Math.round(current - previous);
+  if (Math.abs(diff) < 1) return 'Stable';
+  return `${diff > 0 ? '↑' : '↓'} ${Math.abs(diff)}%`;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -132,10 +151,86 @@ export function HistoryPage({
   const totalSessions = sessions.length;
   const totalNodes = sessions.reduce((a, s) => a + s.node_count, 0);
   const recent3 = filtered.slice(0, 3);
+  const masteryTrends = useMemo(() => {
+    const now = new Date();
+    now.setDate(1);
+    now.setHours(0, 0, 0, 0);
+
+    const months = Array.from({ length: 6 }, (_v, idx) => {
+      const monthDate = new Date(now);
+      monthDate.setMonth(monthDate.getMonth() - (5 - idx));
+      return {
+        key: toMonthKey(monthDate),
+        month: toMonthLabel(monthDate),
+        mathRaw: 0,
+        physicsRaw: 0,
+        overallRaw: 0,
+      };
+    });
+
+    const byMonth = new Map(months.map(m => [m.key, m]));
+    const mathKeywords = ['math', 'calculus', 'algebra', 'geometry', 'trigonometry', 'statistics'];
+    const physicsKeywords = ['physics', 'mechanics', 'kinematic', 'dynamic', 'thermo', 'optics', 'quantum', 'electromagnet'];
+    const scienceKeywords = ['science', 'chemistry', 'biology'];
+
+    for (const session of sessions) {
+      const date = new Date(session.created_at);
+      if (Number.isNaN(date.getTime())) continue;
+      date.setDate(1);
+      date.setHours(0, 0, 0, 0);
+      const month = byMonth.get(toMonthKey(date));
+      if (!month) continue;
+
+      const weight = Math.max(1, session.node_count || 0);
+      const subject = (session.subject ?? '').toLowerCase();
+
+      month.overallRaw += weight;
+      if (includesAny(subject, mathKeywords)) month.mathRaw += weight;
+      if (includesAny(subject, physicsKeywords) || includesAny(subject, scienceKeywords)) month.physicsRaw += weight;
+    }
+
+    const maxRaw = Math.max(
+      1,
+      ...months.flatMap(m => [m.mathRaw, m.physicsRaw, m.overallRaw])
+    );
+
+    return months.map(m => ({
+      month: m.month,
+      math: Math.round((m.mathRaw / maxRaw) * 100),
+      physics: Math.round((m.physicsRaw / maxRaw) * 100),
+      overall: Math.round((m.overallRaw / maxRaw) * 100),
+    }));
+  }, [sessions]);
+  const latestTrend = masteryTrends[masteryTrends.length - 1] ?? { month: '—', math: 0, physics: 0, overall: 0 };
+  const previousTrend = masteryTrends[masteryTrends.length - 2] ?? latestTrend;
+  const trendSummary = [
+    {
+      label: 'Mathematics',
+      value: latestTrend.math,
+      delta: formatDelta(latestTrend.math, previousTrend.math),
+      color: 'text-primary',
+      dot: 'bg-primary',
+    },
+    {
+      label: 'Physics + Science',
+      value: latestTrend.physics,
+      delta: formatDelta(latestTrend.physics, previousTrend.physics),
+      color: 'text-secondary',
+      dot: 'bg-secondary',
+    },
+    {
+      label: 'Overall',
+      value: latestTrend.overall,
+      delta: formatDelta(latestTrend.overall, previousTrend.overall),
+      color: 'text-tertiary',
+      dot: 'bg-tertiary',
+    },
+  ];
 
   const NAV_ITEMS = [
     { id: 'study',   label: 'Study Space',       Icon: GitFork,  action: () => onNavigateStudy?.() },
     { id: 'history', label: 'Learning History',  Icon: History,  action: () => {} },
+    { id: 'flashcards', label: 'Flashcards', Icon: Layers, action: () => onNavigateFlashcards?.() },
     { id: 'collab',  label: 'Collaborate',        Icon: Users,    action: () => {} },
   ];
 
@@ -310,43 +405,99 @@ export function HistoryPage({
                       <p className="text-sm text-on-surface-variant">Cognitive retention across core disciplines</p>
                     </div>
                     <div className="hidden sm:flex gap-2">
-                      <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] rounded-full border border-primary/20">MONTHLY</span>
-                      <span className="px-3 py-1 bg-surface-container-highest text-on-surface-variant text-[10px] rounded-full">QUARTERLY</span>
+                      <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] rounded-full border border-primary/20">REAL DATA</span>
+                      <span className="px-3 py-1 bg-surface-container-highest text-on-surface-variant text-[10px] rounded-full">
+                        LAST {masteryTrends.length} MONTHS
+                      </span>
                     </div>
                   </div>
-                  <div className="w-full h-44 sm:h-56 relative">
-                    <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                      <defs>
-                        <linearGradient id="grad-p" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" stopColor="#a1faff" stopOpacity="1" />
-                          <stop offset="100%" stopColor="#a1faff" stopOpacity="0" />
-                        </linearGradient>
-                        <linearGradient id="grad-s" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" stopColor="#ff51fa" stopOpacity="1" />
-                          <stop offset="100%" stopColor="#ff51fa" stopOpacity="0" />
-                        </linearGradient>
-                      </defs>
-                      <path d="M0,80 Q20,20 40,60 T80,30 T100,10 L100,100 L0,100 Z" fill="url(#grad-p)" fillOpacity="0.1" />
-                      <path d="M0,80 Q20,20 40,60 T80,30 T100,10" fill="none" stroke="#a1faff" strokeWidth="2" strokeLinecap="round" />
-                      <path d="M0,90 Q25,70 50,85 T100,40 L100,100 L0,100 Z" fill="url(#grad-s)" fillOpacity="0.1" />
-                      <path d="M0,90 Q25,70 50,85 T100,40" fill="none" stroke="#ff51fa" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                    <div className="absolute bottom-0 w-full flex justify-between text-[9px] sm:text-[10px] text-on-surface-variant font-label border-t border-outline-variant/20 pt-3">
-                      {['JAN','FEB','MAR','APR','MAY','JUN'].map(m => <span key={m}>{m}</span>)}
-                    </div>
+                  <div className="w-full h-44 sm:h-56 relative border-t border-outline-variant/10 pt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={masteryTrends}
+                        margin={{ top: 6, right: 4, left: -8, bottom: 0 }}
+                      >
+                        <defs>
+                          <linearGradient id="masteryPrimary" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.28} />
+                            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
+                          </linearGradient>
+                          <linearGradient id="masterySecondary" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="var(--color-secondary)" stopOpacity={0.2} />
+                            <stop offset="100%" stopColor="var(--color-secondary)" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid stroke="var(--color-outline-variant)" strokeOpacity={0.12} vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          axisLine={false}
+                          tickLine={false}
+                          dy={8}
+                          tick={{ fontSize: 10, fill: 'var(--color-on-surface-variant)' }}
+                        />
+                        <YAxis hide domain={[0, 100]} />
+                        <Tooltip
+                          cursor={{ stroke: 'var(--color-outline-variant)', strokeOpacity: 0.4 }}
+                          contentStyle={{
+                            borderRadius: 14,
+                            border: '1px solid var(--color-outline-variant)',
+                            backgroundColor: 'rgba(15, 25, 48, 0.92)',
+                            color: 'var(--color-on-surface)',
+                            fontSize: '12px',
+                          }}
+                          labelStyle={{ color: 'var(--color-on-surface-variant)' }}
+                          formatter={(value: number | string, name: string) => {
+                            const label = name === 'math'
+                              ? 'Mathematics'
+                              : name === 'physics'
+                                ? 'Physics + Science'
+                                : 'Overall';
+                            return [`${value}%`, label];
+                          }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="math"
+                          name="math"
+                          stroke="var(--color-primary)"
+                          strokeWidth={2.5}
+                          fill="url(#masteryPrimary)"
+                          fillOpacity={1}
+                          dot={false}
+                          activeDot={{ r: 4, strokeWidth: 0, fill: 'var(--color-primary)' }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="physics"
+                          name="physics"
+                          stroke="var(--color-secondary)"
+                          strokeWidth={2.5}
+                          fill="url(#masterySecondary)"
+                          fillOpacity={1}
+                          dot={false}
+                          activeDot={{ r: 4, strokeWidth: 0, fill: 'var(--color-secondary)' }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="overall"
+                          name="overall"
+                          stroke="var(--color-tertiary)"
+                          strokeWidth={1.8}
+                          fillOpacity={0}
+                          dot={false}
+                          activeDot={{ r: 3.5, strokeWidth: 0, fill: 'var(--color-tertiary)' }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </div>
                   <div className="mt-8 sm:mt-10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {[
-                      { label: 'Mathematics', value: '88%', delta: '↑ 4%', color: 'text-primary', dot: 'bg-primary' },
-                      { label: 'Quantum Physics', value: '72%', delta: '↑ 12%', color: 'text-secondary', dot: 'bg-secondary' },
-                      { label: 'Sciences', value: '94%', delta: 'Stable', color: 'text-tertiary', dot: 'bg-tertiary' },
-                    ].map(stat => (
+                    {trendSummary.map(stat => (
                       <div key={stat.label} className="space-y-1">
                         <div className="flex items-center gap-2">
                           <div className={`w-2 h-2 rounded-full ${stat.dot}`} />
                           <span className="text-xs text-on-surface-variant">{stat.label}</span>
                         </div>
-                        <p className="text-lg font-bold">{stat.value} <span className={`text-xs font-normal ${stat.color}`}>{stat.delta}</span></p>
+                        <p className="text-lg font-bold">{stat.value}% <span className={`text-xs font-normal ${stat.color}`}>{stat.delta}</span></p>
                       </div>
                     ))}
                   </div>

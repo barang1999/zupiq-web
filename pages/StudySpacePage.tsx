@@ -2602,18 +2602,14 @@ Do not repeat content already given.`;
       >
         {/* Brand */}
         <div className={`mb-8 overflow-hidden transition-all duration-200 ${isExpanded ? 'px-6' : 'px-0 flex justify-center'}`}>
-          <AnimatePresence mode="wait">
-            {isExpanded ? (
-              <motion.div key="expanded" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                <h2 className="font-headline font-bold text-lg text-secondary leading-tight whitespace-nowrap">Neural Breakdown</h2>
-                <p className="text-on-surface-variant text-xs uppercase tracking-widest opacity-70 mt-1 whitespace-nowrap">Quantum Prism Engine</p>
-              </motion.div>
-            ) : (
-              <motion.div key="collapsed" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                <GitFork className="w-5 h-5 text-secondary" />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {isExpanded ? (
+            <div>
+              <h2 className="font-headline font-bold text-lg text-secondary leading-tight whitespace-nowrap">Neural Breakdown</h2>
+              <p className="text-on-surface-variant text-xs uppercase tracking-widest opacity-70 mt-1 whitespace-nowrap">Quantum Prism Engine</p>
+            </div>
+          ) : (
+            <GitFork className="w-5 h-5 text-secondary" />
+          )}
         </div>
 
         {/* Nav */}
@@ -2644,19 +2640,7 @@ Do not repeat content already given.`;
                 } ${!isExpanded ? 'justify-center' : ''}`}
               >
                 <Icon className="w-5 h-5 shrink-0" />
-                <AnimatePresence>
-                  {isExpanded && (
-                    <motion.span
-                      initial={{ opacity: 0, width: 0 }}
-                      animate={{ opacity: 1, width: 'auto' }}
-                      exit={{ opacity: 0, width: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden whitespace-nowrap"
-                    >
-                      {label}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
+                {isExpanded && <span className="overflow-hidden whitespace-nowrap">{label}</span>}
               </button>
             );
           })}
@@ -2664,17 +2648,14 @@ Do not repeat content already given.`;
 
         {/* Bottom */}
         <div className="mt-auto space-y-4 px-2">
-          <AnimatePresence>
-            {isExpanded && (
-              <motion.button
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                onClick={handleUpgradeToPro}
-                className="w-full py-3 px-4 rounded-xl bg-surface-container-highest border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest hover:bg-primary/10 transition-all whitespace-nowrap overflow-hidden"
-              >
-                Upgrade to Pro
-              </motion.button>
-            )}
-          </AnimatePresence>
+          {isExpanded && (
+            <button
+              onClick={handleUpgradeToPro}
+              className="w-full py-3 px-4 rounded-xl bg-surface-container-highest border border-primary/20 text-primary text-xs font-bold uppercase tracking-widest hover:bg-primary/10 transition-all whitespace-nowrap overflow-hidden"
+            >
+              Upgrade to Pro
+            </button>
+          )}
           <div className={`pt-4 border-t border-outline-variant/20 flex flex-col gap-2 ${!isExpanded ? 'items-center' : ''}`}>
             <a
               href="#"
@@ -2682,13 +2663,7 @@ Do not repeat content already given.`;
               className={`flex items-center gap-3 text-on-surface-variant hover:text-on-surface transition-colors ${!isExpanded ? 'justify-center p-2 rounded-xl hover:bg-surface-container' : 'px-1'}`}
             >
               <HelpCircle className="w-4 h-4 shrink-0" />
-              <AnimatePresence>
-                {isExpanded && (
-                  <motion.span initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="text-xs overflow-hidden whitespace-nowrap">
-                    Support
-                  </motion.span>
-                )}
-              </AnimatePresence>
+              {isExpanded && <span className="text-xs overflow-hidden whitespace-nowrap">Support</span>}
             </a>
             <button
               onClick={handleSignOut}
@@ -2696,13 +2671,7 @@ Do not repeat content already given.`;
               className={`flex items-center gap-3 text-on-surface-variant hover:text-on-surface transition-colors ${!isExpanded ? 'justify-center p-2 rounded-xl hover:bg-surface-container' : 'px-1'}`}
             >
               <LogOut className="w-4 h-4 shrink-0" />
-              <AnimatePresence>
-                {isExpanded && (
-                  <motion.span initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="text-xs overflow-hidden whitespace-nowrap">
-                    Log Out
-                  </motion.span>
-                )}
-              </AnimatePresence>
+              {isExpanded && <span className="text-xs overflow-hidden whitespace-nowrap">Log Out</span>}
             </button>
           </div>
         </div>
