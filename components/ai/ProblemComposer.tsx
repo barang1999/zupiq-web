@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ChangeEvent } fro
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Camera, Paperclip, Sparkles, Minus, Network, Upload, X } from 'lucide-react';
 import { RichText } from '../ui/RichText';
+import SweepText from '../ui/SweepText.jsx';
 
 function isComposerDebugEnabled(): boolean {
   if (typeof window === 'undefined') return false;
@@ -137,6 +138,7 @@ export function ProblemComposer({
   const textareaMinHeightClass = showRenderedPreview
     ? 'min-h-[170px] sm:min-h-[220px]'
     : 'min-h-[210px] sm:min-h-[280px]';
+  const showImageLoadingPlaceholder = imageLoading && !value.trim();
 
   useEffect(() => {
     if (!open) return;
@@ -374,11 +376,22 @@ export function ProblemComposer({
                     value={value}
                     onChange={(e) => handleTextChange(e.target.value, 'desktop')}
                     onKeyDown={handleKeyDown}
-                    placeholder="Ask Zupiq to breakdown this concept..."
+                    placeholder={imageLoading ? '' : 'Ask Zupiq to breakdown this concept...'}
                     rows={3}
                     disabled={loading}
                     className={`w-full bg-transparent border-none focus:ring-0 text-base sm:text-2xl text-on-surface placeholder:text-on-surface-variant/40 font-body resize-none outline-none pr-24 sm:pr-32 ${textareaMinHeightClass}`}
                   />
+                  {showImageLoadingPlaceholder && (
+                    <div className="pointer-events-none absolute left-0 top-0 pr-24 sm:pr-32 text-base sm:text-2xl font-body">
+                      <SweepText
+                        text="Analyzing attachment and extracting problem text..."
+                        duration={1600}
+                        dimColor="rgba(255,255,255,0.34)"
+                        brightColor="rgba(161,250,255,0.95)"
+                        style={{ color: 'rgba(255,255,255,0.34)' }}
+                      />
+                    </div>
+                  )}
 
                   <div className="absolute bottom-1 right-0 flex items-center gap-2 sm:gap-4">
                     <button
@@ -462,8 +475,16 @@ export function ProblemComposer({
                   </button>
                 </div>
 
-                {imageLoading && (
-                  <p className="mt-3 text-xs text-primary">Analyzing attachment and extracting problem text...</p>
+                {imageLoading && value.trim() && (
+                  <div className="mt-3 text-xs">
+                    <SweepText
+                      text="Analyzing attachment and extracting problem text..."
+                      duration={1600}
+                      dimColor="rgba(161,250,255,0.55)"
+                      brightColor="rgba(161,250,255,1)"
+                      style={{ color: 'rgba(161,250,255,0.55)' }}
+                    />
+                  </div>
                 )}
 
                 {error && (
