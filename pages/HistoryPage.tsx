@@ -6,6 +6,7 @@ import {
   HelpCircle, LogOut, Brain, FlaskConical, Layers,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
+import { MathText } from '../components/ui/MathText';
 import { api } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
@@ -442,7 +443,7 @@ export function HistoryPage({
                           <span className="text-[10px] font-label text-on-surface-variant">{formatRelative(session.created_at)}</span>
                         </div>
                         <h4 className={`text-lg sm:text-xl font-bold mb-2 group-hover:${color} transition-colors relative z-10 line-clamp-2`}>
-                          {session.title}
+                          <MathText>{session.title}</MathText>
                         </h4>
                         <p className="text-sm text-on-surface-variant mb-6 relative z-10">
                           Subject: {session.subject} • {session.node_count} nodes
@@ -496,8 +497,12 @@ export function HistoryPage({
                           >
                             <div className="flex items-start justify-between gap-4">
                               <div className="min-w-0">
-                                <h4 className="font-bold text-on-surface line-clamp-2">{session.title}</h4>
-                                <p className="mt-1 text-xs text-on-surface-variant line-clamp-1">{session.problem}</p>
+                                <h4 className="font-bold text-on-surface line-clamp-2">
+                                  <MathText>{session.title}</MathText>
+                                </h4>
+                                <p className="mt-1 text-xs text-on-surface-variant line-clamp-1">
+                                  <MathText>{session.problem}</MathText>
+                                </p>
                               </div>
                               <span className="shrink-0 text-[10px] text-on-surface-variant">{formatDate(session.created_at)}</span>
                             </div>
@@ -554,8 +559,12 @@ export function HistoryPage({
                             >
                               <td className="px-8 py-6 text-sm text-on-surface-variant">{formatDate(session.created_at)}</td>
                               <td className="px-8 py-6 font-bold text-on-surface max-w-xs">
-                                <span className="line-clamp-1">{session.title}</span>
-                                <span className="block text-xs text-on-surface-variant font-normal mt-0.5 line-clamp-1">{session.problem}</span>
+                                <span className="line-clamp-1 block">
+                                  <MathText>{session.title}</MathText>
+                                </span>
+                                <span className="block text-xs text-on-surface-variant font-normal mt-0.5 line-clamp-1">
+                                  <MathText>{session.problem}</MathText>
+                                </span>
                               </td>
                               <td className="px-8 py-6">
                                 <span className={`px-3 py-1 ${sc.bg} ${sc.text} text-[10px] rounded-full`}>{session.subject}</span>
