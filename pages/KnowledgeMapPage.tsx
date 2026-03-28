@@ -51,6 +51,10 @@ interface PointPosition {
   y: number;
 }
 
+interface SubjectPoint extends PointPosition {
+  id: string;
+}
+
 const MAP_WIDTH = 1000;
 const MAP_HEIGHT = 700;
 
@@ -82,6 +86,42 @@ function toMapY(percent: number): number {
   return (percent / 100) * MAP_HEIGHT;
 }
 
+function distance(a: PointPosition, b: PointPosition): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+const CONSTELLATION_TEMPLATE_POINTS: Array<PointPosition> = [
+  { x: 20, y: 28 },
+  { x: 30, y: 52 },
+  { x: 40, y: 35 },
+  { x: 58, y: 28 },
+  { x: 76, y: 40 },
+  { x: 54, y: 62 },
+  { x: 72, y: 74 },
+  { x: 24, y: 70 },
+  { x: 42, y: 18 },
+  { x: 64, y: 16 },
+  { x: 84, y: 58 },
+  { x: 14, y: 50 },
+  { x: 34, y: 80 },
+  { x: 50, y: 82 },
+  { x: 68, y: 54 },
+  { x: 82, y: 24 },
+  { x: 48, y: 46 },
+  { x: 62, y: 70 },
+  { x: 28, y: 38 },
+  { x: 74, y: 26 },
+];
+
+const CONSTELLATION_TEMPLATE_EDGES: Array<[number, number]> = [
+  [0, 2], [0, 1], [2, 3], [3, 4], [2, 5], [1, 5], [5, 6], [4, 6],
+  [1, 7], [7, 11], [2, 8], [8, 9], [3, 9], [4, 10], [6, 10],
+  [5, 12], [12, 13], [6, 17], [14, 5], [14, 4], [15, 4], [16, 2],
+  [16, 5], [18, 0], [18, 2], [19, 3], [19, 15],
+];
+
 function formatDate(value: string | null): string {
   if (!value) return "-";
   try {
@@ -103,7 +143,9 @@ function parseBreakdownPayload(raw: string | null | undefined): StudyBreakdownPa
       parsed = JSON.parse(parsed);
     }
     if (!parsed || typeof parsed !== "object") return null;
-    return parsed as StudyBreakdownPayload;
+    const candidate = parsed as Partial<StudyBreakdownPayload>;
+    if (!Array.isArray(candidate.nodes)) return null;
+    return candidate as StudyBreakdownPayload;
   } catch {
     return null;
   }
@@ -259,39 +301,75 @@ export default function KnowledgeMapPage({
     [selectedSubjectId, subjectClusters]
   );
 
-  const subjectPositions = useMemo<Record<string, PointPosition>>(() => {
-    const entries: Record<string, PointPosition> = {};
+  const subjectPoints = useMemo<SubjectPoint[]>(() => {
     const total = subjectClusters.length;
-    if (total === 0) return entries;
+    if (total === 0) return [];
     if (total === 1) {
-      entries[subjectClusters[0].id] = { x: 50, y: 50 };
-      return entries;
+      return [{ id: subjectClusters[0].id, x: 50, y: 50 }];
     }
 
-    const innerCount = Math.min(total, 8);
-    const outerCount = Math.max(0, total - innerCount);
+    const points: SubjectPoint[] = [];
+    const templateCount = CONSTELLATION_TEMPLATE_POINTS.length;
 
-    for (let i = 0; i < total; i += 1) {
-      const isInner = i < innerCount;
-      const ringSize = isInner ? innerCount : outerCount;
-      const angleIndex = isInner ? i : i - innerCount;
-      const angle = -Math.PI / 2 + ((Math.PI * 2) / Math.max(1, ringSize)) * angleIndex;
-      const radius = isInner ? 24 : 37;
-      const x = clampPercent(50 + Math.cos(angle) * radius);
-      const y = clampPercent(50 + Math.sin(angle) * radius);
-      entries[subjectClusters[i].id] = { x, y };
+    for (let i = 0; i < Math.min(total, templateCount); i += 1) {
+      points.push({
+        id: subjectClusters[i].id,
+        x: clampPercent(CONSTELLATION_TEMPLATE_POINTS[i].x),
+        y: clampPercent(CONSTELLATION_TEMPLATE_POINTS[i].y),
+      });
     }
 
-    return entries;
+    for (let i = templateCount; i < total; i += 1) {
+      const step = i - templateCount;
+      const angle = step * 2.399963229728653; // golden angle
+      const ring = 28 + (step % 6) * 4;
+      const x = clampPercent(50 + Math.cos(angle) * ring);
+      const y = clampPercent(50 + Math.sin(angle) * (ring * 0.74));
+      points.push({ id: subjectClusters[i].id, x, y });
+    }
+
+    return points;
   }, [subjectClusters]);
+
+  const subjectPositions = useMemo<Record<string, PointPosition>>(
+    () => Object.fromEntries(subjectPoints.map((point) => [point.id, { x: point.x, y: point.y }])),
+    [subjectPoints]
+  );
 
   const subjectLinks = useMemo(() => {
-    if (subjectClusters.length <= 1) return [];
-    return subjectClusters.map((cluster, index) => ({
-      from: cluster.id,
-      to: subjectClusters[(index + 1) % subjectClusters.length].id,
-    }));
-  }, [subjectClusters]);
+    if (subjectPoints.length <= 1) return [];
+
+    const links = new Set<string>();
+    for (const [fromIndex, toIndex] of CONSTELLATION_TEMPLATE_EDGES) {
+      if (fromIndex >= subjectPoints.length || toIndex >= subjectPoints.length) continue;
+      const from = subjectPoints[fromIndex].id;
+      const to = subjectPoints[toIndex].id;
+      const key = [from, to].sort().join("|");
+      links.add(key);
+    }
+
+    // Only add nearest-neighbor fallback edges for nodes beyond the curated
+    // template so the base shape keeps the intended irregular geometry.
+    const templateCount = CONSTELLATION_TEMPLATE_POINTS.length;
+    for (let i = templateCount; i < subjectPoints.length; i += 1) {
+      const source = subjectPoints[i];
+      const nearest = subjectPoints
+        .filter((point) => point.id !== source.id)
+        .map((point) => ({ id: point.id, d: distance(source, point) }))
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 2);
+
+      for (const target of nearest) {
+        const key = [source.id, target.id].sort().join("|");
+        links.add(key);
+      }
+    }
+
+    return Array.from(links).map((key) => {
+      const [from, to] = key.split("|");
+      return { from, to };
+    });
+  }, [subjectPoints]);
 
   const expandedTitleNodes = useMemo(() => {
     if (!selectedSubject) return [];
@@ -420,8 +498,9 @@ export default function KnowledgeMapPage({
                           y1={toMapY(from.y)}
                           x2={toMapX(to.x)}
                           y2={toMapY(to.y)}
-                          stroke="rgba(161, 250, 255, 0.18)"
-                          strokeWidth={1.5}
+                          stroke="rgba(161, 250, 255, 0.28)"
+                          strokeWidth={0.9}
+                          strokeLinecap="round"
                         />
                       );
                     })}
@@ -448,8 +527,8 @@ export default function KnowledgeMapPage({
                             opacity: 0,
                             transition: { duration: 0.2, ease: "easeInOut" },
                           }}
-                          stroke="rgba(255, 81, 250, 0.5)"
-                          strokeWidth={1.4}
+                          stroke="rgba(255, 81, 250, 0.42)"
+                          strokeWidth={0.95}
                           strokeLinecap="round"
                         />
                       ))}
@@ -470,24 +549,43 @@ export default function KnowledgeMapPage({
                       className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
                       style={{ left: `${position.x}%`, top: `${position.y}%` }}
                     >
-                      <div
-                        className={[
-                          "mx-auto h-3 w-3 rounded-full transition-all",
-                          active
-                            ? "bg-secondary shadow-[0_0_18px_rgba(255,81,250,0.8)]"
-                            : "bg-primary shadow-[0_0_14px_rgba(161,250,255,0.55)]",
-                        ].join(" ")}
-                      />
-                      <div
-                        className={[
-                          "mt-2 w-[148px] rounded-2xl border px-3 py-2 backdrop-blur-md transition-all",
-                          active
-                            ? "border-secondary/40 bg-surface-container-highest/85"
-                            : "border-outline-variant/25 bg-surface-container-high/70 hover:border-primary/40",
-                        ].join(" ")}
-                      >
-                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-on-surface">{cluster.name}</p>
-                        <p className="mt-1 text-[10px] text-primary">{cluster.sessionTitles.length} title{cluster.sessionTitles.length > 1 ? "s" : ""}</p>
+                      <div className="relative">
+                        <div className="relative mx-auto flex items-center justify-center">
+                          <motion.span
+                            aria-hidden
+                            className={[
+                              "absolute rounded-full blur-md",
+                              active ? "h-8 w-8 bg-secondary/28" : "h-6 w-6 bg-primary/22",
+                            ].join(" ")}
+                            animate={active ? { scale: [1, 1.15, 1], opacity: [0.45, 0.62, 0.45] } : { scale: 1, opacity: 0.4 }}
+                            transition={active ? { duration: 1.9, ease: "easeInOut", repeat: Infinity } : { duration: 0.25 }}
+                          />
+                          <motion.span
+                            aria-hidden
+                            className={[
+                              "absolute rounded-full",
+                              active ? "h-7 w-7 bg-secondary/14" : "h-6 w-6 bg-primary/10",
+                            ].join(" ")}
+                            animate={active ? { scale: [1, 1.08, 1], opacity: [0.4, 0.55, 0.4] } : { scale: 1, opacity: 0.35 }}
+                            transition={active ? { duration: 2.1, ease: "easeInOut", repeat: Infinity } : { duration: 0.25 }}
+                          />
+                          <div
+                            className={[
+                              "relative h-3 w-3 rounded-full transition-all",
+                              active
+                                ? "bg-secondary shadow-[0_0_18px_rgba(255,81,250,0.8)]"
+                                : "bg-primary shadow-[0_0_14px_rgba(161,250,255,0.55)]",
+                            ].join(" ")}
+                          />
+                        </div>
+                        <div
+                          className={[
+                            "absolute left-1/2 top-full mt-2 w-[148px] -translate-x-1/2 rounded-2xl px-3 py-2 transition-all",
+                            active ? "text-secondary" : "text-on-surface",
+                          ].join(" ")}
+                        >
+                          <p className="text-[11px] font-bold uppercase tracking-[0.14em]">{cluster.name}</p>
+                        </div>
                       </div>
                     </button>
                   );
@@ -523,10 +621,21 @@ export default function KnowledgeMapPage({
                         transition: { duration: 0.2, ease: "easeInOut" },
                       }}
                     >
-                      <div className="w-[120px] rounded-xl border border-secondary/40 bg-surface-container-highest/85 px-2.5 py-2 text-center shadow-[0_12px_24px_rgba(0,0,0,0.35)] transition-colors hover:bg-surface-container-highest">
-                        <p className="truncate text-[10px] font-semibold text-on-surface" title={node.session.title}>
-                          {node.session.title}
-                        </p>
+                      <div className="relative">
+                        <div className="relative mx-auto flex items-center justify-center">
+                          <span
+                            aria-hidden
+                            className="absolute h-5 w-5 rounded-full bg-secondary/14"
+                          />
+                          <div
+                            className="relative h-2.5 w-2.5 rounded-full bg-secondary shadow-[0_0_10px_rgba(255,81,250,0.6)]"
+                          />
+                        </div>
+                        <div className="absolute left-1/2 top-full mt-2 w-[120px] -translate-x-1/2 rounded-xl px-2.5 py-2 text-center shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
+                          <p className="truncate text-[10px] font-semibold text-on-surface" title={node.session.title}>
+                            {node.session.title}
+                          </p>
+                        </div>
                       </div>
                     </motion.button>
                   ))}
@@ -565,7 +674,7 @@ export default function KnowledgeMapPage({
                               type="button"
                               onClick={() => void handleOpenSessionInStudy(session.id)}
                               disabled={openingSessionId === session.id}
-                              className="block w-full rounded-xl bg-surface-container-high p-3 text-left transition-colors hover:bg-surface-container disabled:cursor-wait disabled:opacity-60"
+                              className="block w-full rounded-xl p-3 text-left transition-colors hover:bg-surface-container-high disabled:cursor-wait disabled:opacity-60"
                             >
                               <p className="text-sm font-medium text-on-surface">{session.title}</p>
                               <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-on-surface-variant">

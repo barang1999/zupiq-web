@@ -252,6 +252,21 @@ interface StoredViewportState {
   anchorY?: number;
 }
 
+function sanitizeBreakdownPayload(raw: ProblemBreakdown | null | undefined): ProblemBreakdown {
+  const fallbackInsights: NodeInsight = { simpleBreakdown: '', keyFormula: '' };
+  const safeNodes = Array.isArray(raw?.nodes) ? raw!.nodes : [];
+  return {
+    id: raw?.id,
+    title: (raw?.title ?? 'Untitled Session').toString(),
+    subject: (raw?.subject ?? 'General').toString(),
+    nodes: safeNodes,
+    insights: raw?.insights ?? fallbackInsights,
+    nodeInsights: raw?.nodeInsights ?? {},
+    nodeConversations: raw?.nodeConversations ?? {},
+    nodePositions: raw?.nodePositions ?? {},
+  };
+}
+
 function debugClip(text: string, max = 120): string {
   const t = (text ?? '').replace(/\s+/g, ' ').trim();
   if (t.length <= max) return t;
@@ -1129,36 +1144,37 @@ export function StudySpacePage({
   useEffect(() => { sessionIdRef.current      = sessionId; },      [sessionId]);
 
   const hydrateBreakdown = useCallback((bd: ProblemBreakdown) => {
-    const brs = bd.nodes.filter((n: BreakdownNode) => n.type === 'branch').length;
-    const lvs = bd.nodes.filter((n: BreakdownNode) => n.type === 'leaf').length;
+    const normalized = sanitizeBreakdownPayload(bd);
+    const brs = normalized.nodes.filter((n: BreakdownNode) => n.type === 'branch').length;
+    const lvs = normalized.nodes.filter((n: BreakdownNode) => n.type === 'leaf').length;
     const w = Math.max(1000, (brs + 1) * 320);
     const h = lvs > 0 ? 700 : 540;
-    const hasSavedPositions = Object.keys(bd.nodePositions ?? {}).length > 0;
+    const hasSavedPositions = Object.keys(normalized.nodePositions ?? {}).length > 0;
     const restoredPositions = hasSavedPositions
-      ? bd.nodePositions!
-      : resolveCollisions(computeInitialPositions(bd.nodes, w, h));
-    setBreakdown(bd);
-    setSessionId(bd.id ?? null);
+      ? normalized.nodePositions!
+      : resolveCollisions(computeInitialPositions(normalized.nodes, w, h));
+    setBreakdown(normalized);
+    setSessionId(normalized.id ?? null);
     setSessionSubjectId(null);
-    setNodeInsights(bd.nodeInsights ?? {});
-    setNodeConversations(bd.nodeConversations ?? {});
+    setNodeInsights(normalized.nodeInsights ?? {});
+    setNodeConversations(normalized.nodeConversations ?? {});
     setPositions(restoredPositions);
-    const rootNode = bd.nodes.find((n: BreakdownNode) => n.type === 'root') ?? null;
+    const rootNode = normalized.nodes.find((n: BreakdownNode) => n.type === 'root') ?? null;
     setSelectedNode(rootNode);
     setIsInsightPanelOpen(!!rootNode);
     setShowInput(false);
     setComposerInput('');
-    if (bd.id) localStorage.setItem('zupiq_lastSessionId', bd.id);
+    if (normalized.id) localStorage.setItem('zupiq_lastSessionId', normalized.id);
     debugStudy('hydrate:breakdown', {
       source: 'session-or-initial',
-      sessionId: bd.id ?? null,
-      nodes: bd.nodes.length,
+      sessionId: normalized.id ?? null,
+      nodes: normalized.nodes.length,
       hasSavedPositions,
     });
   }, []);
 
   const hydrateWorkspaceSnapshot = useCallback((snapshot: StoredWorkspaceSnapshot) => {
-    const bd = snapshot.breakdown;
+    const bd = sanitizeBreakdownPayload(snapshot.breakdown);
     setBreakdown(bd);
     setSessionId(snapshot.sessionId ?? bd.id ?? null);
     setNodeInsights(snapshot.nodeInsights ?? {});
@@ -1700,24 +1716,25 @@ export function StudySpacePage({
       } catch {
         // Session save is non-blocking; user can still continue
       }
+      const normalized = sanitizeBreakdownPayload(bd);
       // Compute initial layout right here — avoids useEffect re-triggering on expansions
-      const brs = bd.nodes.filter(n => n.type === 'branch').length;
-      const lvs = bd.nodes.filter(n => n.type === 'leaf').length;
+      const brs = normalized.nodes.filter(n => n.type === 'branch').length;
+      const lvs = normalized.nodes.filter(n => n.type === 'leaf').length;
       const w = Math.max(1000, (brs + 1) * 320);
       const h = lvs > 0 ? 700 : 540;
-      const initial = computeInitialPositions(bd.nodes, w, h);
+      const initial = computeInitialPositions(normalized.nodes, w, h);
       setBreakdown({
-        ...bd,
+        ...normalized,
         id: newSessionId ?? undefined,
-        nodeInsights: bd.nodeInsights ?? {},
-        nodeConversations: bd.nodeConversations ?? {},
+        nodeInsights: normalized.nodeInsights ?? {},
+        nodeConversations: normalized.nodeConversations ?? {},
       });
       setSessionId(newSessionId);
       setSessionSubjectId(newSessionSubjectId);
-      setNodeInsights(bd.nodeInsights ?? {});
-      setNodeConversations(bd.nodeConversations ?? {});
+      setNodeInsights(normalized.nodeInsights ?? {});
+      setNodeConversations(normalized.nodeConversations ?? {});
       setPositions(resolveCollisions(initial));
-      const rootNode = bd.nodes.find(n => n.type === 'root') ?? null;
+      const rootNode = normalized.nodes.find(n => n.type === 'root') ?? null;
       setSelectedNode(rootNode);
       setIsInsightPanelOpen(!!rootNode);
       setShowInput(false);
