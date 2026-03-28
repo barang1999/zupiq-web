@@ -1,6 +1,45 @@
 // ─── API client (fetch-based, no extra dependencies) ─────────────────────────
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? "";
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function resolveBaseUrl(): string {
+  const rawBase = (import.meta.env.VITE_API_URL ?? "").trim();
+  if (!rawBase) return "";
+
+  if (typeof window === "undefined") {
+    return rawBase.replace(/\/+$/, "");
+  }
+
+  try {
+    const resolved = new URL(rawBase, window.location.origin);
+    // Prevent mixed-content failures in production when API URL is configured
+    // as HTTP while the web app is served over HTTPS.
+    if (
+      window.location.protocol === "https:"
+      && resolved.protocol === "http:"
+      && !isLoopbackHost(resolved.hostname)
+    ) {
+      resolved.protocol = "https:";
+    }
+    return resolved.toString().replace(/\/+$/, "");
+  } catch {
+    return rawBase.replace(/\/+$/, "");
+  }
+}
+
+function buildRequestUrl(endpoint: string): string {
+  if (!BASE_URL) return endpoint;
+  try {
+    const normalizedBase = BASE_URL.endsWith("/") ? BASE_URL : `${BASE_URL}/`;
+    return new URL(endpoint, normalizedBase).toString();
+  } catch {
+    return `${BASE_URL}${endpoint}`;
+  }
+}
+
+const BASE_URL = resolveBaseUrl();
 
 // ─── Token storage ────────────────────────────────────────────────────────────
 
@@ -62,8 +101,9 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   }
 
   let response: Response;
+  const requestUrl = buildRequestUrl(endpoint);
   try {
-    response = await fetch(`${BASE_URL}${endpoint}`, {
+    response = await fetch(requestUrl, {
       ...fetchOptions,
       headers,
     });
@@ -73,7 +113,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     throw new ApiError(0, message, {
       kind: "network_error",
       endpoint,
-      url: `${BASE_URL}${endpoint}`,
+      url: requestUrl,
       method,
       baseUrl: BASE_URL,
       errorName: err instanceof Error ? err.name : typeof err,
@@ -90,7 +130,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     if (refreshed) {
       // Retry original request with new token
       headers["Authorization"] = `Bearer ${tokenStorage.getAccess()}`;
-      const retryResponse = await fetch(`${BASE_URL}${endpoint}`, {
+      const retryResponse = await fetch(requestUrl, {
         ...fetchOptions,
         headers,
       });
