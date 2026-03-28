@@ -347,11 +347,47 @@ function buildCopyMathPayload(raw: string): string {
   return normalizeCopiedLatexExpression(raw);
 }
 
+function normalizeMathPreviewText(raw: string): string {
+  if (!raw) return '';
+  return normalizeMathDelimiters(raw)
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\$\$/g, '$')
+    .replace(/[ \t]*\n[ \t]*/g, '\n')
+    .trim();
+}
+
+function splitMathPreviewLines(raw: string): string[] {
+  const normalized = normalizeMathPreviewText(raw);
+  if (!normalized) return [];
+  const baseLines = normalized.includes('\n')
+    ? normalized.split('\n').map((line) => line.trim()).filter(Boolean)
+    : [normalized];
+  const extracted: string[] = [];
+
+  baseLines.forEach((line) => {
+    const tokenLines = line.match(/\$[^$\n]+?\$(?:\s*\(\d+\))?/g) ?? [];
+    if (tokenLines.length > 0) {
+      extracted.push(...tokenLines.map((token) => token.trim()).filter(Boolean));
+      const trailing = line
+        .replace(/\$[^$\n]+?\$(?:\s*\(\d+\))?/g, ' ')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+      if (trailing) extracted.push(trailing);
+      return;
+    }
+    extracted.push(line);
+  });
+
+  return extracted.filter(Boolean);
+}
+
 function wrapInlineMathCandidates(text: string): string {
+  const mathDebug = isPageMathDebugEnabled();
   const mathDelimited = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
   const segments = text.split(mathDelimited);
 
-  return segments.map((segment) => {
+  const result = segments.map((segment) => {
     if (!segment) return segment;
     if (segment.startsWith('$')) return segment;
 
@@ -359,18 +395,40 @@ function wrapInlineMathCandidates(text: string): string {
 
     // e.g. 20 \text{ m/s}, g = 9.8 \text{ m/s}^2
     next = next.replace(
-      /(?:\b[A-Za-z]\s*=\s*)?\d+(?:\.\d+)?\s*(?:\\(?:text|mathrm)\{[^{}]+\}|\\(?:frac|sqrt)\{[^{}]+\}(?:\{[^{}]+\})?|\\(?:times|div|cdot|pm|approx|leq|geq|neq|circ|degree))(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+|_\{[^{}]+\}|_[0-9A-Za-z]+))*/g,
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)?\s*=\s*)?\d+(?:\.\d+)?\s*(?:\\(?:text|mathrm)\{[^{}]+\}|\\(?:frac|sqrt)\{[^{}]+\}(?:\{[^{}]+\})?|\\(?:times|div|cdot|pm|approx|leq|geq|neq|circ|degree))(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+|_\{[^{}]+\}|_[0-9A-Za-z]+))*/g,
       (match) => `$${match.trim()}$`
     );
 
     // e.g. g = 9.8 m/s^2
     next = next.replace(
-      /\b[A-Za-z]\s*=\s*\d+(?:\.\d+)?\s*[A-Za-z]+(?:\/[A-Za-z]+)+(?:\^\d+)?\b/g,
+      /\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)?\s*=\s*\d+(?:\.\d+)?\s*[A-Za-z]+(?:\/[A-Za-z]+)+(?:\^\d+)?\b/g,
       (match) => `$${match.trim()}$`
+    );
+
+    // e.g. F_x = F \cos\theta, a = b \times c
+    // Matches optional assignment, followed by optional terms, and at least one LaTeX command.
+    next = next.replace(
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷]*\\[a-zA-Z]+(?:\s*\{[^{}]*\})?(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+|_\{[^{}]+\}|_[0-9A-Za-z]+))*/g,
+      (match) => {
+        const trimmed = match.trim();
+        // If it looks like a legitimate math fragment (has a command and some structure)
+        if (trimmed.length > 2 && /\\[a-zA-Z]+/.test(trimmed)) {
+          return `$${trimmed}$`;
+        }
+        return match;
+      }
     );
 
     return next;
   }).join('');
+
+  if (mathDebug && result !== text) {
+    console.debug('[StudySpace math debug] wrapInlineMathCandidates changed text', {
+      original: text,
+      wrapped: result
+    });
+  }
+  return result;
 }
 
 function looksLikeStandaloneMathLine(line: string): boolean {
@@ -495,11 +553,24 @@ function resolveAttachmentErrorMessage(
   }
 
   if (err instanceof ApiError) {
-    if (err.status > 0) {
-      return `Core issue: server returned HTTP ${err.status} (stage: ${stageLabel}).`;
+    const apiData = (err.data ?? {}) as Record<string, unknown>;
+    const backendMessage = [
+      err.message,
+      typeof apiData.error === 'string' ? apiData.error : '',
+    ].join(' ').toLowerCase();
+    if (
+      err.status === 403 &&
+      (backendMessage.includes('daily deep dive token limit reached')
+        || backendMessage.includes('token limit reached'))
+    ) {
+      return 'You have reached today’s Deep Dive token limit. Your balance resets tomorrow, or you can upgrade your plan for a higher limit.';
     }
 
-    const data = (err.data ?? {}) as Record<string, unknown>;
+    if (err.status > 0) {
+      return 'We could not process this request right now. Please try again in a moment.';
+    }
+
+    const data = apiData;
     const method = typeof data.method === 'string' ? data.method : 'REQUEST';
     const endpoint = typeof data.endpoint === 'string' ? data.endpoint : '';
     if (/failed to fetch/i.test(raw) || /networkerror/i.test(raw) || /load failed/i.test(raw)) {
@@ -521,6 +592,26 @@ function resolveAttachmentErrorMessage(
     return `Core issue: mixed-content blocked (stage: ${stageLabel}).`;
   }
   return `Core issue: ${raw || 'unknown error'} (stage: ${stageLabel}, trace: ${context.traceId}).`;
+}
+
+function resolveQuotaAwareErrorMessage(err: unknown, fallback: string): string {
+  if (!(err instanceof ApiError)) return err instanceof Error ? (err.message || fallback) : fallback;
+
+  const data = (err.data ?? {}) as Record<string, unknown>;
+  const backendMessage = [
+    err.message,
+    typeof data.error === 'string' ? data.error : '',
+  ].join(' ').toLowerCase();
+
+  if (
+    err.status === 403 &&
+    (backendMessage.includes('daily deep dive token limit reached')
+      || backendMessage.includes('token limit reached'))
+  ) {
+    return 'Daily Deep Dive token limit reached. Your balance resets tomorrow, or upgrade your plan for a higher quota.';
+  }
+
+  return err.message || fallback;
 }
 
 function nextAttachmentTraceId(): string {
@@ -1550,7 +1641,7 @@ export function StudySpacePage({
         nodes: bd.nodes.length,
       });
     } catch (err: any) {
-      setError(err.message ?? 'Failed to break down problem');
+      setError(resolveQuotaAwareErrorMessage(err, 'Failed to break down problem'));
       debugStudy('submit:error', { message: err?.message ?? 'unknown' });
     } finally {
       setLoading(false);
@@ -1956,7 +2047,7 @@ export function StudySpacePage({
       setBreakdown(prev => prev ? { ...prev, nodes: [...prev.nodes, ...newNodes] } : prev);
       setPositions(prev => resolveCollisions({ ...prev, ...newPositions }, node.id));
     } catch (err: any) {
-      setError(err.message ?? 'Expansion failed');
+      setError(resolveQuotaAwareErrorMessage(err, 'Expansion failed'));
     } finally {
       setExpandingId(null);
     }
@@ -2035,7 +2126,7 @@ export function StudySpacePage({
       setBranchActionPortal(null);
       showActionToast('Node regenerated.');
     } catch (err: any) {
-      setError(err?.message ?? 'Failed to regenerate node');
+      setError(resolveQuotaAwareErrorMessage(err, 'Failed to regenerate node'));
       showActionToast('Regenerate failed.');
     } finally {
       setBranchActionBusy(null);
@@ -2097,7 +2188,7 @@ export function StudySpacePage({
       setBranchActionPortal(null);
       showActionToast('Added to flashcards.');
     } catch (err: any) {
-      setError(err?.message ?? 'Failed to add flashcard');
+      setError(resolveQuotaAwareErrorMessage(err, 'Failed to add flashcard'));
       showActionToast('Add to flashcards failed.');
     } finally {
       setBranchActionBusy(null);
@@ -2281,7 +2372,7 @@ Do not repeat content already given.`;
     } catch (err: any) {
       console.error('Failed to generate deep dive response:', err);
       setComposerInput(question);
-      setComposerError(err?.message ?? 'Failed to generate deep dive response');
+      setComposerError(resolveQuotaAwareErrorMessage(err, 'Failed to generate deep dive response'));
     } finally {
       setComposerLoading(false);
     }
@@ -2299,6 +2390,16 @@ Do not repeat content already given.`;
   const activeBranchConversation = selectedNode
     ? (nodeConversations[selectedNode.id] ?? [])
     : [];
+  const selectedNodeKeyFormulaLines = useMemo(() => {
+    if (!selectedNode) return [];
+    const formula = nodeInsights[selectedNode.id]?.keyFormula ?? '';
+    return splitMathPreviewLines(formula);
+  }, [nodeInsights, selectedNode]);
+  const selectedNodeExpressionLines = useMemo(() => {
+    if (!selectedNode) return [];
+    const expression = selectedNode.mathContent || selectedNode.label || '';
+    return splitMathPreviewLines(expression);
+  }, [selectedNode]);
   useEffect(() => {
     if (!selectedNode) return;
     const insight = nodeInsights[selectedNode.id];
@@ -2696,6 +2797,7 @@ Do not repeat content already given.`;
                   if (!pos) return null;
                   const isSelected  = selectedNode?.id === node.id;
                   const isDragging  = draggingId === node.id;
+                  const nodeMathPreviewLines = splitMathPreviewLines(node.mathContent || (node.type === 'root' ? node.label : ''));
 
                   return (
                     <motion.div
@@ -2744,9 +2846,13 @@ Do not repeat content already given.`;
                             Primary Problem
                           </span>
                           <div className="bg-background/60 rounded-xl px-4 py-3 mb-3">
-                            <MathText math className="text-base text-on-surface leading-relaxed">
-                              {node.mathContent || node.label}
-                            </MathText>
+                            <div className="space-y-1.5">
+                              {nodeMathPreviewLines.map((line, idx) => (
+                                <MathText key={`root_${node.id}_${idx}`} className="text-base text-on-surface leading-relaxed whitespace-pre-wrap block">
+                                  {line}
+                                </MathText>
+                              ))}
+                            </div>
                           </div>
                           {node.tags && node.tags.length > 0 && (
                             <div className="flex gap-2 flex-wrap">
@@ -2779,9 +2885,13 @@ Do not repeat content already given.`;
                           </div>
                           {node.mathContent && (
                             <div className="bg-background/50 rounded-lg px-3 py-2">
-                              <MathText math className="text-xs text-primary leading-relaxed">
-                                {node.mathContent}
-                              </MathText>
+                              <div className="space-y-1.5">
+                                {nodeMathPreviewLines.map((line, idx) => (
+                                  <MathText key={`branch_${node.id}_${idx}`} className="text-xs text-primary leading-relaxed whitespace-pre-wrap block">
+                                    {line}
+                                  </MathText>
+                                ))}
+                              </div>
                             </div>
                           )}
                           {/* Expand button */}
@@ -2820,9 +2930,13 @@ Do not repeat content already given.`;
                             <span className="text-xs font-headline font-bold text-tertiary"><MathText>{node.label}</MathText></span>
                           </div>
                           {node.mathContent && (
-                            <MathText math className="text-[11px] text-on-surface-variant leading-relaxed block">
-                              {node.mathContent}
-                            </MathText>
+                            <div className="space-y-1">
+                              {nodeMathPreviewLines.map((line, idx) => (
+                                <MathText key={`leaf_${node.id}_${idx}`} className="text-[11px] text-on-surface-variant leading-relaxed whitespace-pre-wrap block">
+                                  {line}
+                                </MathText>
+                              ))}
+                            </div>
                           )}
                           {node.description && (
                             <p className="text-[10px] text-on-surface-variant mt-1.5 leading-relaxed"><MathText>{node.description}</MathText></p>
@@ -2934,9 +3048,13 @@ Do not repeat content already given.`;
                 {selectedNode.mathContent && (
                   <div className="bg-background/60 rounded-xl px-4 py-3 border border-outline-variant/20">
                     <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-2">Expression</span>
-                    <MathText math className="text-base text-primary leading-relaxed">
-                      {selectedNode.mathContent}
-                    </MathText>
+                    <div className="space-y-1.5">
+                      {selectedNodeExpressionLines.map((line, idx) => (
+                        <MathText key={`expr_${selectedNode.id}_${idx}`} className="text-base text-primary leading-relaxed whitespace-pre-wrap block">
+                          {line}
+                        </MathText>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -2954,11 +3072,15 @@ Do not repeat content already given.`;
                       </div>
                     ) : (
                       <div className="space-y-3 relative">
-                        {nodeInsights[selectedNode.id]?.keyFormula && (
+                        {selectedNodeKeyFormulaLines.length > 0 && (
                           <div className="bg-background/50 p-3 rounded-xl text-center">
-                            <MathText math className="text-sm text-primary">
-                              {nodeInsights[selectedNode.id].keyFormula}
-                            </MathText>
+                            <div className="space-y-1.5">
+                              {selectedNodeKeyFormulaLines.map((line, idx) => (
+                                <MathText key={`key_formula_${idx}`} className="text-sm text-primary whitespace-pre-wrap block">
+                                  {line}
+                                </MathText>
+                              ))}
+                            </div>
                           </div>
                         )}
                         <RichText className="text-on-surface leading-relaxed text-sm break-words [overflow-wrap:anywhere]">

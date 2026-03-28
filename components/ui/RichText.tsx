@@ -197,10 +197,11 @@ type InlineSegment =
   | { type: 'math'; value: string; display: boolean };
 
 function autoWrapInlineMathForRender(text: string): string {
+  const mathDebug = isMathDebugEnabled();
   const mathDelimited = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\])/g;
   const segments = text.split(mathDelimited);
 
-  return segments.map((segment) => {
+  const result = segments.map((segment) => {
     if (!segment) return segment;
     if (segment.startsWith('$') || segment.startsWith('\\(') || segment.startsWith('\\[')) return segment;
 
@@ -208,13 +209,13 @@ function autoWrapInlineMathForRender(text: string): string {
 
     // e.g. g = 9.8 \text{ m/s}^2
     next = next.replace(
-      /\b[A-Za-zα-ωΑ-Ω]\s*=\s*\d+(?:\.\d+)?\s*(?:\\(?:text|mathrm)\{[^{}]+\})(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+))?/g,
+      /\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)?\s*=\s*\d+(?:\.\d+)?\s*(?:\\(?:text|mathrm)\{[^{}]+\})(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+))?/g,
       (match) => `$${match.trim()}$`
     );
 
     // e.g. g = 9.8 m/s^2
     next = next.replace(
-      /\b[A-Za-zα-ωΑ-Ω]\s*=\s*\d+(?:\.\d+)?\s*[A-Za-z]+(?:\/[A-Za-z]+)+(?:\^\d+)?\b/g,
+      /\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)?\s*=\s*\d+(?:\.\d+)?\s*[A-Za-z]+(?:\/[A-Za-z]+)+(?:\^\d+)?\b/g,
       (match) => `$${match.trim()}$`
     );
 
@@ -224,8 +225,30 @@ function autoWrapInlineMathForRender(text: string): string {
       (match) => `$${match.trim()}$`
     );
 
+    // e.g. F_x = F \cos\theta, a = b \times c
+    // Matches optional assignment, followed by optional terms, and at least one LaTeX command.
+    next = next.replace(
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷]*\\[a-zA-Z]+(?:\s*\{[^{}]*\})?(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+|_\{[^{}]+\}|_[0-9A-Za-z]+))*/g,
+      (match) => {
+        const trimmed = match.trim();
+        // If it looks like a legitimate math fragment (has a command and some structure)
+        if (trimmed.length > 2 && /\\[a-zA-Z]+/.test(trimmed)) {
+          return `$${trimmed}$`;
+        }
+        return match;
+      }
+    );
+
     return next;
   }).join('');
+
+  if (mathDebug && result !== text) {
+    console.debug('[RichText debug] autoWrapInlineMathForRender changed text', {
+      original: text,
+      wrapped: result
+    });
+  }
+  return result;
 }
 
 function parseInline(text: string): InlineSegment[] {
