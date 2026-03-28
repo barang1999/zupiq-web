@@ -2742,9 +2742,9 @@ Do not repeat content already given.`;
 
           {/* Title bar (when breakdown loaded) */}
           {breakdown && !loading && (
-            <div className="px-3 sm:px-6 md:px-10 pt-2 sm:pt-4 md:pt-6 pb-0 shrink-0">
-              <span className="text-tertiary text-[10px] sm:text-xs font-bold tracking-[0.14em] sm:tracking-[0.2em] uppercase">Active Analysis</span>
-              <h1 className="font-headline text-base sm:text-2xl md:text-3xl font-bold text-on-surface mt-0.5 sm:mt-1 tracking-tight sm:tracking-tighter leading-snug">
+            <div className="px-2 sm:px-4 md:px-6 pt-1.5 sm:pt-2 md:pt-2.5 pb-0 shrink-0">
+              <span className="text-tertiary text-[9px] sm:text-[10px] font-bold tracking-[0.1em] sm:tracking-[0.14em] uppercase">Active Analysis</span>
+              <h1 className="font-headline text-sm sm:text-lg md:text-xl font-bold text-on-surface mt-0 sm:mt-0.5 tracking-tight leading-snug">
                 {breakdown.title.split(' ').slice(0, -1).join(' ')}{' '}
                 <span className="text-secondary">{breakdown.title.split(' ').slice(-1)}</span>
               </h1>
