@@ -248,7 +248,8 @@ function debugClip(text: string, max = 120): string {
 function isPageMathDebugEnabled(): boolean {
   if (typeof window === 'undefined') return false;
   const flag = (window as unknown as { __ZUPIQ_PAGE_DEBUG__?: boolean }).__ZUPIQ_PAGE_DEBUG__;
-  return flag !== false;
+  if (typeof flag === 'boolean') return flag;
+  return new URLSearchParams(window.location.search).get('debugPageMath') === '1';
 }
 
 function toCodePoints(input: string): string[] {
@@ -257,12 +258,12 @@ function toCodePoints(input: string): string[] {
 
 function extractInlineMathTokens(text: string): string[] {
   if (!text) return [];
-  return text.match(/\$[^$\n]+\$/g) ?? [];
+  return text.match(/\$[\s\S]+?\$/g) ?? [];
 }
 
 function extractEscapedInlineMathTokens(text: string): string[] {
   if (!text) return [];
-  return text.match(/\\\$[^$\n]+\\\$/g) ?? [];
+  return text.match(/\\\$[\s\S]+?\\\$/g) ?? [];
 }
 
 function extractTemperaturePatterns(text: string): string[] {
@@ -351,13 +352,33 @@ function buildCopyMathPayload(raw: string): string {
   return normalizeCopiedLatexExpression(raw);
 }
 
+function expandMultilineInlineMathPreview(raw: string): string {
+  return (raw ?? '').replace(/\$([\s\S]+?)\$/g, (_match, inner: string) => {
+    const normalizedInner = (inner ?? '')
+      .replace(/\\+n(?![a-zA-Z])/g, '\n')
+      .replace(/\r\n?/g, '\n')
+      .trim();
+
+    if (!normalizedInner) return '$$';
+    if (!normalizedInner.includes('\n')) return `$${normalizedInner}$`;
+
+    const lines = normalizedInner
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length <= 1) return `$${normalizedInner}$`;
+
+    return lines.map((line) => `$${line}$`).join('\n');
+  });
+}
+
 function normalizeMathPreviewText(raw: string): string {
   if (!raw) return '';
-  return normalizeMathDelimiters(raw)
+  return normalizeMathDelimiters(expandMultilineInlineMathPreview(raw))
     // Handle LaTeX line-break command explicitly first.
     .replace(/\\newline\b/g, '\n')
-    // Convert escaped "\n" only when it's a standalone escape, not part of commands.
-    .replace(/\\n(?![a-zA-Z])/g, '\n')
+    // Convert escaped "\n" (including over-escaped variants) when standalone.
+    .replace(/\\+n(?![a-zA-Z])/g, '\n')
     // Heal legacy malformed text produced by older normalization ("\newline" -> "ewline").
     .replace(/(^|[ \t])ewline(?=\s+[\u1780-\u17FFA-Za-z])/g, '$1\n')
     .replace(/\r\n?/g, '\n')

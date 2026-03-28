@@ -16,14 +16,16 @@ interface Props {
 export function RichText({ children, className }: Props) {
   if (!children) return null;
   const cleaned = clean(children);
-  const blocks = parseBlocks(cleaned);
+  const normalizedMathBlocks = normalizeMultilineInlineMathBlocks(cleaned);
+  const blocks = parseBlocks(normalizedMathBlocks);
 
   // Optional debug: enable manually with `window.__ZUPIQ_RICHTEXT_DEBUG__ = true`.
   const shouldDebug = isRichTextDebugEnabled();
-  if (shouldDebug && (cleaned !== children || /(\$[^$\n]+\$\s*\*:)|\\frac|\\\$|\\[a-zA-Z]+/.test(children))) {
+  if (shouldDebug && (normalizedMathBlocks !== children || /(\$[\s\S]+?\$\s*\*:)|\\frac|\\\$|\\[a-zA-Z]+/.test(children))) {
     console.log('[RichText debug] raw->cleaned->blocks', {
       raw: children,
       cleaned,
+      normalizedMathBlocks,
       blocks,
     });
   }
@@ -88,6 +90,12 @@ function normalizeLatexInput(src: string): string {
   // Normalize only command-style sequences to avoid touching intended plain backslashes.
   return src
     .replace(/\\{2,}(?=[A-Za-z])/g, '\\')
+    // Fix common OCR/model math-token merge: ln\left(...) -> \ln\left(...).
+    .replace(/\bln\\left\b/g, '\\ln\\left')
+    // Normalize escaped control-sequence artifacts produced by OCR/model output.
+    .replace(/\\+n(?![a-zA-Z])/g, '\n')
+    .replace(/\\+r(?![a-zA-Z])/g, ' ')
+    .replace(/\\+t(?![a-zA-Z])/g, ' ')
     .replace(/\\\$/g, '$');
 }
 
@@ -198,7 +206,7 @@ type InlineSegment =
 
 function autoWrapInlineMathForRender(text: string): string {
   const mathDebug = isMathDebugEnabled();
-  const mathDelimited = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\])/g;
+  const mathDelimited = /(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\])/g;
   const segments = text.split(mathDelimited);
 
   const result = segments.map((segment) => {
@@ -254,7 +262,7 @@ function autoWrapInlineMathForRender(text: string): string {
 function parseInline(text: string): InlineSegment[] {
   const segments: InlineSegment[] = [];
   // Order matters: $$, $, **, *, bare LaTeX
-  const regex = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]|\*\*(.+?)\*\*|\*([^*\n]+?)\*|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|\\[a-zA-Z]+(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
+  const regex = /\$\$([\s\S]+?)\$\$|\$([\s\S]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]|\*\*(.+?)\*\*|\*([^*\n]+?)\*|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|\\[a-zA-Z]+(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
@@ -287,6 +295,26 @@ function parseInline(text: string): InlineSegment[] {
   }
 
   return segments;
+}
+
+function normalizeMultilineInlineMathBlocks(text: string): string {
+  return (text ?? '').replace(/\$([\s\S]+?)\$/g, (_match, inner: string) => {
+    const innerNormalized = (inner ?? '')
+      .replace(/\\+n(?![a-zA-Z])/g, '\n')
+      .replace(/\r\n?/g, '\n')
+      .trim();
+
+    if (!innerNormalized) return '$$';
+    if (!innerNormalized.includes('\n')) return `$${innerNormalized}$`;
+
+    const lines = innerNormalized
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length <= 1) return `$${innerNormalized}$`;
+
+    return lines.map((line) => `$$${line}$$`).join('\n');
+  });
 }
 
 /** Remove lone * or # or $ characters that aren't part of markdown/math syntax */
@@ -418,7 +446,10 @@ function latexToPlainText(src: string): string {
 }
 
 function renderKaTeX(src: string, displayMode: boolean): string {
-  const normalized = normalizeLatexInput(src);
+  const normalized = normalizeLatexInput(src)
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]*\n[ \t]*/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ');
   const trimmed = normalized.trim();
   const mathDebug = isMathDebugEnabled();
   if (mathDebug && (/\\circ|°|\^|_/.test(trimmed) || /\\[a-zA-Z]+/.test(trimmed))) {

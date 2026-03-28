@@ -17,7 +17,7 @@ interface Props {
  */
 export function MathText({ children, math = false, className }: Props) {
   if (!children) return null;
-  const normalizedInput = autoWrapInlineMathForRender(children);
+  const normalizedInput = autoWrapInlineMathForRender(normalizeMultilineInlineMathBlocks(children));
 
   // Some model outputs mix narrative text with inline $...$ math even in "math" fields.
   // In that case, use mixed rendering instead of forcing one KaTeX block.
@@ -99,6 +99,12 @@ function normalizeLatexInput(src: string): string {
   // Normalize only command-style sequences to avoid touching intended plain backslashes.
   return src
     .replace(/\\{2,}(?=[A-Za-z])/g, '\\')
+    // Fix common OCR/model math-token merge: ln\left(...) -> \ln\left(...).
+    .replace(/\bln\\left\b/g, '\\ln\\left')
+    // Normalize escaped control-sequence artifacts produced by OCR/model output.
+    .replace(/\\+n(?![a-zA-Z])/g, '\n')
+    .replace(/\\+r(?![a-zA-Z])/g, ' ')
+    .replace(/\\+t(?![a-zA-Z])/g, ' ')
     .replace(/\\\$/g, '$');
 }
 
@@ -138,7 +144,10 @@ function latexToPlainText(src: string): string {
 }
 
 function renderKaTeX(src: string, displayMode: boolean): string {
-  const normalized = normalizeLatexInput(src);
+  const normalized = normalizeLatexInput(src)
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]*\n[ \t]*/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ');
   const trimmed = normalized.trim();
   const mathDebug = isMathDebugEnabled();
   if (mathDebug && (/\\circ|°|\^|_/.test(trimmed) || /\\[a-zA-Z]+/.test(trimmed))) {
@@ -232,9 +241,29 @@ function isLikelyNarrativeMathWithoutDelimiters(s: string): boolean {
   return proseWords.length >= 3;
 }
 
+function normalizeMultilineInlineMathBlocks(text: string): string {
+  return (text ?? '').replace(/\$([\s\S]+?)\$/g, (_match, inner: string) => {
+    const innerNormalized = (inner ?? '')
+      .replace(/\\+n(?![a-zA-Z])/g, '\n')
+      .replace(/\r\n?/g, '\n')
+      .trim();
+
+    if (!innerNormalized) return '$$';
+    if (!innerNormalized.includes('\n')) return `$${innerNormalized}$`;
+
+    const lines = innerNormalized
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length <= 1) return `$${innerNormalized}$`;
+
+    return lines.map((line) => `$$${line}$$`).join('\n');
+  });
+}
+
 function autoWrapInlineMathForRender(text: string): string {
   const mathDebug = isMathDebugEnabled();
-  const mathDelimited = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\])/g;
+  const mathDelimited = /(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\])/g;
   const segments = text.split(mathDelimited);
 
   const result = segments.map((segment) => {
@@ -292,7 +321,7 @@ function splitMathSegments(text: string): Segment[] {
   const mathDebug = isMathDebugEnabled();
   // Match $$...$$ / \[...\] first (display), then $...$ / \(...\) (inline), 
   // then bare LaTeX commands (consistent with RichText)
-  const regex = /\$\$([\s\S]+?)\$\$|\$([^$\n]+?)\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|\\[a-zA-Z]+(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
+  const regex = /\$\$([\s\S]+?)\$\$|\$([\s\S]+?)\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|\\[a-zA-Z]+(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
