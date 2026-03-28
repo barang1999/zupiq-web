@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Brain,
@@ -165,11 +165,13 @@ export default function KnowledgeMapPage({
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [sessions, setSessions] = useState<StudySessionSummary[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
+  const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 640 : false));
   const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
+  const subjectModalRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 640);
@@ -289,12 +291,28 @@ export default function KnowledgeMapPage({
   useEffect(() => {
     if (!subjectClusters.length) {
       setSelectedSubjectId("");
+      setIsSubjectModalOpen(false);
       return;
     }
     if (selectedSubjectId && !subjectClusters.some((cluster) => cluster.id === selectedSubjectId)) {
       setSelectedSubjectId("");
+      setIsSubjectModalOpen(false);
     }
   }, [selectedSubjectId, subjectClusters]);
+
+  useEffect(() => {
+    if (!isSubjectModalOpen) return;
+
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (subjectModalRef.current?.contains(target)) return;
+      setIsSubjectModalOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    return () => document.removeEventListener("pointerdown", handleOutsidePointerDown);
+  }, [isSubjectModalOpen]);
 
   const selectedSubject = useMemo(
     () => subjectClusters.find((cluster) => cluster.id === selectedSubjectId) ?? null,
@@ -487,17 +505,30 @@ export default function KnowledgeMapPage({
               <div className="relative min-h-[620px] overflow-hidden p-5">
                 <div className="pointer-events-none absolute inset-0">
                   <svg className="h-full w-full" viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} preserveAspectRatio="none">
-                    {subjectLinks.map((link) => {
+                    {subjectLinks.map((link, index) => {
                       const from = subjectPositions[link.from];
                       const to = subjectPositions[link.to];
                       if (!from || !to) return null;
+                      const x1 = toMapX(from.x);
+                      const y1 = toMapY(from.y);
+                      const x2 = toMapX(to.x);
+                      const y2 = toMapY(to.y);
                       return (
-                        <line
+                        <motion.line
                           key={`${link.from}-${link.to}`}
-                          x1={toMapX(from.x)}
-                          y1={toMapY(from.y)}
-                          x2={toMapX(to.x)}
-                          y2={toMapY(to.y)}
+                          x1={x1}
+                          y1={y1}
+                          initial={{ x2: x1, y2: y1, opacity: 0 }}
+                          animate={{
+                            x2,
+                            y2,
+                            opacity: 1,
+                            transition: {
+                              duration: 0.6,
+                              delay: index * 0.07,
+                              ease: [0.22, 1, 0.36, 1],
+                            },
+                          }}
                           stroke="rgba(161, 250, 255, 0.28)"
                           strokeWidth={0.9}
                           strokeLinecap="round"
@@ -543,9 +574,15 @@ export default function KnowledgeMapPage({
                   return (
                     <button
                       key={cluster.id}
-                      onClick={() =>
-                        setSelectedSubjectId((current) => (current === cluster.id ? "" : cluster.id))
-                      }
+                      onClick={() => {
+                        if (selectedSubjectId === cluster.id) {
+                          setSelectedSubjectId("");
+                          setIsSubjectModalOpen(false);
+                          return;
+                        }
+                        setSelectedSubjectId(cluster.id);
+                        setIsSubjectModalOpen(true);
+                      }}
                       className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
                       style={{ left: `${position.x}%`, top: `${position.y}%` }}
                     >
@@ -642,8 +679,9 @@ export default function KnowledgeMapPage({
                 </AnimatePresence>
 
                 <AnimatePresence>
-                  {selectedSubject ? (
+                  {selectedSubject && isSubjectModalOpen ? (
                     <motion.aside
+                      ref={subjectModalRef}
                       key={`subject-popup-${selectedSubject.id}`}
                       initial={{ opacity: 0, y: 18, scale: 0.97 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -657,7 +695,7 @@ export default function KnowledgeMapPage({
                           <h2 className="mt-1 font-headline text-2xl font-black">{selectedSubject.name}</h2>
                         </div>
                         <button
-                          onClick={() => setSelectedSubjectId("")}
+                          onClick={() => setIsSubjectModalOpen(false)}
                           className="rounded-full bg-surface-container p-2 text-on-surface-variant transition-colors hover:text-on-surface"
                           aria-label="Close subject popup"
                         >

@@ -412,7 +412,8 @@ const MobileBottomNav = ({
 }) => {
   const activeItemForPage = (
     currentPage: AppShellPage
-  ): "study" | "history" | "play" => {
+  ): "study" | "knowledge-map" | "history" | "play" => {
+    if (currentPage === "knowledge-map") return "knowledge-map";
     if (currentPage === "history") return "history";
     if (
       currentPage === "flashcards" ||
@@ -423,7 +424,7 @@ const MobileBottomNav = ({
     return "study";
   };
 
-  const [activeItem, setActiveItem] = useState<'study' | 'history' | 'play'>(
+  const [activeItem, setActiveItem] = useState<'study' | 'knowledge-map' | 'history' | 'play'>(
     activeItemForPage(page)
   );
 
@@ -433,6 +434,7 @@ const MobileBottomNav = ({
 
   const navItems = [
     { id: 'study' as const, page: 'study' as const, label: 'Study', Icon: GitFork },
+    { id: 'knowledge-map' as const, page: 'knowledge-map' as const, label: 'Map', Icon: Network },
     { id: 'history' as const, page: 'history' as const, label: 'History', Icon: HistoryIcon },
     { id: 'play' as const, page: 'quiz' as const, label: 'Quiz', Icon: Brain },
   ];

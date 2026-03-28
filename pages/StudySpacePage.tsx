@@ -1137,11 +1137,61 @@ export function StudySpacePage({
   const nodeConversationsRef = useRef<Record<string, NodeConversationMessage[]>>({});
   const breakdownRef      = useRef<ProblemBreakdown | null>(null);
   const sessionIdRef      = useRef<string | null>(null);
+  const insightRequestInFlightRef = useRef<Set<string>>(new Set());
+  const insightRetryNotBeforeRef = useRef<Record<string, number>>({});
+  const persistBreakdownTimeoutRef = useRef<number | null>(null);
+  const pendingBreakdownPersistRef = useRef<{ sessionId: string; payload: string } | null>(null);
+  const persistBreakdownRetryCountRef = useRef(0);
   useEffect(() => { positionsRef.current      = positions; },      [positions]);
   useEffect(() => { nodeInsightsRef.current   = nodeInsights; },   [nodeInsights]);
   useEffect(() => { nodeConversationsRef.current = nodeConversations; }, [nodeConversations]);
   useEffect(() => { breakdownRef.current      = breakdown; },      [breakdown]);
   useEffect(() => { sessionIdRef.current      = sessionId; },      [sessionId]);
+
+  const flushPendingBreakdownPersist = useCallback(async () => {
+    const pending = pendingBreakdownPersistRef.current;
+    if (!pending) return;
+
+    pendingBreakdownPersistRef.current = null;
+    try {
+      await api.put(`/api/sessions/${pending.sessionId}`, {
+        breakdown_json: pending.payload,
+      });
+      persistBreakdownRetryCountRef.current = 0;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 429) {
+        pendingBreakdownPersistRef.current = pending;
+        const retryDelayMs = Math.min(60_000, 5_000 * 2 ** persistBreakdownRetryCountRef.current);
+        persistBreakdownRetryCountRef.current = Math.min(persistBreakdownRetryCountRef.current + 1, 6);
+        if (persistBreakdownTimeoutRef.current === null) {
+          persistBreakdownTimeoutRef.current = window.setTimeout(() => {
+            persistBreakdownTimeoutRef.current = null;
+            void flushPendingBreakdownPersist();
+          }, retryDelayMs);
+        }
+        return;
+      }
+      persistBreakdownRetryCountRef.current = 0;
+      console.error('Failed to persist insight:', err);
+    }
+  }, []);
+
+  const scheduleBreakdownPersist = useCallback((nextSessionId: string, payload: string) => {
+    pendingBreakdownPersistRef.current = { sessionId: nextSessionId, payload };
+    if (persistBreakdownTimeoutRef.current !== null) return;
+    persistBreakdownTimeoutRef.current = window.setTimeout(() => {
+      persistBreakdownTimeoutRef.current = null;
+      void flushPendingBreakdownPersist();
+    }, 700);
+  }, [flushPendingBreakdownPersist]);
+
+  useEffect(() => {
+    return () => {
+      if (persistBreakdownTimeoutRef.current !== null) {
+        window.clearTimeout(persistBreakdownTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const hydrateBreakdown = useCallback((bd: ProblemBreakdown) => {
     const normalized = sanitizeBreakdownPayload(bd);
@@ -1208,26 +1258,26 @@ export function StudySpacePage({
     nextNodeInsights: Record<string, NodeInsight>,
     nextNodeConversations: Record<string, NodeConversationMessage[]>
   ) => {
-    if (!sessionId || !breakdown) return;
+    const activeSessionId = sessionIdRef.current;
+    const activeBreakdown = breakdownRef.current;
+    if (!activeSessionId || !activeBreakdown) return;
     const updatedBreakdown: ProblemBreakdown = {
-      ...breakdown,
+      ...activeBreakdown,
       nodeInsights: nextNodeInsights,
       nodeConversations: nextNodeConversations,
       nodePositions: positionsRef.current,
     };
     setBreakdown(updatedBreakdown);
-    api.put(`/api/sessions/${sessionId}`, {
-      breakdown_json: JSON.stringify(updatedBreakdown),
-    }).catch(err => console.error('Failed to persist insight:', err));
-  }, [breakdown, sessionId]);
+    scheduleBreakdownPersist(activeSessionId, JSON.stringify(updatedBreakdown));
+  }, [scheduleBreakdownPersist]);
 
   const persistNodeInsights = useCallback((nextNodeInsights: Record<string, NodeInsight>) => {
-    persistBreakdownData(nextNodeInsights, nodeConversations);
-  }, [nodeConversations, persistBreakdownData]);
+    persistBreakdownData(nextNodeInsights, nodeConversationsRef.current);
+  }, [persistBreakdownData]);
 
   const persistNodeConversations = useCallback((nextNodeConversations: Record<string, NodeConversationMessage[]>) => {
-    persistBreakdownData(nodeInsights, nextNodeConversations);
-  }, [nodeInsights, persistBreakdownData]);
+    persistBreakdownData(nodeInsightsRef.current, nextNodeConversations);
+  }, [persistBreakdownData]);
 
   // Load from navigation payload first; then local snapshot; otherwise restore most recent saved session.
   // Use a ref so clearing initialBreakdown after consuming it doesn't re-trigger the fallback.
@@ -1540,6 +1590,11 @@ export function StudySpacePage({
   // Auto-fetch insight for the selected node (cached by node id)
   useEffect(() => {
     if (!selectedNode || !breakdown) return;
+    const requestedNodeId = selectedNode.id;
+    if (insightRequestInFlightRef.current.has(requestedNodeId)) return;
+    const notBefore = insightRetryNotBeforeRef.current[requestedNodeId] ?? 0;
+    if (Date.now() < notBefore) return;
+
     const cachedInsight = nodeInsights[selectedNode.id];
     const cachedSimple = (cachedInsight?.simpleBreakdown ?? '').trim();
     const descriptionFallbackStale = !!cachedInsight
@@ -1555,6 +1610,7 @@ export function StudySpacePage({
       nodeMathLength: (selectedNode.mathContent || selectedNode.label || '').length,
       nodeLabelPreview: debugClip(selectedNode.label ?? ''),
     });
+    insightRequestInFlightRef.current.add(requestedNodeId);
     setInsightLoading(true);
     api.post<{ insight: NodeInsight }>('/api/ai/node-insight', {
       nodeLabel: selectedNode.label,
@@ -1577,31 +1633,44 @@ export function StudySpacePage({
           nodeId: selectedNode.id,
           level: 'standard',
         });
-        setNodeInsights(prev => {
-          const next = { ...prev, [selectedNode.id]: insight };
-          persistNodeInsights(next);
-          return next;
-        });
+        insightRetryNotBeforeRef.current[requestedNodeId] = 0;
+        const next = { ...nodeInsightsRef.current, [requestedNodeId]: insight };
+        setNodeInsights(next);
+        persistNodeInsights(next);
       })
       .catch((err) => {
         console.error('[NodeInsight FE] auto request failed', {
-          nodeId: selectedNode.id,
+          nodeId: requestedNodeId,
           error: err?.message ?? String(err),
         });
+        if (err instanceof ApiError && err.status === 429) {
+          insightRetryNotBeforeRef.current[requestedNodeId] = Date.now() + 15_000;
+        }
         // Fallback hint so panel stays useful without duplicating node text.
-        setNodeInsights(prev => {
-          const next = {
-            ...prev,
-            [selectedNode.id]: {
-              simpleBreakdown: 'Could not generate a detailed breakdown right now. Long-press this node and tap Regenerate Node to retry.',
-              keyFormula: selectedNode.mathContent || '',
-            },
-          };
-          persistNodeInsights(next);
-          return next;
-        });
+        const fallbackSimpleBreakdown =
+          'Could not generate a detailed breakdown right now. Long-press this node and tap Regenerate Node to retry.';
+        const fallbackKeyFormula = selectedNode.mathContent || '';
+        const existingInsight = nodeInsightsRef.current[requestedNodeId];
+        if (
+          existingInsight?.simpleBreakdown === fallbackSimpleBreakdown
+          && existingInsight?.keyFormula === fallbackKeyFormula
+        ) {
+          return;
+        }
+        const next = {
+          ...nodeInsightsRef.current,
+          [requestedNodeId]: {
+            simpleBreakdown: fallbackSimpleBreakdown,
+            keyFormula: fallbackKeyFormula,
+          },
+        };
+        setNodeInsights(next);
+        persistNodeInsights(next);
       })
-      .finally(() => setInsightLoading(false));
+      .finally(() => {
+        insightRequestInFlightRef.current.delete(requestedNodeId);
+        setInsightLoading(false);
+      });
   }, [breakdown, nodeInsights, persistNodeInsights, selectedNode]);
 
   const startDrag = useCallback((e: React.MouseEvent, id: string) => {

@@ -21,6 +21,16 @@ const listeners = new Set<Listener>();
 let subscribers = 0;
 let streamAbortController: AbortController | null = null;
 let reconnectTimeoutId: number | null = null;
+let reconnectAttempt = 0;
+
+const DEFAULT_RECONNECT_MS = 3_000;
+const MAX_RECONNECT_MS = 60_000;
+const RATE_LIMIT_MIN_RECONNECT_MS = 30_000;
+
+interface StreamConnectError {
+  status?: number;
+  retryAfterMs?: number;
+}
 
 function emit() {
   for (const listener of listeners) listener(state);
@@ -36,6 +46,32 @@ function resetReconnectTimeout() {
     window.clearTimeout(reconnectTimeoutId);
     reconnectTimeoutId = null;
   }
+}
+
+function parseRetryAfterToMs(headerValue: string | null): number | null {
+  if (!headerValue) return null;
+  const trimmed = headerValue.trim();
+  if (!trimmed) return null;
+
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.max(0, Math.floor(seconds * 1000));
+  }
+
+  const timestamp = Date.parse(trimmed);
+  if (!Number.isFinite(timestamp)) return null;
+  return Math.max(0, timestamp - Date.now());
+}
+
+function computeReconnectDelayMs(error?: StreamConnectError): number {
+  if (error?.status === 429) {
+    const hinted = error.retryAfterMs ?? 0;
+    return Math.min(MAX_RECONNECT_MS, Math.max(RATE_LIMIT_MIN_RECONNECT_MS, hinted));
+  }
+
+  const exponential = Math.min(MAX_RECONNECT_MS, DEFAULT_RECONNECT_MS * 2 ** reconnectAttempt);
+  const jitter = 0.85 + Math.random() * 0.3;
+  return Math.floor(exponential * jitter);
 }
 
 function stopStream() {
@@ -116,6 +152,7 @@ async function connectStream() {
   const controller = new AbortController();
   streamAbortController = controller;
   setState({ loading: true, connected: false });
+  let reconnectError: StreamConnectError | undefined;
 
   try {
     const response = await fetch(`${BASE_URL}/api/billing/usage/stream`, {
@@ -129,9 +166,14 @@ async function connectStream() {
     });
 
     if (!response.ok || !response.body) {
+      reconnectError = {
+        status: response.status,
+        retryAfterMs: parseRetryAfterToMs(response.headers.get("retry-after")),
+      };
       throw new Error(`Failed usage stream request (${response.status})`);
     }
 
+    reconnectAttempt = 0;
     setState({ connected: true });
     await readEventStream(response.body, controller.signal);
   } catch {
@@ -144,11 +186,13 @@ async function connectStream() {
   }
 
   if (subscribers > 0) {
+    reconnectAttempt = Math.min(reconnectAttempt + 1, 8);
+    const reconnectDelayMs = computeReconnectDelayMs(reconnectError);
     resetReconnectTimeout();
     reconnectTimeoutId = window.setTimeout(() => {
       reconnectTimeoutId = null;
       void connectStream();
-    }, 1_000);
+    }, reconnectDelayMs);
   }
 }
 
@@ -170,4 +214,3 @@ export function subscribeToLiveTokenUsage(listener: Listener): () => void {
 export function getLiveTokenUsageSnapshot(): LiveTokenUsageState {
   return state;
 }
-

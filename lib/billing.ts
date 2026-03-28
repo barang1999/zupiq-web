@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, tokenStorage } from "./api";
 
 export type PlanKey = "free" | "core" | "pro";
 export type SubscriptionStatus =
@@ -80,12 +80,47 @@ export interface BillingSubscriptionResponse {
   usage: UsageSnapshot;
 }
 
+const BILLING_SUBSCRIPTION_CACHE_TTL_MS = 30_000;
+let billingSubscriptionCache: {
+  accessToken: string | null;
+  fetchedAt: number;
+  value: BillingSubscriptionResponse;
+} | null = null;
+let billingSubscriptionInFlight: Promise<BillingSubscriptionResponse> | null = null;
+
 export async function getBillingCatalog(): Promise<BillingCatalogResponse> {
   return api.get<BillingCatalogResponse>("/api/billing/catalog");
 }
 
 export async function getBillingSubscription(): Promise<BillingSubscriptionResponse> {
-  return api.get<BillingSubscriptionResponse>("/api/billing/subscription");
+  const accessToken = tokenStorage.getAccess();
+  const now = Date.now();
+
+  if (
+    billingSubscriptionCache
+    && billingSubscriptionCache.accessToken === accessToken
+    && now - billingSubscriptionCache.fetchedAt < BILLING_SUBSCRIPTION_CACHE_TTL_MS
+  ) {
+    return billingSubscriptionCache.value;
+  }
+
+  if (billingSubscriptionInFlight) return billingSubscriptionInFlight;
+
+  billingSubscriptionInFlight = api
+    .get<BillingSubscriptionResponse>("/api/billing/subscription")
+    .then((response) => {
+      billingSubscriptionCache = {
+        accessToken,
+        fetchedAt: Date.now(),
+        value: response,
+      };
+      return response;
+    })
+    .finally(() => {
+      billingSubscriptionInFlight = null;
+    });
+
+  return billingSubscriptionInFlight;
 }
 
 export async function subscribeToPlan(payload: {
