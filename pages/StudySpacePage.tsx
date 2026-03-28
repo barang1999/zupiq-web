@@ -353,7 +353,12 @@ function buildCopyMathPayload(raw: string): string {
 function normalizeMathPreviewText(raw: string): string {
   if (!raw) return '';
   return normalizeMathDelimiters(raw)
-    .replace(/\\n/g, '\n')
+    // Handle LaTeX line-break command explicitly first.
+    .replace(/\\newline\b/g, '\n')
+    // Convert escaped "\n" only when it's a standalone escape, not part of commands.
+    .replace(/\\n(?![a-zA-Z])/g, '\n')
+    // Heal legacy malformed text produced by older normalization ("\newline" -> "ewline").
+    .replace(/(^|[ \t])ewline(?=\s+[\u1780-\u17FFA-Za-z])/g, '$1\n')
     .replace(/\r\n?/g, '\n')
     .replace(/\$\$/g, '$')
     .replace(/[ \t]*\n[ \t]*/g, '\n')
