@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import {
   User, SlidersHorizontal, Languages, GraduationCap,
@@ -7,7 +7,7 @@ import {
 import { ApiError, api, tokenStorage } from '../lib/api';
 import { AppHeader } from '../components/layout/AppHeader';
 import { CustomSelect } from '../components/ui/CustomSelect';
-import { getBillingSubscription, type UsageSnapshot } from '../lib/billing';
+import { useLiveTokenUsage } from '../hooks/useLiveTokenUsage';
 import type { EducationLevel, Language } from '../types/shared';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -116,31 +116,8 @@ export function SettingsPage({
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
-  const [tokenUsage, setTokenUsage] = useState<UsageSnapshot | null>(null);
-  const [loadingTokenUsage, setLoadingTokenUsage] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadUsage = async () => {
-      setLoadingTokenUsage(true);
-      try {
-        const res = await getBillingSubscription();
-        if (active) setTokenUsage(res.usage ?? null);
-      } catch {
-        if (active) setTokenUsage(null);
-      } finally {
-        if (active) setLoadingTokenUsage(false);
-      }
-    };
-
-    void loadUsage();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { usage: tokenUsage, loading: loadingTokenUsage } = useLiveTokenUsage(Boolean(user));
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

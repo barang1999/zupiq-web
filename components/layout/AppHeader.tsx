@@ -11,7 +11,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { getBillingSubscription, type UsageSnapshot } from '../../lib/billing';
+import { useLiveTokenUsage } from '../../hooks/useLiveTokenUsage';
 
 interface AppHeaderProps {
   user: any;
@@ -49,7 +49,7 @@ export function AppHeader({
     .toUpperCase();
   const [imgError, setImgError] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const [tokenUsage, setTokenUsage] = useState<UsageSnapshot | null>(null);
+  const { usage: tokenUsage } = useLiveTokenUsage(Boolean(user));
 
   const mobileMenuItems = useMemo(
     () => [
@@ -60,28 +60,6 @@ export function AppHeader({
     ],
     [onNavigateFlashcards, onNavigateHistory, onNavigateStudy, onSettingsClick]
   );
-
-  useEffect(() => {
-    let active = true;
-    const loadUsage = async () => {
-      if (!user) {
-        if (active) setTokenUsage(null);
-        return;
-      }
-      try {
-        const subscription = await getBillingSubscription();
-        if (active) setTokenUsage(subscription.usage ?? null);
-      } catch {
-        if (active) setTokenUsage(null);
-      }
-    };
-
-    void loadUsage();
-
-    return () => {
-      active = false;
-    };
-  }, [user?.id, user?.email]);
 
   useEffect(() => {
     if (!isProfileMenuOpen) return;
