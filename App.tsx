@@ -175,29 +175,29 @@ const Hero = ({ onAuthClick }: { onAuthClick: () => void }) => {
             </defs>
             <rect x="100" y="250" width="200" height="150" fill="url(#baseGlow)" />
             <g stroke="#00F5FF">
-              <path pathLength={1} className="neural-link" d="M200 380 L200 300" style={{ animationDelay: "0.2s", animationDuration: "0.55s", strokeWidth: 3 }} />
-              <path pathLength={1} className="neural-link" d="M200 300 L140 240" style={{ animationDelay: "0.85s", animationDuration: "0.6s" }} />
-              <path pathLength={1} className="neural-link" d="M200 300 L260 240" style={{ animationDelay: "1.5s", animationDuration: "0.6s" }} />
-              <path pathLength={1} className="neural-link" d="M140 240 L80 200" style={{ animationDelay: "2.15s", animationDuration: "0.55s", strokeWidth: 1.5 }} />
-              <path pathLength={1} className="neural-link" d="M140 240 L160 160" style={{ animationDelay: "2.75s", animationDuration: "0.55s", strokeWidth: 1.5 }} />
-              <path pathLength={1} className="neural-link" d="M260 240 L320 200" style={{ animationDelay: "3.35s", animationDuration: "0.55s", strokeWidth: 1.5 }} />
-              <path pathLength={1} className="neural-link" d="M260 240 L240 160" style={{ animationDelay: "3.95s", animationDuration: "0.55s", strokeWidth: 1.5 }} />
-              <path pathLength={1} className="neural-link" d="M160 160 L120 100" style={{ animationDelay: "4.55s", animationDuration: "0.5s", strokeWidth: 1 }} />
-              <path pathLength={1} className="neural-link" d="M160 160 L200 80" style={{ animationDelay: "5.1s", animationDuration: "0.5s", strokeWidth: 1 }} />
-              <path pathLength={1} className="neural-link" d="M240 160 L280 100" style={{ animationDelay: "5.65s", animationDuration: "0.5s", strokeWidth: 1 }} />
-              <path pathLength={1} className="neural-link" d="M240 160 L220 60" style={{ animationDelay: "6.2s", animationDuration: "0.5s", strokeWidth: 1 }} />
-              <path pathLength={1} className="neural-link" d="M80 200 L52 154" style={{ animationDelay: "6.75s", animationDuration: "0.45s", strokeWidth: 0.9 }} />
-              <path pathLength={1} className="neural-link" d="M80 200 L92 142" style={{ animationDelay: "7.25s", animationDuration: "0.45s", strokeWidth: 0.9 }} />
-              <path pathLength={1} className="neural-link" d="M320 200 L348 154" style={{ animationDelay: "7.75s", animationDuration: "0.45s", strokeWidth: 0.9 }} />
-              <path pathLength={1} className="neural-link" d="M320 200 L308 142" style={{ animationDelay: "8.25s", animationDuration: "0.45s", strokeWidth: 0.9 }} />
-              <path pathLength={1} className="neural-link" d="M120 100 L92 66" style={{ animationDelay: "8.75s", animationDuration: "0.42s", strokeWidth: 0.85 }} />
-              <path pathLength={1} className="neural-link" d="M120 100 L142 58" style={{ animationDelay: "9.2s", animationDuration: "0.42s", strokeWidth: 0.85 }} />
-              <path pathLength={1} className="neural-link" d="M280 100 L258 66" style={{ animationDelay: "9.65s", animationDuration: "0.42s", strokeWidth: 0.85 }} />
-              <path pathLength={1} className="neural-link" d="M280 100 L308 58" style={{ animationDelay: "10.1s", animationDuration: "0.42s", strokeWidth: 0.85 }} />
-              <path pathLength={1} className="neural-link" d="M200 80 L176 48" style={{ animationDelay: "10.55s", animationDuration: "0.42s", strokeWidth: 0.8 }} />
-              <path pathLength={1} className="neural-link" d="M200 80 L226 44" style={{ animationDelay: "11s", animationDuration: "0.42s", strokeWidth: 0.8 }} />
-              <path pathLength={1} className="neural-link" d="M220 60 L200 28" style={{ animationDelay: "11.45s", animationDuration: "0.42s", strokeWidth: 0.8 }} />
-              <path pathLength={1} className="neural-link" d="M220 60 L246 34" style={{ animationDelay: "11.9s", animationDuration: "0.42s", strokeWidth: 0.8 }} />
+              <path pathLength={1} className="neural-link" d="M200 380 L200 300" style={{ animationDelay: "0.4s", animationDuration: "1.3s", strokeWidth: 3 }} />
+              <path pathLength={1} className="neural-link" d="M200 300 L140 240" style={{ animationDelay: "1.9s", animationDuration: "1.2s" }} />
+              <path pathLength={1} className="neural-link" d="M200 300 L260 240" style={{ animationDelay: "1.9s", animationDuration: "1.2s" }} />
+              <path pathLength={1} className="neural-link" d="M140 240 L80 200" style={{ animationDelay: "3.35s", animationDuration: "1.1s", strokeWidth: 1.5 }} />
+              <path pathLength={1} className="neural-link" d="M140 240 L160 160" style={{ animationDelay: "3.35s", animationDuration: "1.1s", strokeWidth: 1.5 }} />
+              <path pathLength={1} className="neural-link" d="M260 240 L320 200" style={{ animationDelay: "3.35s", animationDuration: "1.1s", strokeWidth: 1.5 }} />
+              <path pathLength={1} className="neural-link" d="M260 240 L240 160" style={{ animationDelay: "3.35s", animationDuration: "1.1s", strokeWidth: 1.5 }} />
+              <path pathLength={1} className="neural-link" d="M160 160 L120 100" style={{ animationDelay: "4.75s", animationDuration: "1s", strokeWidth: 1 }} />
+              <path pathLength={1} className="neural-link" d="M160 160 L200 80" style={{ animationDelay: "4.75s", animationDuration: "1s", strokeWidth: 1 }} />
+              <path pathLength={1} className="neural-link" d="M240 160 L280 100" style={{ animationDelay: "4.75s", animationDuration: "1s", strokeWidth: 1 }} />
+              <path pathLength={1} className="neural-link" d="M240 160 L220 60" style={{ animationDelay: "4.75s", animationDuration: "1s", strokeWidth: 1 }} />
+              <path pathLength={1} className="neural-link" d="M80 200 L52 154" style={{ animationDelay: "4.75s", animationDuration: "1s", strokeWidth: 0.9 }} />
+              <path pathLength={1} className="neural-link" d="M80 200 L92 142" style={{ animationDelay: "4.75s", animationDuration: "1s", strokeWidth: 0.9 }} />
+              <path pathLength={1} className="neural-link" d="M320 200 L348 154" style={{ animationDelay: "4.75s", animationDuration: "1s", strokeWidth: 0.9 }} />
+              <path pathLength={1} className="neural-link" d="M320 200 L308 142" style={{ animationDelay: "4.75s", animationDuration: "1s", strokeWidth: 0.9 }} />
+              <path pathLength={1} className="neural-link" d="M120 100 L92 66" style={{ animationDelay: "6.05s", animationDuration: "0.95s", strokeWidth: 0.85 }} />
+              <path pathLength={1} className="neural-link" d="M120 100 L142 58" style={{ animationDelay: "6.05s", animationDuration: "0.95s", strokeWidth: 0.85 }} />
+              <path pathLength={1} className="neural-link" d="M280 100 L258 66" style={{ animationDelay: "6.05s", animationDuration: "0.95s", strokeWidth: 0.85 }} />
+              <path pathLength={1} className="neural-link" d="M280 100 L308 58" style={{ animationDelay: "6.05s", animationDuration: "0.95s", strokeWidth: 0.85 }} />
+              <path pathLength={1} className="neural-link" d="M200 80 L176 48" style={{ animationDelay: "6.05s", animationDuration: "0.95s", strokeWidth: 0.8 }} />
+              <path pathLength={1} className="neural-link" d="M200 80 L226 44" style={{ animationDelay: "6.05s", animationDuration: "0.95s", strokeWidth: 0.8 }} />
+              <path pathLength={1} className="neural-link" d="M220 60 L200 28" style={{ animationDelay: "6.05s", animationDuration: "0.95s", strokeWidth: 0.8 }} />
+              <path pathLength={1} className="neural-link" d="M220 60 L246 34" style={{ animationDelay: "6.05s", animationDuration: "0.95s", strokeWidth: 0.8 }} />
             </g>
             <circle className="neural-node" cx="200" cy="300" r="6" fill="#00F5FF" style={{ filter: "drop-shadow(0 0 8px #00F5FF)" }} />
             <circle className="neural-node" cx="140" cy="240" r="4" fill="#ff51fa" />
