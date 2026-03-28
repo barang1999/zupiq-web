@@ -188,11 +188,14 @@ function debugStudy(event: string, payload?: Record<string, unknown>) {
 
   const entry: StudyDebugEntry = { stamp, event, payload: payload ?? null };
 
-  // Use console.log so it always shows in default console levels.
-  if (payload) {
-    console.log(STUDY_DEBUG_PREFIX, stamp, event, payload);
-  } else {
-    console.log(STUDY_DEBUG_PREFIX, stamp, event);
+  const shouldLogToConsole = typeof window !== 'undefined'
+    && Boolean((window as unknown as { __ZUPIQ_STUDY_DEBUG_CONSOLE__?: boolean }).__ZUPIQ_STUDY_DEBUG_CONSOLE__);
+  if (shouldLogToConsole) {
+    if (payload) {
+      console.log(STUDY_DEBUG_PREFIX, stamp, event, payload);
+    } else {
+      console.log(STUDY_DEBUG_PREFIX, stamp, event);
+    }
   }
 
   if (typeof window === 'undefined') return;
