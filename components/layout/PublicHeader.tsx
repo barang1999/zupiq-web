@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Menu, X, User as UserIcon, LogOut } from "lucide-react";
 
-type PublicHeaderPage = "home" | "plan";
+type PublicHeaderPage = "home" | "plan" | "how-it-works";
 
 interface PublicHeaderProps {
   user: any;
@@ -10,6 +10,7 @@ interface PublicHeaderProps {
   onSignOut?: () => void;
   onNavigateHome?: () => void;
   onNavigatePlan?: () => void;
+  onNavigateHowItWorks?: () => void;
   activePage?: PublicHeaderPage;
 }
 
@@ -19,6 +20,7 @@ export function PublicHeader({
   onSignOut,
   onNavigateHome,
   onNavigatePlan,
+  onNavigateHowItWorks,
   activePage = "home",
 }: PublicHeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -45,6 +47,14 @@ export function PublicHeader({
       return;
     }
     window.location.href = "/plan";
+  };
+
+  const handleHowItWorks = () => {
+    if (onNavigateHowItWorks) {
+      onNavigateHowItWorks();
+      return;
+    }
+    window.location.href = "/how-it-works";
   };
 
   return (
@@ -74,7 +84,12 @@ export function PublicHeader({
           >
             Pricing
           </button>
-          <a href="#" className="text-on-surface-variant hover:text-on-surface transition-colors">How it Works</a>
+          <button
+            onClick={handleHowItWorks}
+            className={activePage === "how-it-works" ? "text-primary border-b-2 border-primary pb-1" : "text-on-surface-variant hover:text-on-surface transition-colors"}
+          >
+            How it Works
+          </button>
           <a href="#" className="text-on-surface-variant hover:text-on-surface transition-colors">Community</a>
         </div>
 
@@ -126,7 +141,7 @@ export function PublicHeader({
         >
           <button onClick={handleHome} className="text-left text-on-surface-variant">Home</button>
           <button onClick={handlePlan} className="text-left text-on-surface-variant">Pricing</button>
-          <a href="#" className="text-on-surface-variant">How it Works</a>
+          <button onClick={handleHowItWorks} className="text-left text-on-surface-variant">How it Works</button>
           <a href="#" className="text-on-surface-variant">Community</a>
           <hr className="border-white/5" />
           {isAuthenticated ? (

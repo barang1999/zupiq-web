@@ -31,11 +31,12 @@ import PlanPage from "./pages/PlanPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
+import { HowItWorksPage } from "./pages/HowItWorksPage";
 import FlashcardSubjectSelectionPage from "./pages/FlashcardSubjectSelectionPage";
 import FlashcardSessionPage from "./pages/FlashcardSessionPage";
 import { PublicHeader } from "./components/layout/PublicHeader";
 
-type AppShellPage = 'study' | 'history' | 'archive' | 'plan' | 'flashcards' | 'flashcards-session' | 'settings' | 'privacy' | 'terms';
+type AppShellPage = 'study' | 'history' | 'archive' | 'plan' | 'flashcards' | 'flashcards-session' | 'settings' | 'privacy' | 'terms' | 'how-it-works';
 type IOSNavigator = Navigator & { standalone?: boolean };
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -490,6 +491,7 @@ export default function App() {
     if (path === '/history') return 'history';
     if (path === '/archive') return 'archive';
     if (path === '/plan') return 'plan';
+    if (path === '/how-it-works') return 'how-it-works';
     if (path === '/flashcards/session') return 'flashcards-session';
     if (path === '/flashcards') return 'flashcards';
     if (path === '/settings') return 'settings';
@@ -513,6 +515,8 @@ export default function App() {
       url = "/archive";
     } else if (next === "plan") {
       url = "/plan";
+    } else if (next === "how-it-works") {
+      url = "/how-it-works";
     } else if (next === "flashcards") {
       url = "/flashcards";
     } else if (next === "flashcards-session") {
@@ -630,6 +634,24 @@ export default function App() {
     setPageState('study');
   };
 
+  if (page === 'how-it-works') {
+    return (
+      <>
+        <HowItWorksPage
+          user={currentUser}
+          onAuthClick={() => setShowAuth(true)}
+          onSignOut={currentUser ? handleSignOut : undefined}
+          onNavigateHome={() => setPage('study')}
+          onNavigatePlan={() => setPage('plan')}
+          onNavigateHowItWorks={() => setPage('how-it-works')}
+        />
+        <AnimatePresence>
+          {showAuth && <Auth onClose={() => setShowAuth(false)} />}
+        </AnimatePresence>
+      </>
+    );
+  }
+
   if (currentUser && currentUser.preferences?.onboarding_completed) {
     let authenticatedPage: ReactNode;
 
@@ -690,6 +712,7 @@ export default function App() {
         <PlanPage
           user={currentUser}
           onNavigateStudy={() => setPage('study')}
+          onNavigateHowItWorks={() => setPage('how-it-works')}
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
           onNavigateSettings={() => setPage('settings')}
@@ -764,6 +787,7 @@ export default function App() {
         <PlanPage
           user={currentUser}
           onNavigateStudy={() => setPage("study")}
+          onNavigateHowItWorks={() => setPage("how-it-works")}
           onNavigateHistory={() => setShowAuth(true)}
           onNavigateFlashcards={() => setShowAuth(true)}
           onNavigateSettings={() => setShowAuth(true)}
@@ -789,6 +813,7 @@ export default function App() {
         onAuthClick={() => setShowAuth(true)}
         onNavigateHome={() => setPage("study")}
         onNavigatePlan={() => setPage("plan")}
+        onNavigateHowItWorks={() => setPage("how-it-works")}
         activePage="home"
       />
       <main>

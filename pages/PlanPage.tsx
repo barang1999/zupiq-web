@@ -22,6 +22,7 @@ import {
 interface Props {
   user: any;
   onNavigateStudy?: () => void;
+  onNavigateHowItWorks?: () => void;
   onNavigateHistory?: () => void;
   onNavigateFlashcards?: () => void;
   onNavigateSettings?: () => void;
@@ -71,6 +72,7 @@ export default function PlanPage(props: Props) {
   const {
     user,
     onNavigateStudy,
+    onNavigateHowItWorks,
     onRequireAuth,
   } = props;
 
@@ -202,6 +204,7 @@ export default function PlanPage(props: Props) {
         onAuthClick={() => onRequireAuth?.()}
         onSignOut={isAuthenticated ? handleSignOut : undefined}
         onNavigateHome={onNavigateStudy ? () => onNavigateStudy() : undefined}
+        onNavigateHowItWorks={onNavigateHowItWorks}
         activePage="plan"
       />
 

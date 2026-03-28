@@ -58,10 +58,77 @@ const SIDEBAR_ITEMS = [
 const AVATAR_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 const MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024;
 
-function getAvatarUploadErrorMessage(err: unknown): string {
+interface SignedUploadPayload {
+  upload: {
+    id: string;
+    storage_url: string | null;
+  };
+  signed_upload: {
+    bucket: string;
+    path: string;
+    signedUrl: string;
+    token: string;
+  };
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+}
+
+function resolveApiBaseUrl(): URL | null {
+  if (typeof window === 'undefined') return null;
+  const rawBase = (import.meta as ImportMeta & { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL;
+  if (!rawBase) return null;
+  try {
+    return new URL(rawBase, window.location.origin);
+  } catch {
+    return null;
+  }
+}
+
+async function uploadToSignedStorageUrl(signedUrl: string, file: File): Promise<Response> {
+  const form = new FormData();
+  form.append('cacheControl', '3600');
+  // Supabase signed upload endpoint expects an unnamed file field in multipart form data.
+  form.append('', file);
+  return fetch(signedUrl, {
+    method: 'PUT',
+    headers: {
+      'x-upsert': 'false',
+    },
+    body: form,
+  });
+}
+
+function getAvatarUploadErrorMessage(err: unknown, stage: string): string {
+  const stageLabel = stage || 'unknown-stage';
+  const apiUrl = resolveApiBaseUrl();
+  const apiOrigin = apiUrl?.origin ?? 'API';
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return `You are offline (stage: ${stageLabel}). Please reconnect and try again.`;
+  }
+
+  if (
+    typeof window !== 'undefined'
+    && window.location.protocol === 'https:'
+    && apiUrl?.protocol === 'http:'
+  ) {
+    return `Blocked by mixed-content policy: HTTPS site cannot call HTTP API ${apiOrigin}.`;
+  }
+
+  if (
+    typeof window !== 'undefined'
+    && apiUrl
+    && isLoopbackHost(apiUrl.hostname)
+    && !isLoopbackHost(window.location.hostname)
+  ) {
+    return 'API URL points to localhost from a non-localhost client. Use a reachable API host.';
+  }
+
   if (err instanceof ApiError) {
     if (err.status === 0) {
-      return 'Unable to reach avatar upload service. Check API URL, HTTPS/mixed-content, and network access.';
+      return `Unable to reach avatar upload service before server response (stage: ${stageLabel}). Check API URL, HTTPS/mixed-content, CORS, and network access.`;
     }
     if (err.status === 401) {
       return 'Your session has expired. Please sign in again and retry.';
@@ -123,6 +190,7 @@ export function SettingsPage({
     const file = e.target.files?.[0];
     if (!file) return;
     setAvatarError(null);
+    let currentStage = 'init';
 
     if (!AVATAR_MIME_TYPES.includes(file.type as typeof AVATAR_MIME_TYPES[number])) {
       setAvatarError('Only JPEG, PNG, WebP, or GIF images are supported.');
@@ -143,16 +211,70 @@ export function SettingsPage({
 
     setUploadingAvatar(true);
     try {
-      const formData = new FormData();
-      formData.append('avatar', file);
-      const res = await api.upload<{ user: any }>('/api/users/avatar', formData);
+      const apiUrl = resolveApiBaseUrl();
+      if (
+        typeof window !== 'undefined'
+        && window.location.protocol === 'https:'
+        && apiUrl
+        && apiUrl.protocol === 'http:'
+      ) {
+        throw new Error(
+          'Blocked by mixed-content policy: site is HTTPS but API URL is HTTP. Configure `VITE_API_URL` to HTTPS.'
+        );
+      }
+      if (
+        typeof window !== 'undefined'
+        && apiUrl
+        && isLoopbackHost(apiUrl.hostname)
+        && !isLoopbackHost(window.location.hostname)
+      ) {
+        throw new Error(
+          'Cannot reach upload API from this device because `VITE_API_URL` points to localhost.'
+        );
+      }
+
+      currentStage = 'signed-url:start';
+      const signedUploadResponse = await api.post<SignedUploadPayload>('/api/uploads/signed-upload-url', {
+        original_name: file.name,
+        mime_type: file.type,
+        size_bytes: file.size,
+        context: 'profile_avatar',
+      });
+      const uploadId = signedUploadResponse.upload?.id;
+      const signedUpload = signedUploadResponse.signed_upload;
+      if (!uploadId || !signedUpload?.signedUrl) {
+        throw new Error('Failed to initialize avatar upload.');
+      }
+
+      currentStage = 'storage-upload:start';
+      const directUploadResponse = await uploadToSignedStorageUrl(signedUpload.signedUrl, file);
+      if (!directUploadResponse.ok) {
+        const errorText = await directUploadResponse.text().catch(() => '');
+        throw new Error(
+          `Direct avatar upload failed with HTTP ${directUploadResponse.status}${errorText ? `: ${errorText.slice(0, 240)}` : ''}`
+        );
+      }
+
+      const avatarUrl = signedUploadResponse.upload.storage_url;
+      if (!avatarUrl) {
+        throw new Error('Storage URL was not returned for avatar upload.');
+      }
+
+      currentStage = 'profile-update:start';
+      const profileRes = await api.patch<{ user: any; accessToken?: string }>('/api/users/profile', {
+        avatar_url: avatarUrl,
+      });
+      const refresh = tokenStorage.getRefresh();
+      if (profileRes.accessToken && refresh) {
+        tokenStorage.setTokens(profileRes.accessToken, refresh, profileRes.user);
+      }
       URL.revokeObjectURL(objectUrl);
       setAvatarPreview(null);
-      onUserUpdate(res.user);
+      onUserUpdate(profileRes.user);
     } catch (err) {
       URL.revokeObjectURL(objectUrl);
       setAvatarPreview(null); // revert preview on error
-      setAvatarError(getAvatarUploadErrorMessage(err));
+      setAvatarError(getAvatarUploadErrorMessage(err, currentStage));
     } finally {
       setUploadingAvatar(false);
       // Reset input so the same file can be re-selected
