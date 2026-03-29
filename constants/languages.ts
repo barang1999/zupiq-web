@@ -17,6 +17,7 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { code: "de", label: "German", nativeLabel: "Deutsch", flag: "🇩🇪" },
   { code: "ja", label: "Japanese", nativeLabel: "日本語", flag: "🇯🇵" },
   { code: "ko", label: "Korean", nativeLabel: "한국어", flag: "🇰🇷" },
+  { code: "km", label: "Khmer", nativeLabel: "ភាសាខ្មែរ", flag: "🇰🇭" },
 ];
 
 export function getLanguageByCode(code: string): LanguageOption | undefined {

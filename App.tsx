@@ -36,6 +36,7 @@ import FlashcardSessionPage from "./pages/FlashcardSessionPage";
 import QuizPage from "./pages/QuizPage";
 import AchievementPage from "./pages/AchievementPage";
 import KnowledgeMapPage from "./pages/KnowledgeMapPage";
+import QuantumPrismPage from "./pages/quantum-prism/QuantumPrismPage";
 import { PublicHeader } from "./components/layout/PublicHeader";
 import { GrowingTreeAnimation } from "./components/ui/GrowingTreeAnimation";
 
@@ -50,6 +51,7 @@ type AppShellPage =
   | 'quiz'
   | 'knowledge-map'
   | 'achievements'
+  | 'quantum-prism'
   | 'settings'
   | 'privacy'
   | 'terms'
@@ -497,6 +499,7 @@ export default function App() {
     if (path === '/quiz') return 'quiz';
     if (path === '/knowledge-map') return 'knowledge-map';
     if (path === '/achievements') return 'achievements';
+    if (path === '/quantum-prism') return 'quantum-prism';
     if (path === '/settings') return 'settings';
     if (path === '/privacy') return 'privacy';
     if (path === '/terms') return 'terms';
@@ -549,6 +552,8 @@ export default function App() {
       url = "/knowledge-map";
     } else if (next === "achievements") {
       url = "/achievements";
+    } else if (next === "quantum-prism") {
+      url = "/quantum-prism";
     } else if (next === "flashcards-session") {
       const nextSubject = options?.subject ?? flashcardSubject;
       if (options && "subject" in options) {
@@ -691,6 +696,10 @@ export default function App() {
         </AnimatePresence>
       </>
     );
+  }
+
+  if (page === 'quantum-prism') {
+    return <QuantumPrismPage onNavigateStudy={() => setPage('study')} />;
   }
 
   if (currentUser && currentUser.preferences?.onboarding_completed) {
@@ -864,6 +873,7 @@ export default function App() {
           onNavigateHistory={() => setPage('history')}
           onNavigateFlashcards={() => setPage('flashcards')}
           onNavigateAchievements={() => setPage('achievements')}
+          onNavigateQuantumPrism={() => setPage('quantum-prism')}
           onNavigateQuiz={(prefill) => setPage('quiz', {
             quizSubjectId: prefill?.subjectId ?? null,
             quizSubjectName: prefill?.subjectName ?? null,
@@ -882,7 +892,9 @@ export default function App() {
     return (
       <>
         {authenticatedPage}
-        {page !== 'plan' && page !== 'billingsubscription' && <MobileBottomNav page={page} onNavigate={setPage} />}
+        {page !== 'plan' && page !== 'billingsubscription' && (
+          <MobileBottomNav page={page} onNavigate={setPage} />
+        )}
       </>
     );
   }

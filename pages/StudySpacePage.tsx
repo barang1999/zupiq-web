@@ -786,6 +786,7 @@ interface Props {
   onNavigateFlashcards?: () => void;
   onNavigateKnowledgeMap?: () => void;
   onNavigateAchievements?: () => void;
+  onNavigateQuantumPrism?: () => void;
   onNavigateQuiz?: (prefill?: {
     subjectId?: string | null;
     subjectName?: string | null;
@@ -805,6 +806,7 @@ export function StudySpacePage({
   onNavigateFlashcards,
   onNavigateKnowledgeMap,
   onNavigateAchievements,
+  onNavigateQuantumPrism,
   onNavigateQuiz,
   onNavigatePlan,
   onNavigateSettings,
@@ -2561,6 +2563,7 @@ Do not repeat content already given.`;
     { id: 'history',     label: 'History',       Icon: History },
     { id: 'flashcards',  label: 'Flashcards',    Icon: Layers },
     { id: 'quiz',        label: 'Quiz',          Icon: Brain },
+    { id: 'quantum-prism', label: 'Quantum Prism', Icon: Zap },
     { id: 'achievements', label: 'Achievements',   Icon: Trophy },
   ];
 
@@ -2630,6 +2633,10 @@ Do not repeat content already given.`;
           navigateToQuiz();
           return;
         }
+        if (id === 'quantum-prism') {
+          onNavigateQuantumPrism?.();
+          return;
+        }
         if (id === 'achievements') {
           onNavigateAchievements?.();
           return;
@@ -2637,7 +2644,7 @@ Do not repeat content already given.`;
         setActiveTab(id);
       },
     }))
-  ), [activeTab, navigateToKnowledgeMap, navigateToQuiz, onNavigateAchievements, onNavigateFlashcards, onNavigateHistory]);
+  ), [activeTab, navigateToKnowledgeMap, navigateToQuiz, onNavigateAchievements, onNavigateFlashcards, onNavigateHistory, onNavigateQuantumPrism]);
 
   const isBranchSelected = !!selectedNode;
   const activeBranchConversation = selectedNode

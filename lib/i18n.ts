@@ -1,6 +1,6 @@
 // ─── Supported locales ────────────────────────────────────────────────────────
 
-export type Locale = "en" | "fr" | "es" | "ar" | "zh" | "hi" | "pt" | "de" | "ja" | "ko";
+export type Locale = "en" | "fr" | "es" | "ar" | "zh" | "hi" | "pt" | "de" | "ja" | "ko" | "km";
 
 export const SUPPORTED_LOCALES: { code: Locale; label: string; nativeLabel: string; rtl?: boolean }[] = [
   { code: "en", label: "English", nativeLabel: "English" },
@@ -13,6 +13,7 @@ export const SUPPORTED_LOCALES: { code: Locale; label: string; nativeLabel: stri
   { code: "de", label: "German", nativeLabel: "Deutsch" },
   { code: "ja", label: "Japanese", nativeLabel: "日本語" },
   { code: "ko", label: "Korean", nativeLabel: "한국어" },
+  { code: "km", label: "Khmer", nativeLabel: "ភាសាខ្មែរ" },
 ];
 
 // ─── Translation map (English baseline) ──────────────────────────────────────
@@ -125,6 +126,7 @@ const translations: Record<Locale, TranslationMap> = {
   de: {},
   ja: {},
   ko: {},
+  km: {},
 };
 
 // ─── i18n state ───────────────────────────────────────────────────────────────

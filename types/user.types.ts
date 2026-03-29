@@ -18,7 +18,8 @@ export type Language =
   | "pt"
   | "de"
   | "ja"
-  | "ko";
+  | "ko"
+  | "km";
 
 export type LearningStyle = "visual" | "auditory" | "reading" | "kinesthetic";
 

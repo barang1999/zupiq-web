@@ -13,6 +13,7 @@ import {
   Settings,
   Sparkles,
   Trophy,
+  Zap,
   X,
 } from 'lucide-react';
 import { useLiveTokenUsage } from '../../hooks/useLiveTokenUsage';
@@ -30,7 +31,8 @@ interface AppHeaderProps {
   onNavigateQuiz?: () => void;
   onNavigateKnowledgeMap?: () => void;
   onNavigateAchievements?: () => void;
-  activeMobileMenu?: 'study' | 'history' | 'flashcards' | 'quiz' | 'knowledge-map' | 'achievements' | 'settings' | null;
+  onNavigateQuantumPrism?: () => void;
+  activeMobileMenu?: 'study' | 'history' | 'flashcards' | 'quiz' | 'quantum-prism' | 'knowledge-map' | 'achievements' | 'settings' | null;
   showInstallAppButton?: boolean;
   onInstallAppClick?: () => void;
 }
@@ -47,6 +49,7 @@ export function AppHeader({
   onNavigateQuiz,
   onNavigateKnowledgeMap,
   onNavigateAchievements,
+  onNavigateQuantumPrism,
   activeMobileMenu = null,
   showInstallAppButton = false,
   onInstallAppClick,
@@ -99,6 +102,18 @@ export function AppHeader({
     setIsProfileMenuOpen(false);
   };
 
+  const navigateToQuantumPrism = () => {
+    if (onNavigateQuantumPrism) {
+      onNavigateQuantumPrism();
+      return;
+    }
+    if (window.location.pathname !== '/quantum-prism') {
+      window.history.pushState({ page: 'quantum-prism' }, '', '/quantum-prism');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { page: 'quantum-prism' } }));
+    }
+    setIsProfileMenuOpen(false);
+  };
+
   const mobileMenuItems = useMemo(
     () => [
       { id: 'study' as const, label: 'Study Space', Icon: GitFork, action: onNavigateStudy },
@@ -106,15 +121,18 @@ export function AppHeader({
       { id: 'history' as const, label: 'Learning History', Icon: History, action: onNavigateHistory },
       { id: 'flashcards' as const, label: 'Flashcards', Icon: Layers, action: onNavigateFlashcards },
       { id: 'quiz' as const, label: 'Quiz', Icon: Brain, action: navigateToQuiz },
+      { id: 'quantum-prism' as const, label: 'Quantum Prism', Icon: Zap, action: navigateToQuantumPrism },
       { id: 'achievements' as const, label: 'Achievements', Icon: Trophy, action: navigateToAchievements },
       { id: 'settings' as const, label: 'Settings', Icon: Settings, action: onSettingsClick },
     ],
     [
       navigateToAchievements,
       navigateToKnowledgeMap,
+      navigateToQuantumPrism,
       navigateToQuiz,
       onNavigateFlashcards,
       onNavigateHistory,
+      onNavigateQuantumPrism,
       onNavigateStudy,
       onSettingsClick,
     ]
