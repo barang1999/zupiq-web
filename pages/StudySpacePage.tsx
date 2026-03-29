@@ -6,7 +6,7 @@ import {
   GitFork, History, Trophy, Archive, Network,
   Plus, X, Loader2, Sparkles,
   Bookmark, Zap, ArrowRight,
-  ChevronLeft, ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers,
+  ChevronLeft, ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers, Lock, LockOpen,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
 import { AppSidebar } from '../components/layout/AppSidebar';
@@ -821,6 +821,7 @@ export function StudySpacePage({
   const [positions,      setPositions]      = useState<Record<string, NodePos>>({});
   const [selectedNode,   setSelectedNode]   = useState<BreakdownNode | null>(null);
   const [draggingId,     setDraggingId]     = useState<string | null>(null);
+  const [isLayoutLocked, setIsLayoutLocked] = useState(false);
   const [expandingId,    setExpandingId]    = useState<string | null>(null);
   const [loading,        setLoading]        = useState(false);
   const [insightLoading, setInsightLoading] = useState(false);
@@ -1676,6 +1677,7 @@ export function StudySpacePage({
   }, [breakdown, nodeInsights, persistNodeInsights, selectedNode]);
 
   const startDrag = useCallback((e: React.MouseEvent, id: string) => {
+    if (isLayoutLocked) return;
     e.preventDefault();
     e.stopPropagation();
     dragState.current = {
@@ -1686,9 +1688,10 @@ export function StudySpacePage({
       origY: positions[id]?.y ?? 0,
     };
     setDraggingId(id);
-  }, [positions]);
+  }, [isLayoutLocked, positions]);
 
   const startTouchDragAt = useCallback((id: string, clientX: number, clientY: number) => {
+    if (isLayoutLocked) return;
     dragState.current = {
       id,
       startX: clientX,
@@ -1697,7 +1700,7 @@ export function StudySpacePage({
       origY: positions[id]?.y ?? 0,
     };
     setDraggingId(id);
-  }, [positions]);
+  }, [isLayoutLocked, positions]);
 
   const handleBranchTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>, node: BreakdownNode) => {
     const touch = e.touches?.[0];
@@ -1728,9 +1731,10 @@ export function StudySpacePage({
     if (distance < BRANCH_LONG_PRESS_MOVE_THRESHOLD) return;
     clearBranchLongPressTimer();
     branchTouchGestureRef.current = null;
+    if (isLayoutLocked) return;
     suppressBranchClickRef.current = true;
     startTouchDragAt(node.id, touch.clientX, touch.clientY);
-  }, [clearBranchLongPressTimer, startTouchDragAt]);
+  }, [clearBranchLongPressTimer, isLayoutLocked, startTouchDragAt]);
 
   const handleBranchTouchEnd = useCallback((nodeId: string) => {
     clearBranchLongPressTimer();
@@ -2754,6 +2758,17 @@ Do not repeat content already given.`;
     }
   }, [onNavigatePlan]);
 
+  const toggleLayoutLock = useCallback(() => {
+    const nextLocked = !isLayoutLocked;
+    setIsLayoutLocked(nextLocked);
+    if (nextLocked) {
+      dragState.current = null;
+      setDraggingId(null);
+      clearBranchLongPressTimer();
+      branchTouchGestureRef.current = null;
+    }
+  }, [clearBranchLongPressTimer, isLayoutLocked]);
+
   return (
     <div className="min-h-screen bg-background text-on-surface overflow-hidden">
       {/* Ambient glows */}
@@ -2818,12 +2833,27 @@ Do not repeat content already given.`;
 
           {/* Title bar (when breakdown loaded) */}
           {breakdown && !loading && (
-            <div className="px-2 sm:px-4 md:px-6 pt-1.5 sm:pt-2 md:pt-2.5 pb-0 shrink-0">
-              <span className="text-tertiary text-[9px] sm:text-[10px] font-bold tracking-[0.1em] sm:tracking-[0.14em] uppercase">Active Analysis</span>
-              <h1 className="font-headline text-sm sm:text-lg md:text-xl font-bold text-on-surface mt-0 sm:mt-0.5 tracking-tight leading-snug">
-                {breakdown.title.split(' ').slice(0, -1).join(' ')}{' '}
-                <span className="text-secondary">{breakdown.title.split(' ').slice(-1)}</span>
-              </h1>
+            <div className="px-2 sm:px-4 md:px-6 pt-1.5 sm:pt-2 md:pt-2.5 pb-0 shrink-0 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-tertiary text-[9px] sm:text-[10px] font-bold tracking-[0.1em] sm:tracking-[0.14em] uppercase">Active Analysis</span>
+                <h1 className="font-headline text-sm sm:text-lg md:text-xl font-bold text-on-surface mt-0 sm:mt-0.5 tracking-tight leading-snug">
+                  {breakdown.title.split(' ').slice(0, -1).join(' ')}{' '}
+                  <span className="text-secondary">{breakdown.title.split(' ').slice(-1)}</span>
+                </h1>
+              </div>
+              <button
+                onClick={toggleLayoutLock}
+                title={isLayoutLocked ? 'Unlock node layout' : 'Lock node layout'}
+                aria-label={isLayoutLocked ? 'Unlock node layout' : 'Lock node layout'}
+                aria-pressed={isLayoutLocked}
+                className={`w-9 h-9 rounded-xl backdrop-blur border flex items-center justify-center transition-colors shadow-md shrink-0 ${
+                  isLayoutLocked
+                    ? 'bg-surface-container-highest border-primary/50 text-primary'
+                    : 'bg-surface-container-highest/80 border-outline-variant/30 text-on-surface-variant hover:text-primary hover:border-primary/40'
+                }`}
+              >
+                {isLayoutLocked ? <Lock className="w-4 h-4" /> : <LockOpen className="w-4 h-4" />}
+              </button>
             </div>
           )}
 
@@ -2965,7 +2995,7 @@ Do not repeat content already given.`;
                         left: pos.x + offsetX,
                         top: pos.y + offsetY,
                         transform: 'translate(-50%, -50%)',
-                        cursor: isDragging ? 'grabbing' : 'grab',
+                        cursor: isLayoutLocked ? 'default' : (isDragging ? 'grabbing' : 'grab'),
                         zIndex: isSelected ? 20 : isDragging ? 30 : 10,
                         userSelect: 'none',
                       }}
