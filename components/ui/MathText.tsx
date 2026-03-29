@@ -108,6 +108,8 @@ function normalizeLatexInput(src: string): string {
     .replace(/\\+n(?![a-zA-Z])/g, '\n')
     .replace(/\\+r(?![a-zA-Z])/g, ' ')
     .replace(/\\+t(?![a-zA-Z])/g, ' ')
+    .replace(/\\+b(?![a-zA-Z])/g, ' ')
+    .replace(/\\+f(?![a-zA-Z])/g, ' ')
     .replace(/\\\$/g, '$');
 }
 

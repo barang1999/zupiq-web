@@ -96,6 +96,8 @@ function normalizeLatexInput(src: string): string {
     .replace(/\\+n(?![a-zA-Z])/g, '\n')
     .replace(/\\+r(?![a-zA-Z])/g, ' ')
     .replace(/\\+t(?![a-zA-Z])/g, ' ')
+    .replace(/\\+b(?![a-zA-Z])/g, ' ')
+    .replace(/\\+f(?![a-zA-Z])/g, ' ')
     .replace(/\\\$/g, '$');
 }
 
@@ -369,6 +371,7 @@ function renderInline(text: string): React.ReactNode[] {
       nodes.push(
         <span
           key={i}
+          className="no-scrollbar"
           style={{ display: 'inline-block', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', verticalAlign: 'middle' }}
           dangerouslySetInnerHTML={{ __html: renderKaTeX(seg.value, seg.display) }}
         />

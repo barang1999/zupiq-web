@@ -408,6 +408,10 @@ function normalizeMathPreviewText(raw: string): string {
     .replace(/\\newline\b/g, '\n')
     // Convert escaped "\n" (including over-escaped variants) when standalone.
     .replace(/\\+n(?![a-zA-Z])/g, '\n')
+    .replace(/\\+r(?![a-zA-Z])/g, ' ')
+    .replace(/\\+t(?![a-zA-Z])/g, ' ')
+    .replace(/\\+b(?![a-zA-Z])/g, ' ')
+    .replace(/\\+f(?![a-zA-Z])/g, ' ')
     // Heal legacy malformed text produced by older normalization ("\newline" -> "ewline").
     .replace(/(^|[ \t])ewline(?=\s+[\u1780-\u17FFA-Za-z])/g, '$1\n')
     .replace(/\r\n?/g, '\n')
@@ -543,6 +547,11 @@ function normalizeImageProblemText(input: string): string {
     input
       .replace(/\u200b/g, '')
       .replace(/\r\n?/g, '\n')
+      .replace(/\\+n(?![a-zA-Z])/g, '\n')
+      .replace(/\\+r(?![a-zA-Z])/g, ' ')
+      .replace(/\\+t(?![a-zA-Z])/g, ' ')
+      .replace(/\\+b(?![a-zA-Z])/g, ' ')
+      .replace(/\\+f(?![a-zA-Z])/g, ' ')
       .replace(/\\{2,}(?=[A-Za-z])/g, '\\')
       .replace(/\\\$/g, '$')
       .replace(/[−–]/g, '-')
@@ -3035,7 +3044,7 @@ Do not repeat content already given.`;
                           <div className="bg-background/60 rounded-xl px-4 py-3 mb-3">
                             <div className="space-y-1.5">
                               {nodeMathPreviewLines.map((line, idx) => (
-                                <MathText key={`root_${node.id}_${idx}`} className="text-base text-on-surface leading-relaxed whitespace-pre-wrap block">
+                                <MathText key={`root_${node.id}_${idx}`} className="text-base text-on-surface leading-relaxed whitespace-pre-wrap block no-scrollbar">
                                   {line}
                                 </MathText>
                               ))}
@@ -3074,7 +3083,7 @@ Do not repeat content already given.`;
                             <div className="bg-background/50 rounded-lg px-3 py-2">
                               <div className="space-y-1.5">
                                 {nodeMathPreviewLines.map((line, idx) => (
-                                  <MathText key={`branch_${node.id}_${idx}`} className="text-xs text-primary leading-relaxed whitespace-pre-wrap block">
+                                  <MathText key={`branch_${node.id}_${idx}`} className="text-xs text-primary leading-relaxed whitespace-pre-wrap block no-scrollbar">
                                     {line}
                                   </MathText>
                                 ))}
@@ -3119,7 +3128,7 @@ Do not repeat content already given.`;
                           {node.mathContent && (
                             <div className="space-y-1">
                               {nodeMathPreviewLines.map((line, idx) => (
-                                <MathText key={`leaf_${node.id}_${idx}`} className="text-[11px] text-on-surface-variant leading-relaxed whitespace-pre-wrap block">
+                                <MathText key={`leaf_${node.id}_${idx}`} className="text-[11px] text-on-surface-variant leading-relaxed whitespace-pre-wrap block no-scrollbar">
                                   {line}
                                 </MathText>
                               ))}
@@ -3237,7 +3246,7 @@ Do not repeat content already given.`;
                     <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-2">Expression</span>
                     <div className="space-y-1.5">
                       {selectedNodeExpressionLines.map((line, idx) => (
-                        <MathText key={`expr_${selectedNode.id}_${idx}`} className="text-base text-primary leading-relaxed whitespace-pre-wrap block">
+                        <MathText key={`expr_${selectedNode.id}_${idx}`} className="text-base text-primary leading-relaxed whitespace-pre-wrap block no-scrollbar">
                           {line}
                         </MathText>
                       ))}
@@ -3266,7 +3275,7 @@ Do not repeat content already given.`;
                                 <MathText
                                   key={`key_formula_${idx}`}
                                   math={selectedNodeKeyFormulaLines.length > 1}
-                                  className="text-sm text-primary whitespace-pre-wrap block"
+                                  className="text-sm text-primary whitespace-pre-wrap block no-scrollbar"
                                 >
                                   {line}
                                 </MathText>
