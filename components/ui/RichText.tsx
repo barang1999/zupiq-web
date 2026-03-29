@@ -98,7 +98,8 @@ function normalizeLatexInput(src: string): string {
     .replace(/\\+t(?![a-zA-Z])/g, ' ')
     .replace(/\\+b(?![a-zA-Z])/g, ' ')
     .replace(/\\+f(?![a-zA-Z])/g, ' ')
-    .replace(/\\\$/g, '$');
+    .replace(/\\\$/g, '$')
+    .replace(/,\s*,/g, '');
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -124,6 +125,7 @@ function clean(text: string): string {
     .replace(/\$(\s*)\*(?!\*)/g, (_m, ws: string) => `$${ws}`) // `$math$*` -> `$math$`, but keep `**` bold markers
     .replace(/\*{3,}/g, ' ')           // `***` → space
     .replace(/[ \t]{2,}/g, ' ')        // collapse multiple spaces
+    .replace(/,\s*,/g, '')            // completely remove redundant commas
     .trim();
 }
 

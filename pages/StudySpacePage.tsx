@@ -557,14 +557,14 @@ function wrapInlineMathCandidates(text: string): string {
     // e.g. F_x = F \cos\theta, a = b \times c, F_{acting} = F_g F_{air} = 0, x_1 = 0, \{ F_g \}
     // Matches optional assignment, followed by optional terms, and at least one LaTeX command or subscript/superscript.
     next = next.replace(
-      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}\\\u200b]+)*/g,
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|\\\\|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}\\\u200b]+)*/g,
       (match) => {
         const trimmed = match.trim();
         if (mathDebug) {
           console.debug('[StudySpace math debug] autoWrap candidate', { match, trimmed });
         }
         // If it looks like a legitimate math fragment (has a command or sub/sup and some structure)
-        if (trimmed.length > 2 && (/\\[a-zA-Z{}]+/.test(trimmed) || /[_^]/.test(trimmed))) {
+        if (trimmed.length > 2 && (/\\[a-zA-Z{}]+|\\\\/.test(trimmed) || /[_^]/.test(trimmed))) {
           return `$${trimmed}$`;
         }
         return match;
@@ -587,7 +587,7 @@ function looksLikeStandaloneMathLine(line: string): boolean {
   const t = line.trim();
   if (!t || t.includes('$')) return false;
 
-  const hasLatexCommand = /(\\[a-zA-Z]+|\\[{}])/.test(t);
+  const hasLatexCommand = /(\\[a-zA-Z]+|\\[{}]|\\\\)/.test(t);
   const hasSubSup = /[_^]/.test(t);
   const hasMathOperator = /[=<>+\-*/]|[≤≥≈≠±×÷]/.test(t);
   const hasDigits = /\d/.test(t);
@@ -596,7 +596,8 @@ function looksLikeStandaloneMathLine(line: string): boolean {
 
   if (hasSentenceEnding && wordCount > 8) return false;
   if ((hasLatexCommand || hasSubSup) && (hasMathOperator || hasDigits) && wordCount <= 14) return true;
-  if (hasMathOperator && hasDigits && wordCount <= 6) return true;
+  if (hasMathOperator && wordCount <= 4) return true; // Catch simple equations like a = m
+  if (hasMathOperator && hasDigits && wordCount <= 8) return true;
   return false;
 }
 
@@ -606,16 +607,20 @@ function normalizeImageProblemText(input: string): string {
     stripLatexTabular(input)
       .replace(/\u200b/g, '')
       .replace(/\r\n?/g, '\n')
+      // Normalize double-backslash as newline for better AI output handling
+      .replace(/\\\\(?![a-zA-Z])/g, '\n')
       .replace(/\\+n(?![a-zA-Z])/g, '\n')
       .replace(/\\+r(?![a-zA-Z])/g, ' ')
       .replace(/\\+t(?![a-zA-Z])/g, ' ')
       .replace(/\\+b(?![a-zA-Z])/g, ' ')
       .replace(/\\+f(?![a-zA-Z])/g, ' ')
       .replace(/\\{2,}(?=[A-Za-z])/g, '\\')
+
       .replace(/\\\$/g, '$')
       .replace(/[−–]/g, '-')
       .replace(/[×]/g, '\\times ')
       .replace(/[÷]/g, '\\div ')
+      .replace(/,\s*,/g, ',')
       .replace(/([A-Za-z])\s*\/\s*([A-Za-z])/g, '$1/$2')
       .replace(/\^(\s+)(\d+)/g, '^$2')
       .trim()

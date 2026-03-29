@@ -17,7 +17,9 @@ interface Props {
  */
 export function MathText({ children, math = false, className }: Props) {
   if (!children) return null;
-  const normalizedInput = autoWrapInlineMathForRender(normalizeMultilineInlineMathBlocks(children));
+  // Normalize double-backslash as newline for better AI output handling
+  const preNormalized = children.replace(/\\\\(?![a-zA-Z])/g, '\n');
+  const normalizedInput = autoWrapInlineMathForRender(normalizeMultilineInlineMathBlocks(preNormalized));
 
   // Some model outputs mix narrative text with inline $...$ math even in "math" fields.
   // In that case, use mixed rendering instead of forcing one KaTeX block.
@@ -110,7 +112,8 @@ function normalizeLatexInput(src: string): string {
     .replace(/\\+t(?![a-zA-Z])/g, ' ')
     .replace(/\\+b(?![a-zA-Z])/g, ' ')
     .replace(/\\+f(?![a-zA-Z])/g, ' ')
-    .replace(/\\\$/g, '$');
+    .replace(/\\\$/g, '$')
+    .replace(/,\s*,/g, '');
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -199,7 +202,7 @@ function renderKaTeX(src: string, displayMode: boolean): string {
 function looksLikePureLaTeX(s: string): boolean {
   const t = s.trim();
   if (!t || t.includes('$')) return false;
-  if (!/\\[a-zA-Z{]/.test(t)) return false;
+  if (!/\\[a-zA-Z{\\]/.test(t)) return false;
   if (containsNonMathUnicode(t)) return false;
 
   // If there are many long natural-language words, this is likely prose with a math fragment.
@@ -216,7 +219,7 @@ function looksLikePureLaTeX(s: string): boolean {
 function looksLikeMathExpression(s: string): boolean {
   const t = s.trim();
   if (!t) return false;
-  if (/\\[a-zA-Z]+/.test(t)) return true;
+  if (/\\[a-zA-Z\\]+/.test(t)) return true;
   if (/[=+\-*/^_{}[\]()]/.test(t)) return true;
   if (/\d/.test(t)) return true;
   if (/[α-ωΑ-Ω∞≈≤≥≠±×÷]/.test(t)) return true;
@@ -302,11 +305,11 @@ function autoWrapInlineMathForRender(text: string): string {
     // e.g. F_x = F \cos\theta, a = b \times c, F_{acting} = F_g F_{air} = 0, x_1 = 0, \{ F_g \}
     // Matches optional assignment, followed by optional terms, and at least one LaTeX command or subscript/superscript.
     next = next.replace(
-      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}\\\u200b]+)*/g,
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|\\\\|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}\\\u200b]+)*/g,
       (match) => {
         const trimmed = match.trim();
         // If it looks like a legitimate math fragment (has a command or sub/sup and some structure)
-        if (trimmed.length > 2 && (/\\[a-zA-Z{}]+/.test(trimmed) || /[_^]/.test(trimmed))) {
+        if (trimmed.length > 2 && (/\\[a-zA-Z{}]+|\\\\/.test(trimmed) || /[_^]/.test(trimmed))) {
           return `$${trimmed}$`;
         }
         return match;
@@ -336,7 +339,7 @@ function splitMathSegments(text: string): Segment[] {
   const mathDebug = isMathDebugEnabled();
   // Match $$...$$ / \[...\] first (display), then $...$ / \(...\) (inline), 
   // then bare LaTeX commands (consistent with RichText)
-  const regex = /\$\$([\s\S]+?)\$\$|\$([\s\S]+?)\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|(\\[a-zA-Z]+|\\[{}]|\\,)(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
+  const regex = /\$\$([\s\S]+?)\$\$|\$([\s\S]+?)\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|(\\[a-zA-Z]+|\\[{}]|\\\\|\\,)(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
