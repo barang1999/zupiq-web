@@ -211,15 +211,19 @@ function autoWrapInlineMathForRender(text: string): string {
   const mathDelimited = /(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\])/g;
   const segments = text.split(mathDelimited);
 
+  if (mathDebug) {
+    console.debug('[RichText debug] autoWrapInlineMathForRender start', { text });
+  }
+
   const result = segments.map((segment) => {
     if (!segment) return segment;
     if (segment.startsWith('$') || segment.startsWith('\\(') || segment.startsWith('\\[')) return segment;
 
     let next = segment;
 
-    // e.g. g = 9.8 \text{ m/s}^2
+    // e.g. 20 \mathrm{m/s}, g = 9.8 \mathrm{m/s}^2
     next = next.replace(
-      /\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)?\s*=\s*\d+(?:\.\d+)?\s*(?:\\(?:text|mathrm)\{[^{}]+\})(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+))?/g,
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9]+|\^[a-zA-Z0-9]+)?\s*=\s*)?\d+(?:\.\d+)?\s*(?:\\(?:text|mathrm)\{[^{}]+\})(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+))?/g,
       (match) => `$${match.trim()}$`
     );
 
@@ -229,20 +233,14 @@ function autoWrapInlineMathForRender(text: string): string {
       (match) => `$${match.trim()}$`
     );
 
-    // e.g. 20 \text{ m/s}
+    // e.g. F_x = F \cos\theta, a = b \times c, F_{acting} = F_g F_{air} = 0, x_1 = 0, \{ F_g \}
+    // Matches optional assignment, followed by optional terms, and at least one LaTeX command or subscript/superscript.
     next = next.replace(
-      /\b\d+(?:\.\d+)?\s*(?:\\(?:text|mathrm)\{[^{}]+\})(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+))?/g,
-      (match) => `$${match.trim()}$`
-    );
-
-    // e.g. F_x = F \cos\theta, a = b \times c
-    // Matches optional assignment, followed by optional terms, and at least one LaTeX command.
-    next = next.replace(
-      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷]*\\[a-zA-Z]+(?:\s*\{[^{}]*\})?(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+|_\{[^{}]+\}|_[0-9A-Za-z]+))*/g,
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}\\\u200b]+)*/g,
       (match) => {
         const trimmed = match.trim();
-        // If it looks like a legitimate math fragment (has a command and some structure)
-        if (trimmed.length > 2 && /\\[a-zA-Z]+/.test(trimmed)) {
+        // If it looks like a legitimate math fragment (has a command or sub/sup and some structure)
+        if (trimmed.length > 2 && (/\\[a-zA-Z{}]+/.test(trimmed) || /[_^]/.test(trimmed))) {
           return `$${trimmed}$`;
         }
         return match;
@@ -264,7 +262,7 @@ function autoWrapInlineMathForRender(text: string): string {
 function parseInline(text: string): InlineSegment[] {
   const segments: InlineSegment[] = [];
   // Order matters: $$, $, **, *, bare LaTeX
-  const regex = /\$\$([\s\S]+?)\$\$|\$([\s\S]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]|\*\*(.+?)\*\*|\*([^*\n]+?)\*|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|\\[a-zA-Z]+(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
+  const regex = /\$\$([\s\S]+?)\$\$|\$([\s\S]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]|\*\*(.+?)\*\*|\*([^*\n]+?)\*|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|(\\[a-zA-Z]+|\\[{}]|\\,)(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
@@ -302,6 +300,7 @@ function parseInline(text: string): InlineSegment[] {
 function normalizeMultilineInlineMathBlocks(text: string): string {
   return (text ?? '').replace(/\$([\s\S]+?)\$/g, (_match, inner: string) => {
     const innerNormalized = (inner ?? '')
+      .replace(/\u200b/g, '')
       .replace(/\\+n(?![a-zA-Z])/g, '\n')
       .replace(/\r\n?/g, '\n')
       .trim();
@@ -368,6 +367,9 @@ function renderInline(text: string): React.ReactNode[] {
     } else if (seg.type === 'italic') {
       nodes.push(<em key={i} className="italic opacity-90">{seg.value}</em>);
     } else if (seg.type === 'math') {
+      if (mathDebug) {
+        console.debug('[RichText debug] rendering math segment', { value: seg.value, display: seg.display });
+      }
       nodes.push(
         <span
           key={i}

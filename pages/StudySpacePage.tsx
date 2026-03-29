@@ -15,6 +15,7 @@ import SweepText from '../components/ui/SweepText.jsx';
 import { api, ApiError } from '../lib/api';
 import { MathText } from '../components/ui/MathText';
 import { RichText } from '../components/ui/RichText';
+import { VisualTable } from '../components/ui/VisualTable';
 import { ActionPopover } from '../components/ui/ActionPopover';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
@@ -32,6 +33,31 @@ interface BreakdownNode {
   parentId?: string;
   tags?: string[];
 }
+
+interface SignTableRow {
+  label: string;
+  type: 'value' | 'interval';
+  cells: string[];
+  conclusion: string;
+}
+
+interface GenericTableRow {
+  cells: string[];
+}
+
+type VisualTable = 
+  | { 
+      type: 'sign_analysis'; 
+      parameterName: string;
+      columns: string[];
+      conclusionLabel: string;
+      rows: SignTableRow[];
+    }
+  | { 
+      type: 'generic'; 
+      headers: string[]; 
+      rows: GenericTableRow[];
+    };
 
 interface NodeInsight {
   simpleBreakdown: string;
@@ -237,6 +263,7 @@ interface StoredWorkspaceSnapshot {
   nodeConversations: Record<string, NodeConversationMessage[]>;
   selectedNodeId: string | null;
   activeTab: string;
+  visualTable: VisualTable | null;
 }
 
 interface StudyDebugEntry {
@@ -253,9 +280,26 @@ interface StoredViewportState {
   anchorY?: number;
 }
 
+function detectSignTableInText(text: string): boolean {
+  if (!text) return false;
+  // Explicit LaTeX tabular environment
+  const hasTabular = /\\begin\{tabular\}/.test(text);
+  // Sign table column header pattern: M ... Δ/Delta ... P ... S (in any OCR form)
+  const hasColumnHeaders = /\bM\b.{0,30}(?:Δ|\\Delta|\$\\Delta\$).{0,30}\bP\b.{0,30}\bS\b/i.test(text);
+  // Discriminant + Vieta (traditional detection)
+  const hasDiscriminant = /[ΔД]['′]?|\\Delta['′]?|\bdiscriminant\b/i.test(text);
+  const hasVietaPS = /\bP\s*[=:]|\bS\s*[=:]|\bVieta\b|\bproduct.*root|sum.*root/i.test(text);
+  return hasTabular || hasColumnHeaders || (hasDiscriminant && hasVietaPS);
+}
+
 function sanitizeBreakdownPayload(raw: ProblemBreakdown | null | undefined): ProblemBreakdown {
   const fallbackInsights: NodeInsight = { simpleBreakdown: '', keyFormula: '' };
-  const safeNodes = Array.isArray(raw?.nodes) ? raw!.nodes : [];
+  const safeNodes = Array.isArray(raw?.nodes) ? raw!.nodes.map((node) => ({
+    ...node,
+    label: stripLatexTabular(node.label ?? ''),
+    description: stripLatexTabular(node.description ?? ''),
+    mathContent: node.mathContent ? stripLatexTabular(node.mathContent) : node.mathContent,
+  })) : [];
   return {
     id: raw?.id,
     title: (raw?.title ?? 'Untitled Session').toString(),
@@ -381,6 +425,18 @@ function buildCopyMathPayload(raw: string): string {
   return normalizeCopiedLatexExpression(raw);
 }
 
+/** Remove LaTeX tabular/array/matrix environments — rendered separately by SignTable */
+function stripLatexTabular(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/\\begin\{tabular\}[\s\S]*?\\end\{tabular\}/g, '')
+    .replace(/\\begin\{array\}[\s\S]*?\\end\{array\}/g, '')
+    .replace(/\\hline\b/g, '')
+    .replace(/(?:^|(?<=\s))(?:&\s*)+(?=\n|$)/gm, '')  // orphaned & separators
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function expandMultilineInlineMathPreview(raw: string): string {
   return (raw ?? '').replace(/\$([\s\S]+?)\$/g, (_match, inner: string) => {
     const normalizedInner = (inner ?? '')
@@ -403,7 +459,7 @@ function expandMultilineInlineMathPreview(raw: string): string {
 
 function normalizeMathPreviewText(raw: string): string {
   if (!raw) return '';
-  return normalizeMathDelimiters(expandMultilineInlineMathPreview(raw))
+  return normalizeMathDelimiters(expandMultilineInlineMathPreview(stripLatexTabular(raw)))
     // Handle LaTeX line-break command explicitly first.
     .replace(/\\newline\b/g, '\n')
     // Convert escaped "\n" (including over-escaped variants) when standalone.
@@ -501,9 +557,12 @@ function wrapInlineMathCandidates(text: string): string {
     // e.g. F_x = F \cos\theta, a = b \times c, F_{acting} = F_g F_{air} = 0, x_1 = 0, \{ F_g \}
     // Matches optional assignment, followed by optional terms, and at least one LaTeX command or subscript/superscript.
     next = next.replace(
-      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}]+)*/g,
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}\\\u200b]+)*/g,
       (match) => {
         const trimmed = match.trim();
+        if (mathDebug) {
+          console.debug('[StudySpace math debug] autoWrap candidate', { match, trimmed });
+        }
         // If it looks like a legitimate math fragment (has a command or sub/sup and some structure)
         if (trimmed.length > 2 && (/\\[a-zA-Z{}]+/.test(trimmed) || /[_^]/.test(trimmed))) {
           return `$${trimmed}$`;
@@ -544,7 +603,7 @@ function looksLikeStandaloneMathLine(line: string): boolean {
 function normalizeImageProblemText(input: string): string {
   if (!input) return '';
   const normalized = wrapInlineMathCandidates(normalizeMathDelimiters(
-    input
+    stripLatexTabular(input)
       .replace(/\u200b/g, '')
       .replace(/\r\n?/g, '\n')
       .replace(/\\+n(?![a-zA-Z])/g, '\n')
@@ -811,6 +870,20 @@ interface Props {
   onBreakdownConsumed?: () => void;
 }
 
+function parseJsonSafe<T>(input: any): T | null {
+  if (!input) return null;
+  if (typeof input !== 'string') return input as T;
+  try {
+    const firstPass = JSON.parse(input);
+    if (typeof firstPass === 'string' && (firstPass.startsWith('{') || firstPass.startsWith('['))) {
+      return JSON.parse(firstPass) as T;
+    }
+    return firstPass as T;
+  } catch {
+    return null;
+  }
+}
+
 export function StudySpacePage({
   user,
   onNavigateHistory,
@@ -860,7 +933,10 @@ export function StudySpacePage({
     () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugStudy') === '1'
   );
   const [debugEntries, setDebugEntries] = useState<StudyDebugEntry[]>([]);
+  const [sessionVisualTable, setSessionVisualTable] = useState<VisualTable | null>(null);
+  const [ocrDetectedSignTable, setOcrDetectedSignTable] = useState(false);
   const lastOcrInsertRef = useRef<string | null>(null);
+  const lastOcrUploadIdRef = useRef<string | null>(null);
   const branchLongPressTimerRef = useRef<number | null>(null);
   const branchTouchGestureRef = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
   const suppressBranchClickRef = useRef(false);
@@ -1207,7 +1283,7 @@ export function StudySpacePage({
     };
   }, []);
 
-  const hydrateBreakdown = useCallback((bd: ProblemBreakdown) => {
+  const hydrateBreakdown = useCallback((bd: ProblemBreakdown, vt: VisualTable | null = null) => {
     const normalized = sanitizeBreakdownPayload(bd);
     const brs = normalized.nodes.filter((n: BreakdownNode) => n.type === 'branch').length;
     const lvs = normalized.nodes.filter((n: BreakdownNode) => n.type === 'leaf').length;
@@ -1220,6 +1296,7 @@ export function StudySpacePage({
     setBreakdown(normalized);
     setSessionId(normalized.id ?? null);
     setSessionSubjectId(null);
+    setSessionVisualTable(vt);
     setNodeInsights(normalized.nodeInsights ?? {});
     setNodeConversations(normalized.nodeConversations ?? {});
     setPositions(restoredPositions);
@@ -1241,6 +1318,27 @@ export function StudySpacePage({
     const bd = sanitizeBreakdownPayload(snapshot.breakdown);
     setBreakdown(bd);
     setSessionId(snapshot.sessionId ?? bd.id ?? null);
+    
+    // If visualTable is missing (undefined), it's a legacy snapshot. 
+    // We set it to null but trigger a background sync if we have a sessionId.
+    const hasTableKey = 'visualTable' in snapshot;
+    setSessionVisualTable(snapshot.visualTable ?? null);
+    
+    if (!hasTableKey && snapshot.sessionId) {
+      console.debug('[VisualTable] Legacy snapshot detected, fetching from cloud...');
+      api.get<{ session: any }>(`/api/sessions/${snapshot.sessionId}`)
+        .then(({ session }) => {
+          if (session?.visual_table_json) {
+            const vt = parseJsonSafe<VisualTable>(session.visual_table_json);
+            if (vt) {
+              setSessionVisualTable(vt);
+              console.debug('[VisualTable] Restored from cloud.');
+            }
+          }
+        })
+        .catch(() => {});
+    }
+
     setNodeInsights(snapshot.nodeInsights ?? {});
     setNodeConversations(snapshot.nodeConversations ?? {});
 
@@ -1341,9 +1439,12 @@ export function StudySpacePage({
           targetSessionId: target?.id ?? null,
         });
         try {
-          const parsed = JSON.parse(target.breakdown_json) as ProblemBreakdown;
-          parsed.id = target.id;
-          hydrateBreakdown(parsed);
+          const parsed = parseJsonSafe<ProblemBreakdown>(target.breakdown_json);
+          if (parsed) {
+            parsed.id = target.id;
+            const vt = target.visual_table_json ? parseJsonSafe<VisualTable>(target.visual_table_json) : null;
+            hydrateBreakdown(parsed, vt);
+          }
         } catch {
           // Ignore malformed historical payloads
           debugStudy('boot:fetchSessions:targetMalformed', {
@@ -1512,6 +1613,7 @@ export function StudySpacePage({
         nodeConversations,
         selectedNodeId: selectedNode?.id ?? null,
         activeTab,
+        visualTable: sessionVisualTable,
       };
       localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(payload));
       debugStudy('workspace:persist', {
@@ -1520,6 +1622,7 @@ export function StudySpacePage({
         positions: Object.keys(payload.positions).length,
         selectedNodeId: payload.selectedNodeId,
         activeTab: payload.activeTab,
+        hasVisualTable: !!payload.visualTable,
       });
     }, 120);
 
@@ -1532,6 +1635,7 @@ export function StudySpacePage({
     nodeConversations,
     selectedNode?.id,
     activeTab,
+    sessionVisualTable,
   ]);
 
   // Global drag handlers
@@ -1626,11 +1730,14 @@ export function StudySpacePage({
     });
     insightRequestInFlightRef.current.add(requestedNodeId);
     setInsightLoading(true);
+    const rootNode = breakdown.nodes.find(n => n.type === 'root');
+    const parentProblem = [rootNode?.label, rootNode?.mathContent].filter(Boolean).join(' ');
     api.post<{ insight: NodeInsight }>('/api/ai/node-insight', {
       nodeLabel: selectedNode.label,
       nodeDescription: selectedNode.description,
       nodeMathContent: selectedNode.mathContent || selectedNode.label,
       subject: breakdown.subject,
+      parentProblem: parentProblem || undefined,
     })
       .then(({ insight }) => {
         console.debug('[NodeInsight FE] auto response', {
@@ -1782,11 +1889,34 @@ export function StudySpacePage({
     setIsInsightPanelOpen(false);
     setBreakdown(null);
     setPositions({});
+    setSessionVisualTable(null);
     try {
-      const { breakdown: bd } = await api.post<{ breakdown: ProblemBreakdown }>(
+      const breakdownPayload: Record<string, unknown> = { problem: trimmedProblem };
+      if (lastOcrUploadIdRef.current) {
+        breakdownPayload.upload_id = lastOcrUploadIdRef.current;
+      }
+      if (ocrDetectedSignTable) {
+        breakdownPayload.sign_table_hint = true;
+      }
+      console.debug('[SignTable] breakdown payload', {
+        problemLength: trimmedProblem.length,
+        sign_table_hint: !!breakdownPayload.sign_table_hint,
+        has_upload_id: !!breakdownPayload.upload_id,
+        problemPreview: trimmedProblem.slice(0, 160),
+      });
+      const { breakdown: bd, visualTable: vt } = await api.post<{ breakdown: ProblemBreakdown; visualTable?: VisualTable }>(
         '/api/ai/breakdown',
-        { problem: trimmedProblem }
+        breakdownPayload
       );
+      setSessionVisualTable(vt ?? null);
+      console.debug('[SignTable] breakdown response', {
+        hasVisualTable: !!vt,
+        tableType: vt?.type ?? null,
+        parameterName: vt?.parameterName ?? null,
+        columns: vt?.columns ?? null,
+        rowCount: vt?.rows?.length ?? null,
+        rows: vt?.rows ?? null,
+      });
       let newSessionId: string | null = null;
       let newSessionSubjectId: string | null = null;
       try {
@@ -1796,6 +1926,7 @@ export function StudySpacePage({
           problem: trimmedProblem,
           node_count: bd.nodes.length,
           breakdown_json: JSON.stringify(bd),
+          visual_table_json: vt ? JSON.stringify(vt) : undefined,
         });
         newSessionId = session.id;
         newSessionSubjectId = session.subject_id ?? null;
@@ -1826,6 +1957,8 @@ export function StudySpacePage({
       setShowInput(false);
       setProblemInput('');
       lastOcrInsertRef.current = null;
+      lastOcrUploadIdRef.current = null;
+      setOcrDetectedSignTable(false);
       setComposerInput('');
       debugStudy('submit:success', {
         newSessionId,
@@ -1959,6 +2092,7 @@ export function StudySpacePage({
         }
 
         lastOcrInsertRef.current = extractedText;
+        lastOcrUploadIdRef.current = uploadId ?? null;
         logPageMathDebug('attachment:attach:composer-insert', nextValue, {
           uploadId,
           replacedPreviousOcr: Boolean(
@@ -1966,6 +2100,17 @@ export function StudySpacePage({
           ),
         });
         return nextValue;
+      });
+      const signTableDetected = detectSignTableInText(rawExtractedText);
+      setOcrDetectedSignTable(signTableDetected);
+      console.debug('[SignTable] OCR detection', {
+        detected: signTableDetected,
+        rawLength: rawExtractedText.length,
+        hasTabular: /\\begin\{tabular\}/.test(rawExtractedText),
+        hasColumnHeaders: /\bM\b.{0,30}(?:Δ|\\Delta|\$\\Delta\$).{0,30}\bP\b.{0,30}\bS\b/i.test(rawExtractedText),
+        hasDelta: /[Δ]/.test(rawExtractedText),
+        hasPeqSeq: /\bP\s*=|\bS\s*=/.test(rawExtractedText),
+        preview: rawExtractedText.slice(0, 200),
       });
       setShowInput(true);
       logAttach('composer:inserted', {
@@ -3200,7 +3345,33 @@ Do not repeat content already given.`;
             onTouchCancel={handleInsightSwipeEnd}
           >
             <div className="flex items-center justify-between mb-8">
-              <h2 className="font-headline font-bold text-xl">Node Insights</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="font-headline font-bold text-xl">Node Insights</h2>
+                {sessionId && (
+                  <button
+                    onClick={async () => {
+                      if (!sessionId) return;
+                      showActionToast('Syncing from cloud...');
+                      try {
+                        const { session } = await api.get<{ session: any }>(`/api/sessions/${sessionId}`);
+                        if (session?.visual_table_json) {
+                          const vt = parseJsonSafe<VisualTable>(session.visual_table_json);
+                          setSessionVisualTable(vt);
+                          showActionToast('Table restored!');
+                        } else {
+                          showActionToast('No table found in cloud.');
+                        }
+                      } catch {
+                        showActionToast('Sync failed.');
+                      }
+                    }}
+                    className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all"
+                    title="Sync from Cloud"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
               {selectedNode && (
                 <button onClick={closeInsightPanel} className="text-on-surface-variant hover:text-on-surface">
                   <X className="w-5 h-5" />
@@ -3250,6 +3421,18 @@ Do not repeat content already given.`;
                           {line}
                         </MathText>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sign Table — session-level visual logic */}
+                {sessionVisualTable && (
+                  <div>
+                    <label className="text-[10px] font-bold text-tertiary uppercase tracking-widest mb-3 block flex items-center gap-1.5">
+                      Visual Logic · {sessionVisualTable.type === 'sign_analysis' ? 'Sign Table' : 'Structured Data'}
+                    </label>
+                    <div className="rounded-2xl border border-tertiary/25 bg-surface-container overflow-hidden">
+                      <VisualTable table={sessionVisualTable} />
                     </div>
                   </div>
                 )}
@@ -3436,12 +3619,17 @@ Do not repeat content already given.`;
         imageLoading={isImageAnalyzing}
         error={error}
         onChange={(next) => {
-          if (lastOcrInsertRef.current && next.trim() !== (lastOcrInsertRef.current ?? '').trim()) {
+          // Only clear OCR refs if the user has removed the OCR-extracted content entirely
+          // (don't clear if they just prepended extra text before the OCR insert)
+          if (lastOcrInsertRef.current && !next.includes(lastOcrInsertRef.current.slice(0, 40))) {
             lastOcrInsertRef.current = null;
+            lastOcrUploadIdRef.current = null;
+            setOcrDetectedSignTable(false);
           }
           setProblemInput(next);
           if (error) setError(null);
         }}
+        hasVisualTable={ocrDetectedSignTable}
         onSubmit={handleSubmit}
         onClose={() => setShowInput(false)}
         onAttachFile={handleAttachProblemFile}

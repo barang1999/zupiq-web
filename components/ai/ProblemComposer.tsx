@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ChangeEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowRight, Camera, Paperclip, Sparkles, Minus, Network, Upload, X } from 'lucide-react';
+import { ArrowRight, Camera, Paperclip, Sparkles, Minus, Network, Upload, X, Table as TableIcon } from 'lucide-react';
 import { RichText } from '../ui/RichText';
 import SweepText from '../ui/SweepText.jsx';
+import { ImageCropModal } from '../ui/ImageCropModal';
 
 function isComposerDebugEnabled(): boolean {
   if (typeof window === 'undefined') return false;
@@ -101,6 +102,7 @@ interface ProblemComposerProps {
   loading?: boolean;
   imageLoading?: boolean;
   error?: string | null;
+  hasVisualTable?: boolean;
   onChange: (value: string) => void;
   onSubmit: () => void;
   onClose: () => void;
@@ -113,6 +115,7 @@ export function ProblemComposer({
   loading = false,
   imageLoading = false,
   error = null,
+  hasVisualTable = false,
   onChange,
   onSubmit,
   onClose,
@@ -124,6 +127,7 @@ export function ProblemComposer({
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
+  const [cropState, setCropState] = useState<{ src: string; name: string } | null>(null);
   const previousValueRef = useRef(value);
   const previousImageLoadingRef = useRef(imageLoading);
   const previousPreviewVisibleRef = useRef(false);
@@ -261,7 +265,7 @@ export function ProblemComposer({
     cameraInputRef.current?.click();
   };
 
-  const handleFileChange = async (
+  const handleFileChange = (
     e: ChangeEvent<HTMLInputElement>,
     source: 'camera' | 'library'
   ) => {
@@ -275,8 +279,24 @@ export function ProblemComposer({
         size: file.size,
       });
     }
-    await onAttachFile(file);
     e.target.value = '';
+    if (file.type.startsWith('image/')) {
+      const objectUrl = URL.createObjectURL(file);
+      setCropState({ src: objectUrl, name: file.name });
+    } else {
+      onAttachFile(file);
+    }
+  };
+
+  const handleCropConfirm = async (croppedFile: File) => {
+    if (cropState) URL.revokeObjectURL(cropState.src);
+    setCropState(null);
+    if (onAttachFile) await onAttachFile(croppedFile);
+  };
+
+  const handleCropCancel = () => {
+    if (cropState) URL.revokeObjectURL(cropState.src);
+    setCropState(null);
   };
 
   return (
@@ -298,6 +318,15 @@ export function ProblemComposer({
             className="hidden"
             onChange={(e) => handleFileChange(e, 'camera')}
           />
+
+          {cropState && (
+            <ImageCropModal
+              imageSrc={cropState.src}
+              fileName={cropState.name}
+              onConfirm={handleCropConfirm}
+              onCancel={handleCropCancel}
+            />
+          )}
 
           <div className="fixed inset-0 z-[91] pointer-events-none">
             <button
@@ -448,6 +477,13 @@ export function ProblemComposer({
                     </button>
                   </div>
                 </div>
+
+                {hasVisualTable && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-primary font-medium mt-2 mb-1">
+                    <TableIcon className="w-3.5 h-3.5" />
+                    <span>Table detected — will be rendered in Visual Logic</span>
+                  </div>
+                )}
 
                 {showRenderedPreview && (
                   <div className="mb-5 sm:mb-6 rounded-2xl border border-primary/20 bg-background/35 px-3 sm:px-4 py-2.5 sm:py-3">

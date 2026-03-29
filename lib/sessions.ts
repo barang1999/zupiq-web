@@ -8,6 +8,7 @@ export interface SessionRow {
   node_count?: number | null;
   duration_seconds?: number | null;
   breakdown_json?: string | null;
+  visual_table_json?: string | null;
   created_at?: string | null;
   subject_id?: string | null;
 }

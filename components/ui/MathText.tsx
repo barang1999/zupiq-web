@@ -167,23 +167,21 @@ function renderKaTeX(src: string, displayMode: boolean): string {
     });
   }
 
-  // If it has non-math unicode, it might be Khmer/etc inside \text{}
-  // KaTeX usually fails or renders poorly with these.
-  // We'll try to keep them if they are inside \text{...} or \mathrm{...}
-  let finalTrimmed = trimmed;
   const hasNonMath = containsNonMathUnicode(trimmed);
   
   try {
-    // If it's pure non-math text, just return it as-is (with sans font)
-    if (hasNonMath && !/\\[a-zA-Z]+|[_^]/.test(trimmed)) {
-       return `<span class="font-sans">${trimmed}</span>`;
+    // If it contains non-math unicode (like Khmer), KaTeX usually fails to render it
+    // unless it's handled very carefully. To prevent console errors and broken renders,
+    // we fallback to plain text rendering for any segment containing these characters.
+    if (hasNonMath) {
+       return `<span class="font-sans">${trimmed.replace(/\\[a-zA-Z]+/g, '').replace(/[{}]/g, '')}</span>`;
     }
 
-    return katex.renderToString(finalTrimmed, {
+    return katex.renderToString(trimmed, {
       throwOnError: false,
       displayMode,
       output: 'html',
-      trust: true, // Allow some commands
+      trust: true,
       strict: false,
     });
   } catch (err) {
@@ -304,7 +302,7 @@ function autoWrapInlineMathForRender(text: string): string {
     // e.g. F_x = F \cos\theta, a = b \times c, F_{acting} = F_g F_{air} = 0, x_1 = 0, \{ F_g \}
     // Matches optional assignment, followed by optional terms, and at least one LaTeX command or subscript/superscript.
     next = next.replace(
-      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}]+)*/g,
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}\\\u200b]+)*/g,
       (match) => {
         const trimmed = match.trim();
         // If it looks like a legitimate math fragment (has a command or sub/sup and some structure)
