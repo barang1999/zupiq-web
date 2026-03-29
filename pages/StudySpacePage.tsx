@@ -494,14 +494,14 @@ function wrapInlineMathCandidates(text: string): string {
       (match) => `$${match.trim()}$`
     );
 
-    // e.g. F_x = F \cos\theta, a = b \times c
-    // Matches optional assignment, followed by optional terms, and at least one LaTeX command.
+    // e.g. F_x = F \cos\theta, a = b \times c, F_{acting} = F_g F_{air} = 0, x_1 = 0, \{ F_g \}
+    // Matches optional assignment, followed by optional terms, and at least one LaTeX command or subscript/superscript.
     next = next.replace(
-      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷]*\\[a-zA-Z]+(?:\s*\{[^{}]*\})?(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+|_\{[^{}]+\}|_[0-9A-Za-z]+))*/g,
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}]+)*/g,
       (match) => {
         const trimmed = match.trim();
-        // If it looks like a legitimate math fragment (has a command and some structure)
-        if (trimmed.length > 2 && /\\[a-zA-Z]+/.test(trimmed)) {
+        // If it looks like a legitimate math fragment (has a command or sub/sup and some structure)
+        if (trimmed.length > 2 && (/\\[a-zA-Z{}]+/.test(trimmed) || /[_^]/.test(trimmed))) {
           return `$${trimmed}$`;
         }
         return match;
@@ -524,14 +524,15 @@ function looksLikeStandaloneMathLine(line: string): boolean {
   const t = line.trim();
   if (!t || t.includes('$')) return false;
 
-  const hasLatexCommand = /\\[a-zA-Z]+/.test(t);
-  const hasMathOperator = /[=<>+\-*/^_]|[≤≥≈≠±×÷]/.test(t);
+  const hasLatexCommand = /(\\[a-zA-Z]+|\\[{}])/.test(t);
+  const hasSubSup = /[_^]/.test(t);
+  const hasMathOperator = /[=<>+\-*/]|[≤≥≈≠±×÷]/.test(t);
   const hasDigits = /\d/.test(t);
   const hasSentenceEnding = /[.!?។៕]\s*$/.test(t);
   const wordCount = (t.match(/[A-Za-z\u0600-\u06FF\u0900-\u097F\u1780-\u17FF\u4E00-\u9FFF\uAC00-\uD7AF\u3040-\u30FF]+/g) ?? []).length;
 
   if (hasSentenceEnding && wordCount > 8) return false;
-  if (hasLatexCommand && (hasMathOperator || hasDigits) && wordCount <= 14) return true;
+  if ((hasLatexCommand || hasSubSup) && (hasMathOperator || hasDigits) && wordCount <= 14) return true;
   if (hasMathOperator && hasDigits && wordCount <= 6) return true;
   return false;
 }
@@ -540,6 +541,7 @@ function normalizeImageProblemText(input: string): string {
   if (!input) return '';
   const normalized = wrapInlineMathCandidates(normalizeMathDelimiters(
     input
+      .replace(/\u200b/g, '')
       .replace(/\r\n?/g, '\n')
       .replace(/\\{2,}(?=[A-Za-z])/g, '\\')
       .replace(/\\\$/g, '$')
@@ -3258,10 +3260,14 @@ Do not repeat content already given.`;
                     ) : (
                       <div className="space-y-3 relative">
                         {selectedNodeKeyFormulaLines.length > 0 && (
-                          <div className="bg-background/50 p-3 rounded-xl text-center">
-                            <div className="space-y-1.5">
+                          <div className="bg-background/50 p-3 rounded-xl text-center mb-1">
+                            <div className="space-y-2">
                               {selectedNodeKeyFormulaLines.map((line, idx) => (
-                                <MathText key={`key_formula_${idx}`} className="text-sm text-primary whitespace-pre-wrap block">
+                                <MathText
+                                  key={`key_formula_${idx}`}
+                                  math={selectedNodeKeyFormulaLines.length > 1}
+                                  className="text-sm text-primary whitespace-pre-wrap block"
+                                >
                                   {line}
                                 </MathText>
                               ))}

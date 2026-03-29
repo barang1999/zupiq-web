@@ -31,6 +31,7 @@ export function MathText({ children, math = false, className }: Props) {
           ) : (
             <span
               key={i}
+              className="no-scrollbar"
               style={{ display: 'inline-block', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', verticalAlign: 'middle' }}
               dangerouslySetInnerHTML={{ __html: renderKaTeX(part.value, part.type === 'display') }}
             />
@@ -58,7 +59,7 @@ export function MathText({ children, math = false, className }: Props) {
     }
     return (
       <span
-        className={className}
+        className={`${className || ''} no-scrollbar`}
         style={{ display: 'inline-block', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', verticalAlign: 'middle' }}
         dangerouslySetInnerHTML={{ __html: renderKaTeX(src, false) }}
       />
@@ -76,6 +77,7 @@ export function MathText({ children, math = false, className }: Props) {
         ) : (
           <span
             key={i}
+            className="no-scrollbar"
             style={{ display: 'inline-block', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', verticalAlign: 'middle' }}
             dangerouslySetInnerHTML={{ __html: renderKaTeX(part.value, part.type === 'display') }}
           />
@@ -98,6 +100,7 @@ function normalizeLatexInput(src: string): string {
   // Some model outputs contain over-escaped commands (e.g. \\circ instead of \circ).
   // Normalize only command-style sequences to avoid touching intended plain backslashes.
   return src
+    .replace(/\u200b/g, '')
     .replace(/\\{2,}(?=[A-Za-z])/g, '\\')
     // Fix common OCR/model math-token merge: ln\left(...) -> \ln\left(...).
     .replace(/\bln\\left\b/g, '\\ln\\left')
@@ -150,6 +153,7 @@ function renderKaTeX(src: string, displayMode: boolean): string {
     .replace(/[ \t]{2,}/g, ' ');
   const trimmed = normalized.trim();
   const mathDebug = isMathDebugEnabled();
+  
   if (mathDebug && (/\\circ|°|\^|_/.test(trimmed) || /\\[a-zA-Z]+/.test(trimmed))) {
     console.debug('[MathText debug] renderKaTeX input', {
       src,
@@ -160,15 +164,25 @@ function renderKaTeX(src: string, displayMode: boolean): string {
       codePoints: toCodePoints(trimmed),
     });
   }
-  if (containsNonMathUnicode(trimmed)) {
-    return `<span class="font-sans">${latexToPlainText(trimmed)}</span>`;
-  }
+
+  // If it has non-math unicode, it might be Khmer/etc inside \text{}
+  // KaTeX usually fails or renders poorly with these.
+  // We'll try to keep them if they are inside \text{...} or \mathrm{...}
+  let finalTrimmed = trimmed;
+  const hasNonMath = containsNonMathUnicode(trimmed);
+  
   try {
-    return katex.renderToString(trimmed, {
+    // If it's pure non-math text, just return it as-is (with sans font)
+    if (hasNonMath && !/\\[a-zA-Z]+|[_^]/.test(trimmed)) {
+       return `<span class="font-sans">${trimmed}</span>`;
+    }
+
+    return katex.renderToString(finalTrimmed, {
       throwOnError: false,
       displayMode,
       output: 'html',
-      trust: false,
+      trust: true, // Allow some commands
+      strict: false,
     });
   } catch (err) {
     if (mathDebug) {
@@ -177,7 +191,7 @@ function renderKaTeX(src: string, displayMode: boolean): string {
         error: err instanceof Error ? err.message : String(err),
       });
     }
-    return latexToPlainText(trimmed);
+    return hasNonMath ? `<span class="font-sans">${trimmed}</span>` : latexToPlainText(trimmed);
   }
 }
 
@@ -244,6 +258,7 @@ function isLikelyNarrativeMathWithoutDelimiters(s: string): boolean {
 function normalizeMultilineInlineMathBlocks(text: string): string {
   return (text ?? '').replace(/\$([\s\S]+?)\$/g, (_match, inner: string) => {
     const innerNormalized = (inner ?? '')
+      .replace(/\u200b/g, '')
       .replace(/\\+n(?![a-zA-Z])/g, '\n')
       .replace(/\r\n?/g, '\n')
       .trim();
@@ -284,14 +299,14 @@ function autoWrapInlineMathForRender(text: string): string {
       (match) => `$${match.trim()}$`
     );
 
-    // e.g. F_x = F \cos\theta, a = b \times c
-    // Matches optional assignment, followed by optional terms, and at least one LaTeX command.
+    // e.g. F_x = F \cos\theta, a = b \times c, F_{acting} = F_g F_{air} = 0, x_1 = 0, \{ F_g \}
+    // Matches optional assignment, followed by optional terms, and at least one LaTeX command or subscript/superscript.
     next = next.replace(
-      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷]*\\[a-zA-Z]+(?:\s*\{[^{}]*\})?(?:\s*(?:\^\{[^{}]+\}|\^[0-9A-Za-z]+|_\{[^{}]+\}|_[0-9A-Za-z]+))*/g,
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}]+)*/g,
       (match) => {
         const trimmed = match.trim();
-        // If it looks like a legitimate math fragment (has a command and some structure)
-        if (trimmed.length > 2 && /\\[a-zA-Z]+/.test(trimmed)) {
+        // If it looks like a legitimate math fragment (has a command or sub/sup and some structure)
+        if (trimmed.length > 2 && (/\\[a-zA-Z{}]+/.test(trimmed) || /[_^]/.test(trimmed))) {
           return `$${trimmed}$`;
         }
         return match;
@@ -321,7 +336,7 @@ function splitMathSegments(text: string): Segment[] {
   const mathDebug = isMathDebugEnabled();
   // Match $$...$$ / \[...\] first (display), then $...$ / \(...\) (inline), 
   // then bare LaTeX commands (consistent with RichText)
-  const regex = /\$\$([\s\S]+?)\$\$|\$([\s\S]+?)\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|\\[a-zA-Z]+(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
+  const regex = /\$\$([\s\S]+?)\$\$|\$([\s\S]+?)\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|(\\[a-zA-Z]+|\\[{}]|\\,)(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
