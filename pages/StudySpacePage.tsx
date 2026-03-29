@@ -910,7 +910,9 @@ export function StudySpacePage({
   const [positions,      setPositions]      = useState<Record<string, NodePos>>({});
   const [selectedNode,   setSelectedNode]   = useState<BreakdownNode | null>(null);
   const [draggingId,     setDraggingId]     = useState<string | null>(null);
-  const [isLayoutLocked, setIsLayoutLocked] = useState(false);
+  const [isLayoutLocked, setIsLayoutLocked] = useState(() => {
+    try { return localStorage.getItem('studyspace_layout_locked') === 'true'; } catch { return false; }
+  });
   const [expandingId,    setExpandingId]    = useState<string | null>(null);
   const [loading,        setLoading]        = useState(false);
   const [insightLoading, setInsightLoading] = useState(false);
@@ -2922,6 +2924,7 @@ Do not repeat content already given.`;
   const toggleLayoutLock = useCallback(() => {
     const nextLocked = !isLayoutLocked;
     setIsLayoutLocked(nextLocked);
+    try { localStorage.setItem('studyspace_layout_locked', String(nextLocked)); } catch {}
     if (nextLocked) {
       dragState.current = null;
       setDraggingId(null);
