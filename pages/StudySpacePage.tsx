@@ -6,7 +6,7 @@ import {
   GitFork, History, Trophy, Network,
   Plus, X, Loader2, Sparkles,
   Bookmark, Zap,
-  ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers, Lock, LockOpen,
+  ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers, Lock, LockOpen, Users,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
 import { AppSidebar } from '../components/layout/AppSidebar';
@@ -19,6 +19,8 @@ import { VisualTable, type VisualTableData } from '../components/ui/VisualTable'
 import { Modal } from '../components/ui/Modal';
 import { ActionPopover } from '../components/ui/ActionPopover';
 import { NodeInsightPanel } from '../components/study/NodeInsightPanel';
+import { CollabInviteModal } from '../components/study/CollabInviteModal';
+import { useSessionCollaboration } from '../hooks/useSessionCollaboration';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
 import { getSessionsCached } from '../lib/sessions';
@@ -993,6 +995,7 @@ export function StudySpacePage({
   const [sessionVisualTable, setSessionVisualTable] = useState<VisualTableData | null>(null);
   const [expandedTable, setExpandedTable] = useState<VisualTableData | null>(null);
   const [ocrDetectedSignTable, setOcrDetectedSignTable] = useState(false);
+  const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
   const lastOcrInsertRef = useRef<string | null>(null);
   const lastOcrUploadIdRef = useRef<string | null>(null);
   const deepDiveLastOcrInsertRef = useRef<string | null>(null);
@@ -1203,6 +1206,24 @@ export function StudySpacePage({
   const showActionToast = useCallback((message: string) => {
     setActionToast(message);
   }, []);
+
+  // ─── Collaboration ─────────────────────────────────────────────────────────
+  const {
+    members: collabMembers,
+    connected: collabConnected,
+    isLoadingMembers: collabLoadingMembers,
+    createInviteLink,
+    removeMember: removeCollabMember,
+  } = useSessionCollaboration(sessionId, {
+    onSessionUpdated: (updatedBy) => {
+      const isOwnUpdate = updatedBy === (user?.id ?? user?.sub ?? '');
+      if (!isOwnUpdate) {
+        showActionToast('Session updated by a collaborator.');
+      }
+    },
+    onMemberJoined: () => showActionToast('A collaborator joined the session.'),
+    onMemberLeft:   () => showActionToast('A collaborator left the session.'),
+  });
 
   const openBranchActionPortal = useCallback((node: BreakdownNode, clientX: number, clientY: number) => {
     if (typeof window === 'undefined') return;
@@ -3196,19 +3217,38 @@ IMPORTANT:
                   <span className="text-secondary">{breakdown.title.split(' ').slice(-1)}</span>
                 </h1>
               </div>
-              <button
-                onClick={toggleLayoutLock}
-                title={isLayoutLocked ? 'Unlock node layout' : 'Lock node layout'}
-                aria-label={isLayoutLocked ? 'Unlock node layout' : 'Lock node layout'}
-                aria-pressed={isLayoutLocked}
-                className={`w-9 h-9 rounded-xl backdrop-blur border flex items-center justify-center transition-colors shadow-md shrink-0 ${
-                  isLayoutLocked
-                    ? 'bg-surface-container-highest border-primary/50 text-primary'
-                    : 'bg-surface-container-highest/80 border-outline-variant/30 text-on-surface-variant hover:text-primary hover:border-primary/40'
-                }`}
-              >
-                {isLayoutLocked ? <Lock className="w-4 h-4" /> : <LockOpen className="w-4 h-4" />}
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Invite collaborators */}
+                {sessionId && (
+                  <button
+                    onClick={() => setIsCollabModalOpen(true)}
+                    title="Invite collaborators"
+                    aria-label="Invite collaborators"
+                    className="w-9 h-9 rounded-xl backdrop-blur border bg-surface-container-highest/80 border-outline-variant/30 text-on-surface-variant hover:text-secondary hover:border-secondary/40 flex items-center justify-center transition-colors shadow-md relative"
+                  >
+                    <Users className="w-4 h-4" />
+                    {collabMembers.length > 1 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-secondary text-on-secondary text-[8px] font-bold flex items-center justify-center">
+                        {collabMembers.length}
+                      </span>
+                    )}
+                  </button>
+                )}
+                {/* Lock layout */}
+                <button
+                  onClick={toggleLayoutLock}
+                  title={isLayoutLocked ? 'Unlock node layout' : 'Lock node layout'}
+                  aria-label={isLayoutLocked ? 'Unlock node layout' : 'Lock node layout'}
+                  aria-pressed={isLayoutLocked}
+                  className={`w-9 h-9 rounded-xl backdrop-blur border flex items-center justify-center transition-colors shadow-md ${
+                    isLayoutLocked
+                      ? 'bg-surface-container-highest border-primary/50 text-primary'
+                      : 'bg-surface-container-highest/80 border-outline-variant/30 text-on-surface-variant hover:text-primary hover:border-primary/40'
+                  }`}
+                >
+                  {isLayoutLocked ? <Lock className="w-4 h-4" /> : <LockOpen className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
           )}
 
@@ -3682,6 +3722,18 @@ IMPORTANT:
           </div>
         </div>
       </Modal>
+
+      {/* Collaboration invite modal */}
+      <CollabInviteModal
+        isOpen={isCollabModalOpen}
+        sessionId={sessionId}
+        currentUserId={user?.id ?? user?.sub ?? null}
+        members={collabMembers}
+        isLoadingMembers={collabLoadingMembers}
+        onClose={() => setIsCollabModalOpen(false)}
+        onCreateInviteLink={createInviteLink}
+        onRemoveMember={removeCollabMember}
+      />
 
       {/* Table modal chrome — fixed to screen edges */}
       <AnimatePresence>

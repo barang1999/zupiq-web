@@ -37,6 +37,7 @@ import QuizPage from "./pages/QuizPage";
 import AchievementPage from "./pages/AchievementPage";
 import KnowledgeMapPage from "./pages/KnowledgeMapPage";
 import QuantumPrismPage from "./pages/quantum-prism/QuantumPrismPage";
+import { JoinSessionPage } from "./pages/JoinSessionPage";
 import { PublicHeader } from "./components/layout/PublicHeader";
 import { GrowingTreeAnimation } from "./components/ui/GrowingTreeAnimation";
 
@@ -55,7 +56,8 @@ type AppShellPage =
   | 'settings'
   | 'privacy'
   | 'terms'
-  | 'how-it-works';
+  | 'how-it-works'
+  | 'join';
 type IOSNavigator = Navigator & { standalone?: boolean };
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -489,6 +491,7 @@ export default function App() {
   const [isMobileViewport, setIsMobileViewport] = useState(() => window.innerWidth < 640);
 
   const pathToPage = (path: string): AppShellPage => {
+    if (path === '/join') return 'join';
     if (path === '/history') return 'history';
     if (path === '/archive') return 'archive';
     if (path === '/plan') return 'plan';
@@ -507,6 +510,12 @@ export default function App() {
   };
 
   const [page, setPageState] = useState<AppShellPage>(() => pathToPage(window.location.pathname));
+  const [joinToken, setJoinToken] = useState<string | null>(() => {
+    if (window.location.pathname === '/join') {
+      return new URLSearchParams(window.location.search).get('token');
+    }
+    return null;
+  });
   const [flashcardSubject, setFlashcardSubject] = useState<string | null>(() => {
     const value = new URLSearchParams(window.location.search).get("subject");
     return value?.trim() ? value : null;
@@ -580,9 +589,11 @@ export default function App() {
 
     // Sync page state with browser back/forward buttons
     const onPopState = (e: PopStateEvent) => {
-      setPageState(e.state?.page ?? pathToPage(window.location.pathname));
-      const value = new URLSearchParams(window.location.search).get("subject");
-      setFlashcardSubject(value?.trim() ? value : null);
+      const nextPage = e.state?.page ?? pathToPage(window.location.pathname);
+      setPageState(nextPage);
+      const params = new URLSearchParams(window.location.search);
+      setFlashcardSubject(params.get("subject")?.trim() || null);
+      if (nextPage === 'join') setJoinToken(params.get('token'));
     };
     window.addEventListener('popstate', onPopState);
 
@@ -654,6 +665,46 @@ export default function App() {
 
   if (page === 'terms') {
     return <TermsPage onBack={() => setPage('study')} />;
+  }
+
+  // Join-session page: works for logged-in users; unauthenticated users are
+  // redirected to auth first, then back to the join page.
+  if (page === 'join') {
+    if (!currentUser) {
+      return (
+        <>
+          <div className="min-h-screen bg-background flex items-center justify-center">
+            <Auth onClose={() => {
+              // After login, stay on the join page so the useEffect re-runs
+              if (!tokenStorage.getAccess()) setPageState('study');
+            }} />
+          </div>
+        </>
+      );
+    }
+    return (
+      <JoinSessionPage
+        token={joinToken ?? ''}
+        onJoined={(sessionId) => {
+          // Load the joined session then navigate to study
+          api.get<{ session: any }>(`/api/sessions/${sessionId}`)
+            .then(({ session }) => {
+              try {
+                const bd = JSON.parse(session.breakdown_json);
+                // Ensure StudySpacePage uses this session's ID, not a stale one
+                bd.id = session.id;
+                setInitialBreakdown(bd);
+              } catch { /* ignore */ }
+            })
+            .catch(() => {})
+            .finally(() => {
+              window.history.pushState({ page: 'study' }, '', '/');
+              setPageState('study');
+            });
+        }}
+        onNavigateStudy={() => { window.history.pushState({ page: 'study' }, '', '/'); setPageState('study'); }}
+      />
+    );
   }
 
   if (showOnboarding && currentUser) {

@@ -11,6 +11,7 @@ export interface SessionRow {
   visual_table_json?: string | null;
   created_at?: string | null;
   subject_id?: string | null;
+  user_role?: 'owner' | 'editor' | 'viewer';
 }
 
 const SESSIONS_CACHE_TTL_MS = 60_000;

@@ -22,6 +22,7 @@ interface StudySession {
   duration_seconds: number | null;
   breakdown_json: string;
   created_at: string;
+  user_role?: 'owner' | 'editor' | 'viewer';
 }
 
 interface ProblemBreakdown {
@@ -322,6 +323,9 @@ export default function MobileHistoryPage({
                         </p>
                         <p className="text-[10px] text-on-surface-variant uppercase tracking-widest font-medium">
                           {formatDate(session.created_at)} • {formatDuration(session.duration_seconds)}
+                          {session.user_role && session.user_role !== 'owner' && (
+                            <span className="ml-1.5 text-secondary font-bold">· Shared</span>
+                          )}
                         </p>
                       </div>
                     </div>

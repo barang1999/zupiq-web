@@ -23,6 +23,7 @@ interface StudySession {
   duration_seconds: number | null;
   breakdown_json: string;
   created_at: string;
+  user_role?: 'owner' | 'editor' | 'viewer';
 }
 
 interface ProblemBreakdown {
@@ -642,9 +643,14 @@ export function HistoryPage({
                         <h4 className={`text-lg sm:text-xl font-bold mb-2 group-hover:${color} transition-colors relative z-10 line-clamp-2`}>
                           <MathText>{toSingleLinePreview(session.title)}</MathText>
                         </h4>
-                        <p className="text-sm text-on-surface-variant mb-6 relative z-10">
+                        <p className="text-sm text-on-surface-variant mb-2 relative z-10">
                           Subject: {session.subject} • {session.node_count} nodes
                         </p>
+                        {session.user_role && session.user_role !== 'owner' && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary/10 text-secondary text-[9px] font-bold uppercase tracking-widest mb-4 relative z-10">
+                            <Users className="w-2.5 h-2.5" /> Shared with you
+                          </span>
+                        )}
                         <div className={`flex items-center gap-2 ${color} font-bold text-xs uppercase tracking-widest relative z-10`}>
                           <span>View breakdown</span>
                           <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -705,18 +711,25 @@ export function HistoryPage({
                               </div>
                               <div className="mt-3 flex flex-wrap items-center gap-2.5 text-xs">
                                 <span className={`px-2.5 py-1 rounded-full ${sc.bg} ${sc.text}`}>{session.subject}</span>
+                                {session.user_role && session.user_role !== 'owner' && (
+                                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary/10 text-secondary text-[9px] font-bold uppercase tracking-widest">
+                                    <Users className="w-2.5 h-2.5" /> Shared
+                                  </span>
+                                )}
                                 <span className="text-on-surface-variant">{session.node_count} nodes</span>
                                 <span className="text-on-surface-variant">{formatDuration(session.duration_seconds)}</span>
                               </div>
                             </button>
-                            <button
-                              onClick={() => setConfirmDeleteId(session.id)}
-                              disabled={deletingId === session.id}
-                              className="shrink-0 p-2 rounded-xl text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors opacity-0 group-hover:opacity-100"
-                              title="Delete session"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {(!session.user_role || session.user_role === 'owner') && (
+                              <button
+                                onClick={() => setConfirmDeleteId(session.id)}
+                                disabled={deletingId === session.id}
+                                className="shrink-0 p-2 rounded-xl text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Delete session"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         );
                       })}
@@ -773,7 +786,14 @@ export function HistoryPage({
                                 </span>
                               </td>
                               <td className="px-8 py-6">
-                                <span className={`px-3 py-1 ${sc.bg} ${sc.text} text-[10px] rounded-full`}>{session.subject}</span>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`px-3 py-1 ${sc.bg} ${sc.text} text-[10px] rounded-full`}>{session.subject}</span>
+                                  {session.user_role && session.user_role !== 'owner' && (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary/10 text-secondary text-[9px] font-bold uppercase tracking-widest">
+                                      <Users className="w-2.5 h-2.5" /> Shared
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-8 py-6">
                                 <div className="flex items-center gap-2">
@@ -787,14 +807,16 @@ export function HistoryPage({
                                 {formatDuration(session.duration_seconds)}
                               </td>
                               <td className="px-4 py-6" onClick={e => e.stopPropagation()}>
-                                <button
-                                  onClick={() => setConfirmDeleteId(session.id)}
-                                  disabled={deletingId === session.id}
-                                  className="p-2 rounded-xl text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors opacity-0 group-hover:opacity-100"
-                                  title="Delete session"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                {(!session.user_role || session.user_role === 'owner') && (
+                                  <button
+                                    onClick={() => setConfirmDeleteId(session.id)}
+                                    disabled={deletingId === session.id}
+                                    className="p-2 rounded-xl text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Delete session"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
                               </td>
                             </motion.tr>
                           );

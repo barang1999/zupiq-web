@@ -562,3 +562,100 @@ The correct idea is:
 Keep the table.
 Improve the semantics.
 Make the math feel native.
+
+---
+
+## Maintenance Notes
+
+### Rule 1 — Loosened (2026-03-30)
+
+The original Rule 1 was:
+
+> If a `value` row contains any `+` or `−`, reclassify it as `interval`.
+
+**This was too aggressive.**
+
+In practice the AI correctly emits rows like:
+
+```ts
+{ label: '$\\frac{1}{2}$', type: 'value', cells: ['+', '0', '+'], conclusion: '...' }
+```
+
+This means: at the exact point $m = \frac{1}{2}$, $P = 0$ while $\Delta$ and $S$ are still positive. The `+` values are valid non-zero states at the boundary — they are not interval signs. The `SignCell` renderer already suppresses `+`/`−` in value rows (shows nothing), so they do not produce incorrect visual output.
+
+**Current Rule 1 (correct):**
+
+> Reclassify as `interval` only if the `value` row has `+`/`−` signs **and no `0` at all**.
+> If at least one cell is `0`, the row is a genuine critical-point row — keep it as `value`.
+
+```ts
+const hasSign = row.cells.some(c => c === '+' || c === '-' || c === '−');
+const hasZero = row.cells.some(c => c === '0');
+if (row.type === 'value' && hasSign && !hasZero) {
+  // reclassify
+}
+```
+
+---
+
+### `headers` Fallback for `sign_analysis` (2026-03-30)
+
+The AI sometimes returns a `sign_analysis` table using the generic `headers` field instead of the structured `parameterName` / `columns` / `conclusionLabel` fields:
+
+```json
+{
+  "type": "sign_analysis",
+  "headers": ["$m$", "$\\Delta$", "$P$", "$S$", "Conclusion"],
+  "rows": [...]
+}
+```
+
+This caused a runtime crash: `table.columns is not iterable`.
+
+**Fix:** When `parameterName`, `columns`, and `conclusionLabel` are all absent, fall back to `headers` for constructing the header row:
+
+```ts
+const headers = (table as unknown as { headers?: string[] }).headers;
+const allCols = (table.parameterName || table.columns || table.conclusionLabel)
+  ? [table.parameterName ?? '', ...(table.columns ?? []), table.conclusionLabel ?? '']
+  : (headers ?? []);
+```
+
+The preferred data shape remains `parameterName` / `columns` / `conclusionLabel`. If the AI prompt is updated, enforce this shape there first.
+
+---
+
+### Border Corner Rendering (2026-03-30)
+
+CSS `border` + `border-radius` + `overflow: hidden` on the same element causes the border to appear faded at the corners due to double anti-aliasing.
+
+**Fix applied in `VisualTable`:** Two-layer container approach.
+
+- **Outer div** — holds `rounded-xl` and `ring-1 ring-inset ring-outline-variant/20` (inset box-shadow, not `border`). No `overflow: hidden` so the border paints cleanly.
+- **Inner div** — holds `overflow-hidden rounded-[11px]` (1 px inset from outer radius) to clip table content at the corners.
+
+Why `ring-inset` and not `ring` (outer box-shadow): an outer ring gets clipped by any parent element that has `overflow: hidden` (e.g. the insight panel wrapper). An inset box-shadow lives inside the element's border-box and is never clipped by a parent.
+
+```ts
+const outerClass = "relative group/table rounded-xl ring-1 ring-inset ring-outline-variant/20 bg-surface-container";
+const innerClass = "overflow-hidden rounded-[11px]";
+```
+
+---
+
+### Expand to Full-Screen Modal (2026-03-30)
+
+`VisualTable` accepts optional `expandable` and `onExpand` props. When `expandable` is true, a `Maximize2` button appears on hover.
+
+The modal is **not** rendered inside `VisualTable` or `NodeInsightPanel`. It is lifted to `StudySpacePage` so it overlays the full viewport:
+
+- `StudySpacePage` holds `expandedTable: VisualTableData | null` state.
+- `NodeInsightPanel` receives `onExpandTable: (table: VisualTableData) => void` and passes it down as `onExpand` to each `VisualTable`.
+- The modal renders at the root level of `StudySpacePage` using `<Modal maxWidth="fit">`.
+- Title and close button are rendered as `fixed` elements (`z-[101]`) outside the modal container so they sit at the screen edges.
+
+Modal sizing in the expand context:
+- `maxWidth="fit"` → `w-full max-w-[calc(100vw-2rem)]`
+- `containerClassName="!bg-transparent !border-0 !shadow-none"` — no box background
+- Content wrapper: `overflow-auto max-h-[80vh] [&_table]:w-auto [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap`
+- Table centered with `w-fit mx-auto`
