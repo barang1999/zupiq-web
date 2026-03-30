@@ -40,6 +40,11 @@ interface UseSessionCollaborationOptions {
   onMemberJoined?: (userId: string) => void;
   /** Called when a member leaves. */
   onMemberLeft?: (userId: string) => void;
+  /**
+   * Called when the SSE stream reconnects after a drop.
+   * Use this to re-sync any state that may have changed while disconnected.
+   */
+  onReconnected?: () => void;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -92,7 +97,7 @@ export function useSessionCollaboration(
     }
   }, [sessionId]);
 
-  // ─── SSE connection ────────────────────────────────────────────────────────
+  // ─── SSE connection with auto-reconnect ───────────────────────────────────
 
   useEffect(() => {
     if (!sessionId) {
@@ -104,13 +109,24 @@ export function useSessionCollaboration(
     fetchMembers();
     fetchActivity();
 
-    const token = tokenStorage.getAccess();
-    if (!token) return;
-
     const abort = new AbortController();
     abortRef.current = abort;
 
-    (async () => {
+    const BASE_DELAY_MS = 2_000;
+    const MAX_DELAY_MS  = 30_000;
+    let retryDelay      = BASE_DELAY_MS;
+    let isFirstConnect  = true;
+
+    // Jitter helper — spreads reconnects so a server restart doesn't get
+    // hit by all clients simultaneously (thundering herd).
+    const withJitter = (ms: number) => ms * (0.75 + Math.random() * 0.5);
+
+    const connect = async (): Promise<void> => {
+      if (abort.signal.aborted) return;
+
+      const token = tokenStorage.getAccess();
+      if (!token) return;
+
       try {
         const rawBase = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
         const base = rawBase || window.location.origin;
@@ -123,9 +139,17 @@ export function useSessionCollaboration(
 
         if (!response.ok || !response.body) {
           setConnected(false);
-          return;
+          throw new Error(`SSE responded ${response.status}`);
         }
 
+        // Connection established — reset backoff and notify on reconnects.
+        if (!isFirstConnect) {
+          fetchMembers();
+          fetchActivity();
+          optionRef.current?.onReconnected?.();
+        }
+        isFirstConnect = false;
+        retryDelay = BASE_DELAY_MS;
         setConnected(true);
 
         const reader  = response.body.getReader();
@@ -169,16 +193,42 @@ export function useSessionCollaboration(
             }
           }
         }
+
+        // Stream ended cleanly — treat as a drop and reconnect.
+        throw new Error('SSE stream closed');
       } catch (err: unknown) {
-        if ((err as Error)?.name !== 'AbortError') {
-          setConnected(false);
-        }
+        if ((err as Error)?.name === 'AbortError' || abort.signal.aborted) return;
+        setConnected(false);
       }
-    })();
+
+      // Wait with jitter then reconnect.
+      const delay = withJitter(retryDelay);
+      console.log('[SSE] will reconnect in', Math.round(delay), 'ms');
+      await new Promise<void>(resolve => {
+        const timer = setTimeout(resolve, delay);
+        abort.signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); });
+      });
+      retryDelay = Math.min(MAX_DELAY_MS, retryDelay * 2);
+      void connect();
+    };
+
+    void connect();
+
+    // Re-sync data when the tab becomes visible again — catches missed events while hidden.
+    // Does NOT touch the SSE connection; the reconnect loop handles that independently.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !abort.signal.aborted) {
+        fetchMembers();
+        fetchActivity();
+        optionRef.current?.onReconnected?.();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
 
     return () => {
       abort.abort();
       setConnected(false);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [sessionId, fetchMembers, fetchActivity]);
 

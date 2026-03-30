@@ -1010,6 +1010,8 @@ export function StudySpacePage({
   const branchLongPressTimerRef = useRef<number | null>(null);
   const branchTouchGestureRef = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
   const suppressBranchClickRef = useRef(false);
+  // True once this user has manually dragged a node — prevents remote position sync from overriding their layout.
+  const hasLocalPositionEditsRef = useRef(false);
 
   useEffect(() => {
     const win = window as unknown as {
@@ -1216,6 +1218,80 @@ export function StudySpacePage({
   }, []);
 
   // ─── Collaboration ─────────────────────────────────────────────────────────
+
+  // Soft-sync session state from the server without disrupting the local workspace.
+  // Called when a collaborator's session_updated SSE event arrives.
+  const applyRemoteSessionUpdate = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const { session } = await api.get<{ session: any }>(`/api/sessions/${sessionId}`);
+
+      const remoteBd = parseJsonSafe<ProblemBreakdown>(session.breakdown_json);
+      if (!remoteBd) {
+        console.error('[LiveSync] breakdown_json could not be parsed — aborting sync');
+        return;
+      }
+      remoteBd.id = session.id;
+      const sanitized = sanitizeBreakdownPayload(remoteBd);
+
+
+      // Update breakdown content (nodes, title, subject, problem) from remote.
+      setBreakdown(sanitized);
+
+      // Merge positions: keep existing positions, compute for brand-new nodes, drop deleted ones.
+      setPositions(prev => {
+        const remoteNodes = sanitized.nodes ?? [];
+        const remoteIdSet = new Set(remoteNodes.map(n => n.id));
+
+        const kept: Record<string, NodePos> = {};
+        for (const [id, pos] of Object.entries(prev)) {
+          if (remoteIdSet.has(id)) kept[id] = pos;
+        }
+
+        const newNodes = remoteNodes.filter(n => !prev[n.id]);
+        if (newNodes.length > 0) {
+          // Prefer the positions the owner computed (saved in nodePositions) so new
+          // nodes appear next to their parent, not in a full default layout.
+          const remotePositions = sanitized.nodePositions ?? {};
+          for (const n of newNodes) {
+            if (remotePositions[n.id]) {
+              kept[n.id] = remotePositions[n.id];
+            } else {
+              // Fallback: place near parent if known, otherwise use default layout.
+              const parentPos = n.parentId ? (kept[n.parentId] ?? remotePositions[n.parentId]) : null;
+              if (parentPos) {
+                kept[n.id] = { x: parentPos.x, y: parentPos.y - 200 };
+              } else {
+                const brs = remoteNodes.filter(r => r.type === 'branch').length;
+                const lvs = remoteNodes.filter(r => r.type === 'leaf').length;
+                const w = Math.max(1000, (brs + 1) * 320);
+                const h = lvs > 0 ? 700 : 540;
+                const computed = computeInitialPositions(remoteNodes, w, h);
+                if (computed[n.id]) kept[n.id] = computed[n.id];
+              }
+            }
+          }
+          return resolveCollisions(kept);
+        }
+        return kept;
+      });
+
+      // Keep selectedNode only if it still exists in the remote breakdown.
+      setSelectedNode(prev => {
+        if (!prev) return null;
+        return sanitized.nodes?.find(n => n.id === prev.id) ?? null;
+      });
+
+      // Sync visual table.
+      const vt = session.visual_table_json
+        ? parseJsonSafe<VisualTableData>(session.visual_table_json)
+        : null;
+      setSessionVisualTable(vt ?? null);
+    } catch (err) {
+      console.error('[LiveSync] applyRemoteSessionUpdate failed', err);
+    }
+  }, [sessionId]);
+
   const {
     members: collabMembers,
     connected: collabConnected,
@@ -1228,11 +1304,13 @@ export function StudySpacePage({
     onSessionUpdated: (updatedBy) => {
       const isOwnUpdate = updatedBy === (user?.id ?? user?.sub ?? '');
       if (!isOwnUpdate) {
+        void applyRemoteSessionUpdate();
         showActionToast('Session updated by a collaborator.');
       }
     },
-    onMemberJoined: () => showActionToast('A collaborator joined the session.'),
-    onMemberLeft:   () => showActionToast('A collaborator left the session.'),
+    onMemberJoined:  () => showActionToast('A collaborator joined the session.'),
+    onMemberLeft:    () => showActionToast('A collaborator left the session.'),
+    onReconnected:   () => void applyRemoteSessionUpdate(),
   });
 
   const [lastViewedAt, setLastViewedAt] = useState<string | null>(null);
@@ -1856,6 +1934,7 @@ export function StudySpacePage({
     if (draggingId !== null) { wasDraggingRef.current = true; return; }
     if (!wasDraggingRef.current) return;
     wasDraggingRef.current = false;
+    hasLocalPositionEditsRef.current = true;
     const bd  = breakdownRef.current;
     const sid = sessionIdRef.current;
     if (!sid || !bd) return;
@@ -2657,8 +2736,23 @@ export function StudySpacePage({
         };
       });
 
-      setBreakdown(prev => prev ? { ...prev, nodes: [...prev.nodes, ...newNodes] } : prev);
+      const expandedBreakdown: ProblemBreakdown = breakdown
+        ? { ...breakdown, nodes: [...breakdown.nodes, ...newNodes], nodePositions: { ...positions, ...newPositions } }
+        : breakdown!;
+      setBreakdown(expandedBreakdown);
       setPositions(prev => resolveCollisions({ ...prev, ...newPositions }, node.id));
+
+      // Persist to server so collaborators receive the new nodes via SSE.
+      if (sessionId) {
+        api.put(`/api/sessions/${sessionId}`, {
+          breakdown_json: JSON.stringify({
+            ...expandedBreakdown,
+            nodeInsights: nodeInsightsRef.current,
+            nodeConversations: nodeConversationsRef.current,
+            nodePositions: { ...positionsRef.current, ...newPositions },
+          }),
+        }).catch(() => {});
+      }
     } catch (err: any) {
       setError(resolveQuotaAwareErrorMessage(err, 'Expansion failed'));
     } finally {
@@ -3905,6 +3999,30 @@ IMPORTANT:
                       const mins = Math.floor(diff / 60000);
                       const timeLabel = mins < 1 ? 'just now' : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : new Date(entry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
+                      // Build before/after diff rows for session_updated entries
+                      const diffRows = (() => {
+                        if (entry.action !== 'session_updated') return null;
+                        const before = entry.metadata.before as Record<string, unknown> | undefined;
+                        const after = entry.metadata.after as Record<string, unknown> | undefined;
+                        if (!before || !after) return null;
+                        const LABEL: Record<string, string> = { title: 'Title', subject: 'Subject', problem: 'Problem', node_count: 'Nodes' };
+                        return Object.keys(after).map((key) => {
+                          const oldVal = String(before[key] ?? '');
+                          const newVal = String(after[key] ?? '');
+                          if (oldVal === newVal) return null;
+                          const label = LABEL[key] ?? key;
+                          const truncate = (s: string, n: number) => s.length > n ? s.slice(0, n) + '…' : s;
+                          return (
+                            <div key={key} className="mt-1 text-[10px] leading-relaxed rounded-md bg-surface-container px-2 py-1 text-on-surface-variant">
+                              <span className="font-medium text-on-surface-variant/70">{label}: </span>
+                              <span className="line-through opacity-60">{truncate(oldVal, 48)}</span>
+                              <span className="mx-1 opacity-40">→</span>
+                              <span className="text-primary font-medium">{truncate(newVal, 48)}</span>
+                            </div>
+                          );
+                        }).filter(Boolean);
+                      })();
+
                       return (
                         <li key={entry.id} className="flex gap-3 relative">
                           {/* Connector line */}
@@ -3920,6 +4038,9 @@ IMPORTANT:
                               <span className="font-semibold">{entry.actor_name ?? 'Someone'}</span>
                               {' '}{actionText}
                             </p>
+                            {diffRows && diffRows.length > 0 && (
+                              <div className="mt-1 space-y-0.5">{diffRows}</div>
+                            )}
                             <p className="text-[11px] text-on-surface-variant mt-0.5">{timeLabel}</p>
                           </div>
                         </li>
