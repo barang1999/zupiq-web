@@ -6,9 +6,12 @@ function hasNonMathScript(text: string): boolean {
   return /[\u1780-\u17FF\u1800-\u18AF]/.test(text);
 }
 
-// Render text as MathText only if it's safe for KaTeX (no Khmer/non-Latin scripts)
+// Render text as MathText only if it's safe for KaTeX (no Khmer/non-Latin scripts),
+// but always use MathText when there are inline math delimiters ($...$) present —
+// MathText already handles mixed Khmer+math via its pushMathSegment logic.
 function SafeText({ children, className }: { children: string; className?: string }) {
-  if (hasNonMathScript(children)) {
+  const hasMathDelimiters = /\$/.test(children);
+  if (hasNonMathScript(children) && !hasMathDelimiters) {
     return <span className={className}>{children}</span>;
   }
   return <MathText className={className}>{children}</MathText>;
@@ -115,7 +118,7 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
   // Two-layer approach: outer holds the border + radius (no overflow clip so
   // corners stay sharp), inner clips the table content at a matching radius.
   const outerClass = "relative group/table rounded-xl ring-1 ring-inset ring-outline-variant/20 bg-surface-container";
-  const innerClass = "overflow-hidden rounded-[11px]";
+  const innerClass = "overflow-hidden rounded-xl";
 
   const expandButton = expandable && onExpand && (
     <button
