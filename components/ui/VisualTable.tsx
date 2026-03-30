@@ -1,4 +1,5 @@
 import { MathText } from './MathText';
+import { Maximize2 } from 'lucide-react';
 
 // Detect Khmer Unicode block (U+1780–U+17FF) or other non-math scripts
 function hasNonMathScript(text: string): boolean {
@@ -63,6 +64,8 @@ function SignCell({ value, rowType }: { value: string; rowType: 'value' | 'inter
 
 interface VisualTableProps {
   table: VisualTableData;
+  expandable?: boolean;
+  onExpand?: () => void;
 }
 
 /** Returns true if label looks like a single exact value (not an interval). */
@@ -84,9 +87,13 @@ function normalizeSignTableRows(rows: SignTableRow[]): SignTableRow[] {
     : !!(import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV;
 
   return rows.map((row, i) => {
-    // Rule 1: value row must not contain +/−
-    if (row.type === 'value' && row.cells.some(c => c === '+' || c === '-' || c === '−')) {
-      if (isDev) console.warn(`[VisualTable] row[${i}] type='value' but contains interval signs — reclassified as 'interval'`, row);
+    // Rule 1: value row that has ONLY +/− (no zero) is almost certainly a
+    // mislabelled interval row — reclassify. But if it has at least one '0'
+    // alongside +/− (e.g. P=0 while Δ>0) it is a genuine critical-point row.
+    const hasSign = row.cells.some(c => c === '+' || c === '-' || c === '−');
+    const hasZero = row.cells.some(c => c === '0');
+    if (row.type === 'value' && hasSign && !hasZero) {
+      if (isDev) console.warn(`[VisualTable] row[${i}] type='value' but contains only interval signs — reclassified as 'interval'`, row);
       return { ...row, type: 'interval' };
     }
     // Rule 2: interval row must not contain 0
@@ -104,79 +111,106 @@ function normalizeSignTableRows(rows: SignTableRow[]): SignTableRow[] {
   });
 }
 
-export function VisualTable({ table }: VisualTableProps) {
+export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
+  // Two-layer approach: outer holds the border + radius (no overflow clip so
+  // corners stay sharp), inner clips the table content at a matching radius.
+  const outerClass = "relative group/table rounded-xl ring-1 ring-inset ring-outline-variant/20 bg-surface-container";
+  const innerClass = "overflow-hidden rounded-[11px]";
+
+  const expandButton = expandable && onExpand && (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onExpand();
+      }}
+      className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-surface-container-highest/80 backdrop-blur-md text-on-surface-variant hover:text-primary border border-white/5 opacity-0 group-hover/table:opacity-100 transition-all shadow-lg"
+      title="Expand Table"
+    >
+      <Maximize2 className="w-4 h-4" />
+    </button>
+  );
+
   if (table.type === 'sign_analysis') {
-    const allCols = [table.parameterName!, ...table.columns!, table.conclusionLabel!];
+    // Support AI responses that used generic `headers` instead of the structured fields
+    const headers = (table as unknown as { headers?: string[] }).headers;
+    const allCols = (table.parameterName || table.columns || table.conclusionLabel)
+      ? [table.parameterName ?? '', ...(table.columns ?? []), table.conclusionLabel ?? '']
+      : (headers ?? []);
     const rows = normalizeSignTableRows(table.rows as SignTableRow[]);
 
     return (
-      <div className="overflow-x-auto -mx-1">
-        <table className="w-full min-w-[320px] border-collapse text-xs">
-          {/* Header */}
-          <thead>
-            <tr>
-              {allCols.map((col, i) => (
-                <th
-                  key={i}
-                  className={`
-                    border border-primary/25 px-2 py-2 font-bold text-center
-                    ${i === 0 ? 'text-on-surface-variant w-14' : ''}
-                    ${i > 0 && i < allCols.length - 1 ? 'text-secondary w-10' : ''}
-                    ${i === allCols.length - 1 ? 'text-primary text-left pl-3' : ''}
-                  `}
-                >
-                  <SafeText className="block">{col}</SafeText>
-                </th>
-              ))}
-            </tr>
-          </thead>
+      <div className={outerClass}>
+        {expandButton}
+        <div className={innerClass}>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[320px] border-collapse text-xs">
+            {/* Header */}
+            <thead>
+              <tr>
+                {allCols.map((col, i) => (
+                  <th
+                    key={i}
+                    className={`
+                      border border-primary/25 px-2 py-2 font-bold text-center
+                      ${i === 0 ? 'text-on-surface-variant w-14' : ''}
+                      ${i > 0 && i < allCols.length - 1 ? 'text-secondary w-10' : ''}
+                      ${i === allCols.length - 1 ? 'text-primary text-left pl-3' : ''}
+                    `}
+                  >
+                    <SafeText className="block">{col}</SafeText>
+                  </th>
+                ))}
+              </tr>
+            </thead>
 
-          {/* Body */}
-          <tbody className="relative">
-            {rows.map((row, ri) => {
-              const isValueRow = row.type === 'value';
-              
-              const rowClass = isValueRow
-                ? 'h-3 bg-transparent group/value'
-                : 'h-10 bg-background/20 group/interval';
+            {/* Body */}
+            <tbody className="relative">
+              {rows.map((row, ri) => {
+                const isValueRow = row.type === 'value';
+                
+                const rowClass = isValueRow
+                  ? 'h-3 bg-transparent group/value'
+                  : 'h-10 bg-background/20 group/interval';
 
-              const cellClass = isValueRow
-                ? 'border-x border-primary/15 px-1 py-0 text-center overflow-visible relative'
-                : 'border border-primary/15 px-1 py-2 text-center';
+                const cellClass = isValueRow
+                  ? 'border-x border-primary/15 px-1 py-0 text-center overflow-visible relative'
+                  : 'border border-primary/15 px-1 py-2 text-center';
 
-              const labelClass = isValueRow
-                ? 'border-x border-primary/15 px-2 py-0 text-center font-mono text-[10px] text-on-surface-variant/60'
-                : 'border border-primary/15 px-2 py-2 text-center font-mono text-on-surface-variant';
+                const labelClass = isValueRow
+                  ? 'border-x border-primary/15 px-2 py-0 text-center font-mono text-[10px] text-on-surface-variant/60'
+                  : 'border border-primary/15 px-2 py-2 text-center font-mono text-on-surface-variant';
 
-              return (
-                <tr key={ri} className={rowClass}>
-                  {/* Parameter column (e.g. m) */}
-                  <td className={labelClass}>
-                    {row.label ? (
-                      <SafeText className="block">{row.label}</SafeText>
-                    ) : null}
-                  </td>
-
-                  {/* Sign columns */}
-                  {row.cells.map((cell, ci) => (
-                    <td key={ci} className={cellClass}>
-                      <SignCell value={cell} rowType={row.type} />
+                return (
+                  <tr key={ri} className={rowClass}>
+                    {/* Parameter column (e.g. m) */}
+                    <td className={labelClass}>
+                      {row.label ? (
+                        <SafeText className="block">{row.label}</SafeText>
+                      ) : null}
                     </td>
-                  ))}
 
-                  {/* Conclusion column */}
-                  <td className={`border-primary/15 px-3 py-1 text-left ${isValueRow ? 'border-x' : 'border'}`}>
-                    {row.conclusion ? (
-                      <SafeText className={`block leading-snug ${isValueRow ? 'text-[10px] text-on-surface/50 italic' : 'text-[11px] text-on-surface'}`}>
-                        {row.conclusion}
-                      </SafeText>
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    {/* Sign columns */}
+                    {row.cells.map((cell, ci) => (
+                      <td key={ci} className={cellClass}>
+                        <SignCell value={cell} rowType={row.type} />
+                      </td>
+                    ))}
+
+                    {/* Conclusion column */}
+                    <td className={`border-primary/15 px-3 py-1 text-left ${isValueRow ? 'border-x' : 'border'}`}>
+                      {row.conclusion ? (
+                        <SafeText className={`block leading-snug ${isValueRow ? 'text-[10px] text-on-surface/50 italic' : 'text-[11px] text-on-surface'}`}>
+                          {row.conclusion}
+                        </SafeText>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        </div>
       </div>
     );
   }
@@ -186,34 +220,39 @@ export function VisualTable({ table }: VisualTableProps) {
     const rows = table.rows as GenericTableRow[];
 
     return (
-      <div className="overflow-x-auto -mx-1">
-        <table className="w-full min-w-[320px] border-collapse text-xs">
-          {headers.length > 0 && (
-            <thead>
-              <tr className="bg-surface-container/40">
-                {headers.map((header, i) => (
-                  <th
-                    key={i}
-                    className="border border-primary/25 px-3 py-2 font-bold text-left text-secondary"
-                  >
-                    <SafeText>{header}</SafeText>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-          )}
-          <tbody>
-            {rows.map((row, ri) => (
-              <tr key={ri} className={ri % 2 === 0 ? 'bg-background/10' : 'bg-surface-container/20'}>
-                {row.cells.map((cell, ci) => (
-                  <td key={ci} className="border border-primary/15 px-3 py-2 text-on-surface">
-                    <SafeText>{cell}</SafeText>
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className={outerClass}>
+        {expandButton}
+        <div className={innerClass}>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[320px] border-collapse text-xs">
+            {headers.length > 0 && (
+              <thead>
+                <tr className="bg-surface-container/40">
+                  {headers.map((header, i) => (
+                    <th
+                      key={i}
+                      className="border border-primary/25 px-3 py-2 font-bold text-left text-secondary"
+                    >
+                      <SafeText>{header}</SafeText>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+            )}
+            <tbody>
+              {rows.map((row, ri) => (
+                <tr key={ri} className={ri % 2 === 0 ? 'bg-background/10' : 'bg-surface-container/20'}>
+                  {row.cells.map((cell, ci) => (
+                    <td key={ci} className="border border-primary/15 px-3 py-2 text-on-surface">
+                      <SafeText>{cell}</SafeText>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        </div>
       </div>
     );
   }

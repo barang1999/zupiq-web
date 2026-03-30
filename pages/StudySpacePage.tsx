@@ -15,7 +15,8 @@ import SweepText from '../components/ui/SweepText.jsx';
 import { api, ApiError } from '../lib/api';
 import { MathText } from '../components/ui/MathText';
 import { RichText } from '../components/ui/RichText';
-import { type VisualTableData } from '../components/ui/VisualTable';
+import { VisualTable, type VisualTableData } from '../components/ui/VisualTable';
+import { Modal } from '../components/ui/Modal';
 import { ActionPopover } from '../components/ui/ActionPopover';
 import { NodeInsightPanel } from '../components/study/NodeInsightPanel';
 import { supabase } from '../lib/supabase';
@@ -990,6 +991,7 @@ export function StudySpacePage({
   );
   const [debugEntries, setDebugEntries] = useState<StudyDebugEntry[]>([]);
   const [sessionVisualTable, setSessionVisualTable] = useState<VisualTableData | null>(null);
+  const [expandedTable, setExpandedTable] = useState<VisualTableData | null>(null);
   const [ocrDetectedSignTable, setOcrDetectedSignTable] = useState(false);
   const lastOcrInsertRef = useRef<string | null>(null);
   const lastOcrUploadIdRef = useRef<string | null>(null);
@@ -3575,6 +3577,7 @@ IMPORTANT:
                 setDeepDiveUploadId(null);
                 setHasDeepDiveAttachment(false);
               }}
+              onExpandTable={setExpandedTable}
               onTouchStart={handleInsightSwipeStart}
               onTouchMove={handleInsightSwipeMove}
               onTouchEnd={handleInsightSwipeEnd}
@@ -3664,6 +3667,51 @@ IMPORTANT:
           </div>
         </div>
       )}
+
+      {/* Global table expand modal */}
+      <Modal
+        isOpen={!!expandedTable}
+        onClose={() => setExpandedTable(null)}
+        showCloseButton={false}
+        maxWidth="fit"
+        containerClassName="!bg-transparent !border-0 !shadow-none"
+      >
+        <div className="overflow-auto max-h-[80vh] [&_table]:w-auto [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
+          <div className="w-fit mx-auto">
+            {expandedTable && <VisualTable table={expandedTable} />}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Table modal chrome — fixed to screen edges */}
+      <AnimatePresence>
+        {expandedTable && (
+          <>
+            <motion.div
+              key="table-modal-title"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              className="fixed top-5 left-5 z-[101] pointer-events-none"
+            >
+              <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                {expandedTable.type === 'sign_analysis' ? 'Sign Table' : 'Table'}
+              </span>
+            </motion.div>
+            <motion.button
+              key="table-modal-close"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              onClick={() => setExpandedTable(null)}
+              className="fixed top-4 right-4 z-[101] p-2 rounded-full text-on-surface-variant hover:text-on-surface hover:bg-white/10 transition-colors"
+              aria-label="Close table"
+            >
+              <X className="w-5 h-5" />
+            </motion.button>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

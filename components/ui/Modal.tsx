@@ -8,15 +8,17 @@ interface ModalProps {
   title?: string;
   subtitle?: string;
   children: React.ReactNode;
-  maxWidth?: "sm" | "md" | "lg" | "xl";
+  maxWidth?: "sm" | "md" | "lg" | "xl" | "fit";
   showCloseButton?: boolean;
+  containerClassName?: string;
 }
 
-const maxWidthClasses = {
-  sm: "max-w-sm",
-  md: "max-w-md",
-  lg: "max-w-lg",
-  xl: "max-w-xl",
+const maxWidthClasses: Record<string, string> = {
+  sm:  "w-full max-w-sm",
+  md:  "w-full max-w-md",
+  lg:  "w-full max-w-lg",
+  xl:  "w-full max-w-xl",
+  fit: "w-full max-w-[calc(100vw-2rem)]",
 };
 
 export function Modal({
@@ -27,6 +29,7 @@ export function Modal({
   children,
   maxWidth = "md",
   showCloseButton = true,
+  containerClassName,
 }: ModalProps) {
   // Close on Escape key
   useEffect(() => {
@@ -67,9 +70,10 @@ export function Modal({
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             className={[
-              "w-full bg-surface-container-highest/95 backdrop-blur-xl",
+              "bg-surface-container-highest/95 backdrop-blur-xl",
               "border border-white/5 rounded-3xl p-6 relative overflow-hidden",
               maxWidthClasses[maxWidth],
+              containerClassName ?? "",
             ].join(" ")}
           >
             {(title || showCloseButton) && (

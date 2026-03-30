@@ -61,6 +61,7 @@ interface Props {
   onSyncVisualTable: () => void;
   onAttachFile?: (file: File) => void | Promise<void>;
   onClearAttachment?: () => void;
+  onExpandTable: (table: VisualTableData) => void;
   onTouchStart: (e: ReactTouchEvent<HTMLDivElement>) => void;
   onTouchMove: (e: ReactTouchEvent<HTMLDivElement>) => void;
   onTouchEnd: () => void;
@@ -91,6 +92,7 @@ export function NodeInsightPanel({
   onSyncVisualTable,
   onAttachFile,
   onClearAttachment,
+  onExpandTable,
   onTouchStart,
   onTouchMove,
   onTouchEnd,
@@ -285,7 +287,11 @@ export function NodeInsightPanel({
                   Visual Logic · {sessionVisualTable.type === 'sign_analysis' ? 'Sign Table' : 'Structured Data'}
                 </label>
                 <div className="rounded-2xl border border-tertiary/25 bg-surface-container overflow-hidden">
-                  <VisualTable table={sessionVisualTable} />
+                  <VisualTable
+                    table={sessionVisualTable}
+                    expandable
+                    onExpand={() => onExpandTable(sessionVisualTable)}
+                  />
                 </div>
               </div>
             )}
@@ -373,7 +379,11 @@ export function NodeInsightPanel({
                           <RichText className="text-xs leading-relaxed">{message.content}</RichText>
                           {message.visualTable && (
                             <div className="mt-3 rounded-xl border border-outline-variant/20 bg-surface-container overflow-hidden">
-                              <VisualTable table={message.visualTable} />
+                              <VisualTable
+                                table={message.visualTable}
+                                expandable
+                                onExpand={() => onExpandTable(message.visualTable!)}
+                              />
                             </div>
                           )}
                         </>
@@ -539,6 +549,7 @@ export function NodeInsightPanel({
           <p className="mt-2 text-[10px] text-error px-2">{composerError}</p>
         )}
       </div>
+
     </>
   );
 }
