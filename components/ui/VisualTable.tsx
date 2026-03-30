@@ -1,27 +1,29 @@
 import { MathText } from './MathText';
 import { Maximize2 } from 'lucide-react';
+import React from 'react';
 
-// Detect Khmer Unicode block (U+1780–U+17FF) or other non-math scripts
-function hasNonMathScript(text: string): boolean {
-  return /[\u1780-\u17FF\u1800-\u18AF]/.test(text);
+/**
+ * Detects non-Latin scripts (Khmer, Arabic, etc.) that should bypass direct KaTeX 
+ * rendering if they don't have math delimiters.
+ */
+function containsNonMathUnicode(text: string): boolean {
+  return /[\u0600-\u06FF\u0900-\u097F\u1780-\u17FF\u4E00-\u9FFF\uAC00-\uD7AF\u3040-\u30FF]/.test(text);
 }
 
-// Render text as MathText only if it's safe for KaTeX (no Khmer/non-Latin scripts),
-// but always use MathText when there are inline math delimiters ($...$) present —
-// MathText already handles mixed Khmer+math via its pushMathSegment logic.
 function SafeText({ children, className }: { children: string; className?: string }) {
+  if (!children) return null;
   const hasMathDelimiters = /\$/.test(children);
-  if (hasNonMathScript(children) && !hasMathDelimiters) {
+  if (containsNonMathUnicode(children) && !hasMathDelimiters) {
     return <span className={className}>{children}</span>;
   }
   return <MathText className={className}>{children}</MathText>;
 }
 
 export interface SignTableRow {
-  label: string;       // "-∞", "0", "1/2", "+∞"
+  label: string;
   type: 'value' | 'interval';
-  cells: string[];     // "+", "-", "0", "" — one per analysis column
-  conclusion: string;  // e.g. "0 < x₁ < x₂"  or  "x₁ = x₂ = 4/3"
+  cells: string[];
+  conclusion: string;
 }
 
 export interface GenericTableRow {
@@ -42,93 +44,85 @@ export type VisualTableData =
       rows: GenericTableRow[];
     };
 
-function SignCell({ value, rowType }: { value: string; rowType: 'value' | 'interval' }) {
-  const base = 'flex items-center justify-center w-full h-full text-sm font-bold';
+/**
+ * Normalizes fragmented AI data into a strict textbook sequence:
+ * Interval -> Point -> Interval -> Point ...
+ * Merges sign data so each region is represented exactly once.
+ */
+function normalizeToSignChart(rows: SignTableRow[], colCount: number): SignTableRow[] {
+  // 1. Initial reclassification
+  const baseRows = rows.map(row => {
+    const hasSign = row.cells.some(c => c === '+' || c === '-' || c === '−');
+    const hasZero = row.cells.some(c => c === '0');
+    if (row.type === 'value' && hasSign && !hasZero) return { ...row, type: 'interval' as const };
+    if (row.type === 'interval' && row.cells.every(c => !c || c === '0') && row.cells.some(c => c === '0')) return { ...row, type: 'value' as const };
+    return row;
+  });
 
-  if (rowType === 'value') {
-    if (value === '0') {
-      // Option B: anchor the marker on the border line between rows
-      return (
-        <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 z-10 w-4 h-4 rounded-full border border-amber-400/90 bg-surface-container-highest flex items-center justify-center text-[10px] font-bold text-amber-400 shadow-sm pointer-events-none">
-          0
-        </span>
-      );
+  // 2. Identify unique boundary points in ascending order
+  const points: string[] = [];
+  baseRows.forEach(r => {
+    if (r.type === 'value' && r.label && !points.includes(r.label)) {
+      points.push(r.label);
     }
-    // +/− must not appear in value rows — silently suppressed
-    return null;
+  });
+
+  // 3. Construct textbook slots
+  const slots: SignTableRow[] = [];
+  for (let i = 0; i <= points.length; i++) {
+    const lower = i === 0 ? '-∞' : points[i - 1];
+    const upper = i === points.length ? '+∞' : points[i];
+    slots.push({
+      label: `(${lower}, ${upper})`,
+      type: 'interval',
+      cells: Array(colCount).fill(''),
+      conclusion: ''
+    });
+    if (i < points.length) {
+      slots.push({
+        label: points[i],
+        type: 'value',
+        cells: Array(colCount).fill(''),
+        conclusion: ''
+      });
+    }
   }
 
-  // Interval row signs
-  if (value === '+') return <span className={`${base} text-emerald-400`}>+</span>;
-  if (value === '-' || value === '−') return <span className={`${base} text-rose-400`}>−</span>;
+  // 4. Merge data into slots
+  baseRows.forEach(row => {
+    let targetSlot: SignTableRow | undefined;
+    if (row.type === 'value') {
+      targetSlot = slots.find(s => s.type === 'value' && s.label === row.label);
+    } else {
+      // Find interval slot - preference for exact label match or overlap
+      targetSlot = slots.find(s => s.type === 'interval' && (
+        row.label === s.label || row.label.includes(s.label.split(',')[0].replace('(', '').trim())
+      ));
+    }
 
-  return <SafeText className="text-xs text-on-surface/80">{value}</SafeText>;
+    if (targetSlot) {
+      row.cells.forEach((c, ci) => {
+        if (c && !targetSlot!.cells[ci]) targetSlot!.cells[ci] = c;
+      });
+      if (row.conclusion && !targetSlot.conclusion) targetSlot.conclusion = row.conclusion;
+    }
+  });
+
+  return slots.filter(s => s.cells.some(c => c) || s.type === 'value');
 }
 
-interface VisualTableProps {
+export function VisualTable({ table, expandable, onExpand }: {
   table: VisualTableData;
   expandable?: boolean;
   onExpand?: () => void;
-}
-
-/** Returns true if label looks like a single exact value (not an interval). */
-function looksLikePointLabel(label: string): boolean {
-  const t = label.trim();
-  // Interval notation: starts with ( or [ or −∞, +∞
-  if (/^[([−-]/.test(t) || t.includes(',')) return false;
-  // Single value: digits, fractions, ±∞, or simple expressions like 9/2
-  return /^[0-9−-]/.test(t) || t === '+∞' || t === '-∞';
-}
-
-/**
- * Normalizes legacy or ambiguous rows to follow stricter mathematical semantics.
- * Logs dev-mode warnings for rows that violate the spec.
- */
-function normalizeSignTableRows(rows: SignTableRow[]): SignTableRow[] {
-  const isDev = typeof process !== 'undefined'
-    ? process.env.NODE_ENV !== 'production'
-    : !!(import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV;
-
-  return rows.map((row, i) => {
-    // Rule 1: value row that has ONLY +/− (no zero) is almost certainly a
-    // mislabelled interval row — reclassify. But if it has at least one '0'
-    // alongside +/− (e.g. P=0 while Δ>0) it is a genuine critical-point row.
-    const hasSign = row.cells.some(c => c === '+' || c === '-' || c === '−');
-    const hasZero = row.cells.some(c => c === '0');
-    if (row.type === 'value' && hasSign && !hasZero) {
-      if (isDev) console.warn(`[VisualTable] row[${i}] type='value' but contains only interval signs — reclassified as 'interval'`, row);
-      return { ...row, type: 'interval' };
-    }
-    // Rule 2: interval row must not contain 0
-    if (row.type === 'interval' && row.cells.every(c => !c || c === '0') && row.cells.some(c => c === '0')) {
-      if (isDev) console.warn(`[VisualTable] row[${i}] type='interval' but contains only zeros — reclassified as 'value'`, row);
-      return { ...row, type: 'value' };
-    }
-    // Rule 3/4: interval row with a point-style label (legacy AI output)
-    if (row.type === 'interval' && looksLikePointLabel(row.label)) {
-      if (isDev) console.warn(`[VisualTable] row[${i}] type='interval' but label looks like a point value '${row.label}' — legacy ambiguous format`, row);
-      // Keep rendering as interval (signs belong to the open interval around it),
-      // but don't silently upgrade to a point row unless all cells are 0.
-    }
-    return row;
-  });
-}
-
-export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
-  // Two-layer approach: outer holds the border + radius (no overflow clip so
-  // corners stay sharp), inner clips the table content at a matching radius.
-  // We add p-px and rounded-xl to both, then use border-separate on the table
-  // to prevent internal borders from being clipped by the rounded corners.
-  const outerClass = "relative group/table rounded-xl ring-1 ring-inset ring-outline-variant/30 bg-surface-container p-px";
+}) {
+  const outerClass = "relative group/table rounded-xl ring-1 ring-inset ring-outline-variant/25 bg-surface-container p-px";
   const innerClass = "overflow-hidden rounded-[11px]";
 
   const expandButton = expandable && onExpand && (
     <button
-      onClick={(e) => {
-        e.stopPropagation();
-        onExpand();
-      }}
-      className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-surface-container-highest/80 backdrop-blur-md text-on-surface-variant hover:text-primary border border-white/5 invisible opacity-0 group-hover/table:visible group-hover/table:opacity-100 transition-all shadow-lg"
+      onClick={(e) => { e.stopPropagation(); onExpand(); }}
+      className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-surface-container-highest/80 backdrop-blur-md text-on-surface-variant hover:text-primary border border-white/5 invisible opacity-0 group-hover/table:visible group-hover/table:opacity-100 transition-all shadow-lg active:scale-95 cursor-pointer"
       title="Expand Table"
     >
       <Maximize2 className="w-4 h-4" />
@@ -136,99 +130,114 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
   );
 
   if (table.type === 'sign_analysis') {
-    // Support AI responses that used generic `headers` instead of the structured fields
-    const headers = (table as unknown as { headers?: string[] }).headers;
-    const allCols = (table.parameterName || table.columns || table.conclusionLabel)
-      ? [table.parameterName ?? '', ...(table.columns ?? []), table.conclusionLabel ?? '']
-      : (headers ?? []);
-    const rows = normalizeSignTableRows(table.rows as SignTableRow[]);
+    const columns = table.columns ?? [];
+    const rows = normalizeToSignChart(table.rows as SignTableRow[], columns.length);
+    
+    // Grid Setup: Label Column | Sign Columns | Conclusion Column
+    // Sign columns use minmax so complex math headers get enough room
+    const gridCols = `120px repeat(${columns.length}, minmax(80px, 1fr)) 2fr`;
 
     return (
       <div className={outerClass}>
         {expandButton}
         <div className={innerClass}>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[320px] border-separate border-spacing-0 text-xs">
-            {/* Header */}
-            <thead>
-              <tr>
-                {allCols.map((col, i) => (
-                  <th
-                    key={i}
-                    className={`
-                      border-b border-primary/25 px-2 py-2 font-bold text-center
-                      ${i < allCols.length - 1 ? 'border-r' : ''}
-                      ${i === 0 ? 'text-on-surface-variant w-14' : ''}
-                      ${i > 0 && i < allCols.length - 1 ? 'text-secondary w-10' : ''}
-                      ${i === allCols.length - 1 ? 'text-primary text-left pl-3' : ''}
-                    `}
-                  >
-                    <SafeText className="block">{col}</SafeText>
-                  </th>
-                ))}
-              </tr>
-            </thead>
+          <div className="overflow-x-auto no-scrollbar bg-surface-container/20 p-6">
+            <div
+              className="grid min-w-[500px]"
+              style={{ gridTemplateColumns: gridCols }}
+            >
+              {/* Header */}
+              <div className="py-5 px-2 flex items-end justify-center font-bold text-on-surface-variant text-[11px] uppercase tracking-wider border-b border-primary/20">
+                <SafeText>{table.parameterName}</SafeText>
+              </div>
+              {columns.map((col, ci) => (
+                <div key={ci} className="py-5 px-3 flex items-end justify-center font-bold text-secondary text-sm border-b border-primary/20 text-center">
+                  <SafeText>{col}</SafeText>
+                </div>
+              ))}
+              <div className="py-5 px-4 flex items-end pl-8 font-bold text-primary text-[11px] uppercase tracking-wider border-b border-primary/20">
+                <SafeText>{table.conclusionLabel}</SafeText>
+              </div>
 
-            {/* Body */}
-            <tbody className="relative">
+              {/* Chart Body */}
               {rows.map((row, ri) => {
-                const isValueRow = row.type === 'value';
-                const isLastRow = ri === rows.length - 1;
-                
-                const rowClass = isValueRow
-                  ? 'h-3 bg-transparent group/value'
-                  : 'h-10 bg-background/20 group/interval';
-
-                const cellClass = `
-                  px-1 text-center relative
-                  ${isValueRow ? 'py-0 overflow-visible' : 'py-2'}
-                  ${!isLastRow ? 'border-b border-primary/15' : ''}
-                  border-r border-primary/15
-                `;
-
-                const labelClass = `
-                  px-2 text-center font-mono
-                  ${isValueRow ? 'py-0 text-[10px] text-on-surface-variant/60' : 'py-2 text-on-surface-variant'}
-                  ${!isLastRow ? 'border-b border-primary/15' : ''}
-                  border-r border-primary/15
-                `;
-
-                const conclusionClass = `
-                  px-3 py-1 text-left
-                  ${!isLastRow ? 'border-b border-primary/15' : ''}
-                  ${isValueRow ? 'text-[10px] text-on-surface/50 italic' : 'text-[11px] text-on-surface'}
-                `;
+                if (row.type === 'value') {
+                  return (
+                    <React.Fragment key={ri}>
+                      {/* Label cell — no border so line doesn't cut through text */}
+                      <div className="h-0 relative my-4">
+                        <div className="absolute right-0 top-0 -translate-y-1/2 pr-2">
+                          <span className="text-[10px] font-mono text-on-surface-variant/40 whitespace-nowrap">
+                            <SafeText>{`${table.parameterName} = ${row.label}`}</SafeText>
+                          </span>
+                        </div>
+                      </div>
+                      {/* Sign cells — render 0 centered on the line for vanishing factors */}
+                      {row.cells.map((cell, ci) => (
+                        <div key={ci} className="h-0 relative my-4 border-t border-primary/10">
+                          {cell === '0' && (
+                            <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 text-base font-bold text-on-surface-variant/60">
+                              0
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                      {/* Conclusion cell — chevron split < at boundary point */}
+                      <div className="h-0 relative my-4" style={{ overflow: 'visible' }}>
+                        {/* Chevron < */}
+                        <svg
+                          className="absolute left-2 top-0"
+                          style={{ transform: 'translateY(-50%)', overflow: 'visible' }}
+                          width="20"
+                          height="52"
+                        >
+                          <polyline
+                            points="18,0 3,26 18,52"
+                            fill="none"
+                            stroke="rgba(148,163,184,0.55)"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                        {/* Top horizontal line from chevron tip to right edge */}
+                        <div className="absolute" style={{ left: 26, right: 0, top: 0, transform: 'translateY(-26px)', borderTop: '1.5px solid rgba(148,163,184,0.55)' }} />
+                        {/* Bottom horizontal line from chevron tip to right edge */}
+                        <div className="absolute" style={{ left: 26, right: 0, top: 0, transform: 'translateY(26px)', borderTop: '1.5px solid rgba(148,163,184,0.55)' }} />
+                        {row.conclusion && (
+                          <div className="absolute left-7 top-0 -translate-y-1/2 pr-2">
+                            <SafeText className="text-[10px] text-on-surface/55 italic">{row.conclusion}</SafeText>
+                          </div>
+                        )}
+                      </div>
+                    </React.Fragment>
+                  );
+                }
 
                 return (
-                  <tr key={ri} className={rowClass}>
-                    {/* Parameter column (e.g. m) */}
-                    <td className={labelClass}>
-                      {row.label ? (
-                        <SafeText className="block">{row.label}</SafeText>
-                      ) : null}
-                    </td>
-
-                    {/* Sign columns */}
+                  <React.Fragment key={ri}>
+                    {/* Interval Row */}
+                    <div className="h-14 flex items-center justify-center text-[10px] font-mono text-on-surface-variant/40">
+                      <SafeText>{row.label}</SafeText>
+                    </div>
                     {row.cells.map((cell, ci) => (
-                      <td key={ci} className={cellClass}>
-                        <SignCell value={cell} rowType={row.type} />
-                      </td>
+                      <div key={ci} className="h-14 flex items-center justify-center">
+                        {cell === '+' && (
+                          <span className="text-xl font-bold text-emerald-400/90 drop-shadow-[0_0_8px_rgba(52,211,153,0.25)]">+</span>
+                        )}
+                        {(cell === '-' || cell === '−') && (
+                          <span className="text-xl font-bold text-rose-400/90 drop-shadow-[0_0_8px_rgba(251,113,133,0.25)]">−</span>
+                        )}
+                      </div>
                     ))}
-
-                    {/* Conclusion column */}
-                    <td className={conclusionClass}>
-                      {row.conclusion ? (
-                        <SafeText className="block leading-snug">
-                          {row.conclusion}
-                        </SafeText>
-                      ) : null}
-                    </td>
-                  </tr>
+                    <div className="h-14 flex items-center pl-6 text-[11px] text-on-surface/80 leading-snug">
+                      <SafeText>{row.conclusion}</SafeText>
+                    </div>
+                  </React.Fragment>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -237,24 +246,17 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
   if (table.type === 'generic') {
     const headers = table.headers || [];
     const rows = table.rows as GenericTableRow[];
-
     return (
       <div className={outerClass}>
         {expandButton}
         <div className={innerClass}>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto no-scrollbar">
           <table className="w-full min-w-[320px] border-separate border-spacing-0 text-xs">
             {headers.length > 0 && (
               <thead>
-                <tr className="bg-surface-container/40">
+                <tr className="bg-surface-container/60">
                   {headers.map((header, i) => (
-                    <th
-                      key={i}
-                      className={`
-                        border-b border-primary/25 px-3 py-2 font-bold text-left text-secondary
-                        ${i < headers.length - 1 ? 'border-r' : ''}
-                      `}
-                    >
+                    <th key={i} className={`border-b border-primary/25 px-3 py-2.5 font-bold text-left text-secondary ${i < headers.length - 1 ? 'border-r border-primary/15' : ''}`}>
                       <SafeText>{header}</SafeText>
                     </th>
                   ))}
@@ -262,25 +264,15 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
               </thead>
             )}
             <tbody>
-              {rows.map((row, ri) => {
-                const isLastRow = ri === rows.length - 1;
-                return (
-                  <tr key={ri} className={ri % 2 === 0 ? 'bg-background/10' : 'bg-surface-container/20'}>
-                    {row.cells.map((cell, ci) => (
-                      <td 
-                        key={ci} 
-                        className={`
-                          px-3 py-2 text-on-surface
-                          ${!isLastRow ? 'border-b border-primary/15' : ''}
-                          ${ci < row.cells.length - 1 ? 'border-r border-primary/15' : ''}
-                        `}
-                      >
-                        <SafeText>{cell}</SafeText>
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
+              {rows.map((row, ri) => (
+                <tr key={ri} className={ri % 2 === 0 ? 'bg-background/20' : 'bg-surface-container/20'}>
+                  {row.cells.map((cell, ci) => (
+                    <td key={ci} className={`px-3 py-2 text-on-surface ${ri < rows.length - 1 ? 'border-b border-primary/10' : ''} ${ci < row.cells.length - 1 ? 'border-r border-primary/10' : ''}`}>
+                      <SafeText>{cell}</SafeText>
+                    </td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -288,6 +280,5 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
       </div>
     );
   }
-
   return null;
 }
