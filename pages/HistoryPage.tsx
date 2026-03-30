@@ -4,11 +4,11 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import {
   GitFork, History, Users,
   Search, ArrowRight, Zap, ChevronLeft,
-  HelpCircle, LogOut, Brain, FlaskConical, Layers,
+  HelpCircle, LogOut, Brain, FlaskConical, Layers, Trash2,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
 import { MathText } from '../components/ui/MathText';
-import { getSessionsCached } from '../lib/sessions';
+import { getSessionsCached, deleteSession } from '../lib/sessions';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
 
@@ -124,6 +124,8 @@ export function HistoryPage({
   const [search, setSearch]     = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHovered, setSidebarHovered] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < 640
   );
@@ -156,6 +158,21 @@ export function HistoryPage({
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     await firebaseSignOut();
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!confirmDeleteId) return;
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
+    setDeletingId(id);
+    try {
+      await deleteSession(id);
+      setSessions(prev => prev.filter(s => s.id !== id));
+    } catch {
+      // silently fail — session stays in list
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const navigateToQuiz = () => {
@@ -670,29 +687,37 @@ export function HistoryPage({
                           }
                         };
                         return (
-                          <button
-                            key={session.id}
-                            onClick={handleOpen}
-                            className="w-full text-left px-5 py-4 hover:bg-surface-container-highest/40 transition-colors"
-                          >
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="min-w-0">
-                                <h4 className="font-bold text-on-surface line-clamp-2">
-                                  <MathText>{toSingleLinePreview(session.title)}</MathText>
-                                </h4>
-                                <p className="mt-1 text-xs text-on-surface-variant line-clamp-1">
-                                  <MathText>{toSingleLinePreview(session.problem)}</MathText>
-                                </p>
+                          <div key={session.id} className="flex items-center gap-2 pr-3 hover:bg-surface-container-highest/40 transition-colors group">
+                            <button
+                              onClick={handleOpen}
+                              className="flex-1 text-left px-5 py-4 min-w-0"
+                            >
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                  <h4 className="font-bold text-on-surface line-clamp-2">
+                                    <MathText>{toSingleLinePreview(session.title)}</MathText>
+                                  </h4>
+                                  <p className="mt-1 text-xs text-on-surface-variant line-clamp-1">
+                                    <MathText>{toSingleLinePreview(session.problem)}</MathText>
+                                  </p>
+                                </div>
+                                <span className="shrink-0 text-[10px] text-on-surface-variant">{formatDate(session.created_at)}</span>
                               </div>
-                              <span className="shrink-0 text-[10px] text-on-surface-variant">{formatDate(session.created_at)}</span>
-                            </div>
-
-                            <div className="mt-3 flex flex-wrap items-center gap-2.5 text-xs">
-                              <span className={`px-2.5 py-1 rounded-full ${sc.bg} ${sc.text}`}>{session.subject}</span>
-                              <span className="text-on-surface-variant">{session.node_count} nodes</span>
-                              <span className="text-on-surface-variant">{formatDuration(session.duration_seconds)}</span>
-                            </div>
-                          </button>
+                              <div className="mt-3 flex flex-wrap items-center gap-2.5 text-xs">
+                                <span className={`px-2.5 py-1 rounded-full ${sc.bg} ${sc.text}`}>{session.subject}</span>
+                                <span className="text-on-surface-variant">{session.node_count} nodes</span>
+                                <span className="text-on-surface-variant">{formatDuration(session.duration_seconds)}</span>
+                              </div>
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(session.id)}
+                              disabled={deletingId === session.id}
+                              className="shrink-0 p-2 rounded-xl text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors opacity-0 group-hover:opacity-100"
+                              title="Delete session"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -715,6 +740,7 @@ export function HistoryPage({
                           <th className="px-8 py-4 font-medium">Subject</th>
                           <th className="px-8 py-4 font-medium">Nodes</th>
                           <th className="px-8 py-4 font-medium">Duration</th>
+                          <th className="px-4 py-4 font-medium" />
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-outline-variant/10">
@@ -735,7 +761,7 @@ export function HistoryPage({
                               onClick={handleOpen}
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
-                              className="hover:bg-surface-container-highest/50 transition-colors cursor-pointer"
+                              className="hover:bg-surface-container-highest/50 transition-colors cursor-pointer group"
                             >
                               <td className="px-8 py-6 text-sm text-on-surface-variant">{formatDate(session.created_at)}</td>
                               <td className="px-8 py-6 font-bold text-on-surface max-w-xs">
@@ -760,6 +786,16 @@ export function HistoryPage({
                               <td className="px-8 py-6 text-sm text-on-surface-variant">
                                 {formatDuration(session.duration_seconds)}
                               </td>
+                              <td className="px-4 py-6" onClick={e => e.stopPropagation()}>
+                                <button
+                                  onClick={() => setConfirmDeleteId(session.id)}
+                                  disabled={deletingId === session.id}
+                                  className="p-2 rounded-xl text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors opacity-0 group-hover:opacity-100"
+                                  title="Delete session"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
                             </motion.tr>
                           );
                         })}
@@ -773,6 +809,41 @@ export function HistoryPage({
           </div>
         </div>
       </motion.main>
+
+      {/* ── Delete confirmation dialog ──────────────────────────────────── */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-surface-container-low border border-outline-variant/20 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-2xl bg-error/10">
+                <Trash2 className="w-5 h-5 text-error" />
+              </div>
+              <h3 className="font-headline font-bold text-lg">Delete session?</h3>
+            </div>
+            <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
+              This will permanently remove the session and all its data. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="flex-1 py-2.5 rounded-full border border-outline-variant/30 text-on-surface text-sm font-bold hover:bg-surface-container transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="flex-1 py-2.5 rounded-full bg-error text-on-error text-sm font-bold hover:opacity-90 transition-opacity"
+              >
+                Delete
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

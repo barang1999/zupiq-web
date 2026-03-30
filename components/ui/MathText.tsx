@@ -334,10 +334,52 @@ function stripOrphanDollars(s: string): string {
   return s.replace(/\$+/g, '');
 }
 
+/**
+ * Push a math segment. If the value contains non-math Unicode (e.g. Khmer mixed with LaTeX),
+ * split it into text + math sub-segments so renderKaTeX never receives Khmer alongside LaTeX.
+ *
+ * Strategy:
+ *  1. Unwrap \text{…} / \mathrm{…} wrappers whose argument contains non-math Unicode.
+ *  2. Split the resulting string on runs of non-math Unicode characters.
+ *  3. Non-math-Unicode runs → 'text' segments; everything else → 'inline' math segments.
+ */
+function pushMathSegment(out: Segment[], value: string, type: 'inline' | 'display'): void {
+  if (!containsNonMathUnicode(value)) {
+    out.push({ type, value });
+    return;
+  }
+
+  // Step 1: unwrap \text{…} / \mathrm{…} etc. whose content has non-math Unicode.
+  const unwrapped = value.replace(
+    /\\(?:text|mathrm|mbox|textrm|textit|textbf)\{([^{}]*)\}/g,
+    (_match, inner: string) => (containsNonMathUnicode(inner) ? ` ${inner} ` : _match),
+  );
+
+  // Step 2: split on runs of non-math Unicode characters.
+  const NON_MATH_RUN = /[\u0600-\u06FF\u0900-\u097F\u1780-\u17FF\u4E00-\u9FFF\uAC00-\uD7AF\u3040-\u30FF]+/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  NON_MATH_RUN.lastIndex = 0;
+
+  while ((m = NON_MATH_RUN.exec(unwrapped)) !== null) {
+    if (m.index > last) {
+      const mathPart = unwrapped.slice(last, m.index).trim();
+      if (mathPart) out.push({ type: 'inline', value: mathPart });
+    }
+    out.push({ type: 'text', value: m[0] });
+    last = m.index + m[0].length;
+  }
+
+  if (last < unwrapped.length) {
+    const mathPart = unwrapped.slice(last).trim();
+    if (mathPart) out.push({ type: 'inline', value: mathPart });
+  }
+}
+
 function splitMathSegments(text: string): Segment[] {
   const segments: Segment[] = [];
   const mathDebug = isMathDebugEnabled();
-  // Match $$...$$ / \[...\] first (display), then $...$ / \(...\) (inline), 
+  // Match $$...$$ / \[...\] first (display), then $...$ / \(...\) (inline),
   // then bare LaTeX commands (consistent with RichText)
   const regex = /\$\$([\s\S]+?)\$\$|\$([\s\S]+?)\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|(\\[a-zA-Z]+|\\[{}]|\\\\|\\,)(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
   let last = 0;
@@ -348,15 +390,15 @@ function splitMathSegments(text: string): Segment[] {
       segments.push({ type: 'text', value: stripOrphanDollars(text.slice(last, match.index)) });
     }
     if (match[1] !== undefined) {
-      segments.push({ type: 'display', value: match[1] });
+      pushMathSegment(segments, match[1], 'display');
     } else if (match[2] !== undefined) {
-      segments.push({ type: 'inline', value: match[2] });
+      pushMathSegment(segments, match[2], 'inline');
     } else if (match[3] !== undefined) {
-      segments.push({ type: 'display', value: match[3] });
+      pushMathSegment(segments, match[3], 'display');
     } else if (match[4] !== undefined) {
-      segments.push({ type: 'inline', value: match[4] });
+      pushMathSegment(segments, match[4], 'inline');
     } else if (match[5] !== undefined) {
-      segments.push({ type: 'inline', value: match[5] });
+      pushMathSegment(segments, match[5], 'inline');
     }
     last = match.index + match[0].length;
   }

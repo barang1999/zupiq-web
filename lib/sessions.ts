@@ -24,6 +24,20 @@ let sessionsCache: {
 let sessionsInFlight: Promise<SessionRow[]> | null = null;
 let sessionsRetryNotBefore = 0;
 
+export function invalidateSessionsCache(): void {
+  sessionsCache = null;
+}
+
+export async function deleteSession(id: string): Promise<void> {
+  await api.delete(`/api/sessions/${id}`);
+  if (sessionsCache) {
+    sessionsCache = {
+      ...sessionsCache,
+      value: sessionsCache.value.filter(s => s.id !== id),
+    };
+  }
+}
+
 export async function getSessionsCached(): Promise<SessionRow[]> {
   const accessToken = tokenStorage.getAccess();
   const now = Date.now();

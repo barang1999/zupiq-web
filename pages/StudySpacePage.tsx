@@ -462,6 +462,8 @@ function normalizeMathPreviewText(raw: string): string {
   return normalizeMathDelimiters(expandMultilineInlineMathPreview(stripLatexTabular(raw)))
     // Handle LaTeX line-break command explicitly first.
     .replace(/\\newline\b/g, '\n')
+    // Convert LaTeX double-backslash line break (\\) to newline.
+    .replace(/\\\\(?![a-zA-Z])/g, '\n')
     // Convert escaped "\n" (including over-escaped variants) when standalone.
     .replace(/\\+n(?![a-zA-Z])/g, '\n')
     .replace(/\\+r(?![a-zA-Z])/g, ' ')
@@ -473,6 +475,8 @@ function normalizeMathPreviewText(raw: string): string {
     .replace(/\r\n?/g, '\n')
     .replace(/\$\$/g, '$')
     .replace(/[ \t]*\n[ \t]*/g, '\n')
+    // Strip consecutive-comma separator artifacts from LaTeX align/cases environments.
+    .replace(/,\s*,/g, '')
     .trim();
 }
 
@@ -480,7 +484,7 @@ function splitMathPreviewLines(raw: string): string[] {
   const normalized = normalizeMathPreviewText(raw);
   if (!normalized) return [];
   const baseLines = normalized.includes('\n')
-    ? normalized.split('\n').map((line) => line.trim()).filter(Boolean)
+    ? normalized.split('\n').map((line) => line.trim()).filter((line) => Boolean(line) && !/^[,;\s\\]+$/.test(line))
     : [normalized];
   const extracted: string[] = [];
 
@@ -492,7 +496,7 @@ function splitMathPreviewLines(raw: string): string[] {
         .replace(/\$[^$\n]+?\$(?:\s*\(\d+\))?/g, ' ')
         .replace(/[ \t]{2,}/g, ' ')
         .trim();
-      if (trailing) extracted.push(trailing);
+      if (trailing && !/^[,;\s\\]+$/.test(trailing)) extracted.push(trailing);
       return;
     }
     extracted.push(line);
@@ -515,10 +519,17 @@ function splitMathPreviewLines(raw: string): string[] {
   return merged;
 }
 
+const NON_MATH_UNICODE_RE = /[\u0600-\u06FF\u0900-\u097F\u1780-\u17FF\u4E00-\u9FFF\uAC00-\uD7AF\u3040-\u30FF]/;
+
 function normalizeMathPreviewLineForRender(line: string): string {
   const t = (line ?? '').trim();
   if (!t) return '';
   if (t.includes('$')) return t;
+  // Don't wrap as a single math block if it contains non-math Unicode (e.g. Khmer).
+  // Let MathText's autoWrapInlineMathForRender handle the mixed content instead,
+  // otherwise renderKaTeX's non-math fallback strips LaTeX commands like \Delta → gone,
+  // \frac{9}{2} → "92", etc.
+  if (NON_MATH_UNICODE_RE.test(t)) return t;
   if (looksLikeMathPreviewExpression(t)) return `$${t}$`;
   return t;
 }
