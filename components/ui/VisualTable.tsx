@@ -131,7 +131,7 @@ export function VisualTable({ table, expandable, onExpand }: {
 
   if (table.type === 'sign_analysis') {
     const columns = table.columns ?? [];
-    const rows = normalizeToSignChart(table.rows as SignTableRow[], columns.length);
+    const rows = normalizeToSignChart(table.rows as SignTableRow[], columns.length).reverse();
     
     // Grid Setup: Label Column | Sign Columns | Conclusion Column
     // Sign columns use minmax so complex math headers get enough room
