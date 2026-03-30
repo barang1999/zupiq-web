@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   X, Loader2, Sparkles, Bookmark, Zap,
   ArrowRight, Archive, ChevronLeft, RefreshCw,
-  Paperclip, Camera, Upload, Table,
+  Paperclip, Camera, Upload, Table, Maximize2, Minimize2,
 } from 'lucide-react';
 import { MathText } from '../ui/MathText';
 import { RichText } from '../ui/RichText';
@@ -62,6 +62,8 @@ interface Props {
   onAttachFile?: (file: File) => void | Promise<void>;
   onClearAttachment?: () => void;
   onExpandTable: (table: VisualTableData) => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
   onTouchStart: (e: ReactTouchEvent<HTMLDivElement>) => void;
   onTouchMove: (e: ReactTouchEvent<HTMLDivElement>) => void;
   onTouchEnd: () => void;
@@ -93,6 +95,8 @@ export function NodeInsightPanel({
   onAttachFile,
   onClearAttachment,
   onExpandTable,
+  isExpanded,
+  onToggleExpand,
   onTouchStart,
   onTouchMove,
   onTouchEnd,
@@ -200,7 +204,7 @@ export function NodeInsightPanel({
       {/* Scrollable content */}
       <div
         className="h-full overflow-y-auto p-8 pb-[200px]"
-        style={{ width: 384, touchAction: 'pan-y' }}
+        style={{ width: '100%', touchAction: 'pan-y' }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -221,9 +225,20 @@ export function NodeInsightPanel({
             )}
           </div>
           {selectedNode && (
-            <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface">
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              {onToggleExpand && (
+                <button
+                  onClick={onToggleExpand}
+                  className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5 transition-all"
+                  title={isExpanded ? 'Restore Size' : 'Expand Panel'}
+                >
+                  {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+              )}
+              <button onClick={onClose} className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5 transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           )}
         </div>
 

@@ -976,6 +976,13 @@ export function StudySpacePage({
   const [problemInput,   setProblemInput]   = useState('');
   const [isImageAnalyzing, setIsImageAnalyzing] = useState(false);
   const [isInsightPanelOpen, setIsInsightPanelOpen] = useState(false);
+  const [insightPanelWidth, setInsightPanelWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('studyspace_insight_width');
+      return saved ? Number(saved) : 384;
+    } catch { return 384; }
+  });
+  const [isResizing, setIsResizing] = useState(false);
   const [branchActionPortal, setBranchActionPortal] = useState<BranchActionPortalState | null>(null);
   const [insightSwipeOffsetX, setInsightSwipeOffsetX] = useState(0);
   const [isInsightSwipeDragging, setIsInsightSwipeDragging] = useState(false);
@@ -1293,6 +1300,46 @@ export function StudySpacePage({
     if (selectedNode && isInsightPanelOpen) return;
     resetInsightSwipe();
   }, [isInsightPanelOpen, resetInsightSwipe, selectedNode]);
+
+  const handlePanelResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const handleToggleInsightExpand = useCallback(() => {
+    setInsightPanelWidth(prev => {
+      const next = prev > 400 ? 384 : 640;
+      try { localStorage.setItem('studyspace_insight_width', next.toString()); } catch {}
+      return next;
+    });
+  }, []);
+
+  const isInsightExpanded = insightPanelWidth > 400;
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      // Panel is on the right, resizing from the left edge.
+      // So panel width = window.innerWidth - e.clientX
+      const newWidth = Math.max(320, Math.min(window.innerWidth - 100, window.innerWidth - e.clientX));
+      setInsightPanelWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      setIsResizing(false);
+      try {
+        localStorage.setItem('studyspace_insight_width', insightPanelWidth.toString());
+      } catch {}
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [isResizing, insightPanelWidth]);
 
   const handleInsightSwipeStart = useCallback((e: ReactTouchEvent<HTMLDivElement>) => {
     if (!selectedNode || !isInsightPanelOpen) return;
@@ -3602,12 +3649,12 @@ IMPORTANT:
         {/* ── Right Panel ─────────────────────────────────────────────────── */}
         <motion.aside
           animate={{
-            width: selectedNode && isInsightPanelOpen ? 384 : 0,
+            width: selectedNode && isInsightPanelOpen ? insightPanelWidth : 0,
             opacity: selectedNode && isInsightPanelOpen ? 1 : 0,
             x: selectedNode && isInsightPanelOpen ? insightSwipeOffsetX : 24,
           }}
           transition={{
-            width: { duration: 0.22, ease: 'easeInOut' },
+            width: isResizing ? { duration: 0 } : { duration: 0.22, ease: 'easeInOut' },
             opacity: { duration: 0.18, ease: 'easeOut' },
             x: isInsightSwipeDragging
               ? { duration: 0 }
@@ -3615,6 +3662,16 @@ IMPORTANT:
           }}
           className="h-full bg-surface-container-low/80 backdrop-blur-md border-l border-outline-variant/10 shrink-0 relative overflow-hidden z-20"
         >
+          {/* Resize Handle */}
+          {selectedNode && isInsightPanelOpen && (
+            <div
+              onMouseDown={handlePanelResizeMouseDown}
+              className="absolute inset-y-0 left-0 w-2 cursor-col-resize z-30 group"
+            >
+              <div className="absolute inset-y-0 left-0 w-[2px] bg-primary/0 group-hover:bg-primary/30 transition-colors" />
+            </div>
+          )}
+
           {selectedNode && isInsightPanelOpen && (
             <NodeInsightPanel
               selectedNode={selectedNode}
@@ -3658,6 +3715,8 @@ IMPORTANT:
                 setHasDeepDiveAttachment(false);
               }}
               onExpandTable={setExpandedTable}
+              isExpanded={isInsightExpanded}
+              onToggleExpand={handleToggleInsightExpand}
               onTouchStart={handleInsightSwipeStart}
               onTouchMove={handleInsightSwipeMove}
               onTouchEnd={handleInsightSwipeEnd}
