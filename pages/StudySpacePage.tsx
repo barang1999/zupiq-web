@@ -1238,6 +1238,10 @@ export function StudySpacePage({
       // Update breakdown content (nodes, title, subject, problem) from remote.
       setBreakdown(sanitized);
 
+      // Sync node-level data that lives in breakdown_json but is kept in separate state.
+      setNodeInsights(sanitized.nodeInsights ?? {});
+      setNodeConversations(sanitized.nodeConversations ?? {});
+
       // Merge positions: keep existing positions, compute for brand-new nodes, drop deleted ones.
       setPositions(prev => {
         const remoteNodes = sanitized.nodes ?? [];
