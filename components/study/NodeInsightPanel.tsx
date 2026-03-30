@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   X, Loader2, Sparkles, Bookmark, Zap,
@@ -110,6 +110,23 @@ export function NodeInsightPanel({
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
   const [cropState, setCropState] = useState<{ src: string; name: string } | null>(null);
 
+  // Close attach menu on outside click or when upload completes
+  useEffect(() => {
+    if (!isAttachMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (attachMenuRef.current?.contains(target)) return;
+      if (attachButtonRef.current?.contains(target)) return;
+      setIsAttachMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [isAttachMenuOpen]);
+
+  useEffect(() => {
+    if (!imageLoading) setIsAttachMenuOpen(false);
+  }, [imageLoading]);
+
   const openAttachOptions = () => {
     if (!onAttachFile || composerLoading || imageLoading) return;
     setIsAttachMenuOpen((prev) => !prev);
@@ -156,7 +173,7 @@ export function NodeInsightPanel({
       <input
         ref={uploadFileInputRef}
         type="file"
-        accept="image/*,application/pdf,text/plain"
+        accept="image/*"
         className="hidden"
         onChange={handleFileChange}
       />
@@ -414,7 +431,7 @@ export function NodeInsightPanel({
             value={composerInput}
             onChange={e => onComposerInputChange(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter' && !e.shiftKey && (composerInput.trim() || hasAttachment)) {
                 e.preventDefault();
                 onAskDeepDive();
               }
@@ -507,7 +524,7 @@ export function NodeInsightPanel({
 
             <button
               onClick={onAskDeepDive}
-              disabled={!isBranchSelected || composerLoading || imageLoading || !composerInput.trim()}
+              disabled={!isBranchSelected || composerLoading || imageLoading || (!composerInput.trim() && !hasAttachment)}
               className="w-10 h-10 rounded-full bg-on-surface-variant/20 text-on-surface flex items-center justify-center hover:bg-on-surface-variant/30 transition-all disabled:opacity-30"
             >
               {composerLoading

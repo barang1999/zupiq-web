@@ -15,7 +15,7 @@ import SweepText from '../components/ui/SweepText.jsx';
 import { api, ApiError } from '../lib/api';
 import { MathText } from '../components/ui/MathText';
 import { RichText } from '../components/ui/RichText';
-import { VisualTable } from '../components/ui/VisualTable';
+import { type VisualTableData } from '../components/ui/VisualTable';
 import { ActionPopover } from '../components/ui/ActionPopover';
 import { NodeInsightPanel } from '../components/study/NodeInsightPanel';
 import { supabase } from '../lib/supabase';
@@ -35,31 +35,6 @@ interface BreakdownNode {
   tags?: string[];
 }
 
-interface SignTableRow {
-  label: string;
-  type: 'value' | 'interval';
-  cells: string[];
-  conclusion: string;
-}
-
-interface GenericTableRow {
-  cells: string[];
-}
-
-type VisualTable = 
-  | { 
-      type: 'sign_analysis'; 
-      parameterName: string;
-      columns: string[];
-      conclusionLabel: string;
-      rows: SignTableRow[];
-    }
-  | { 
-      type: 'generic'; 
-      headers: string[]; 
-      rows: GenericTableRow[];
-    };
-
 interface NodeInsight {
   simpleBreakdown: string;
   keyFormula: string;
@@ -69,7 +44,7 @@ interface NodeConversationMessage {
   role: 'user' | 'model';
   content: string;
   createdAt: string;
-  visualTable?: VisualTable;
+  visualTable?: VisualTableData;
 }
 
 interface OcrMathSegment {
@@ -265,7 +240,7 @@ interface StoredWorkspaceSnapshot {
   nodeConversations: Record<string, NodeConversationMessage[]>;
   selectedNodeId: string | null;
   activeTab: string;
-  visualTable: VisualTable | null;
+  visualTable: VisualTableData | null;
 }
 
 interface StudyDebugEntry {
@@ -888,6 +863,64 @@ interface Props {
   onBreakdownConsumed?: () => void;
 }
 
+/**
+ * Scans a chat response string for ```json ... ``` blocks that contain a
+ * { text, visualTable } payload the backend failed to extract (e.g. when the
+ * AI prefixed the block with conversational text, causing stripCodeFence to
+ * miss it, or when the first block was truncated at MAX_TOKENS and the second
+ * block from the continuation is the complete one).
+ *
+ * Returns the cleaned text (JSON blocks replaced by their "text" field, or
+ * removed) and the last successfully parsed visualTable, if any.
+ */
+function extractChatJsonBlocks(raw: string): {
+  cleanText: string;
+  visualTable: VisualTableData | null;
+} {
+  const BLOCK_RE = /```json\s*([\s\S]*?)```/g;
+  const matches = [...raw.matchAll(BLOCK_RE)];
+  if (matches.length === 0) return { cleanText: raw, visualTable: null };
+
+  let bestTable: VisualTableData | null = null;
+
+  // Walk backwards — the last complete JSON block (from continuation) is most reliable
+  for (const match of [...matches].reverse()) {
+    try {
+      const parsed = JSON.parse(match[1].trim()) as { text?: string; visualTable?: VisualTableData };
+      if (
+        parsed?.visualTable?.type &&
+        ['sign_analysis', 'generic'].includes(parsed.visualTable.type) &&
+        Array.isArray((parsed.visualTable as { rows?: unknown }).rows)
+      ) {
+        bestTable = parsed.visualTable;
+        break;
+      }
+    } catch {
+      // truncated or invalid JSON — try the next block
+    }
+  }
+
+  // Rebuild the text by replacing each JSON block with its "text" field (if
+  // present) or removing it entirely
+  let cleanText = raw;
+  // Process matches right-to-left to preserve string indices
+  for (const match of [...matches].reverse()) {
+    let replacement = '';
+    try {
+      const parsed = JSON.parse(match[1].trim()) as { text?: string };
+      if (parsed?.text?.trim()) replacement = parsed.text.trim();
+    } catch {
+      // drop the block
+    }
+    cleanText =
+      cleanText.slice(0, match.index!) +
+      replacement +
+      cleanText.slice(match.index! + match[0].length);
+  }
+
+  return { cleanText: cleanText.trim(), visualTable: bestTable };
+}
+
 function parseJsonSafe<T>(input: any): T | null {
   if (!input) return null;
   if (typeof input !== 'string') return input as T;
@@ -956,7 +989,7 @@ export function StudySpacePage({
     () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugStudy') === '1'
   );
   const [debugEntries, setDebugEntries] = useState<StudyDebugEntry[]>([]);
-  const [sessionVisualTable, setSessionVisualTable] = useState<VisualTable | null>(null);
+  const [sessionVisualTable, setSessionVisualTable] = useState<VisualTableData | null>(null);
   const [ocrDetectedSignTable, setOcrDetectedSignTable] = useState(false);
   const lastOcrInsertRef = useRef<string | null>(null);
   const lastOcrUploadIdRef = useRef<string | null>(null);
@@ -1307,7 +1340,7 @@ export function StudySpacePage({
     };
   }, []);
 
-  const hydrateBreakdown = useCallback((bd: ProblemBreakdown, vt: VisualTable | null = null) => {
+  const hydrateBreakdown = useCallback((bd: ProblemBreakdown, vt: VisualTableData | null = null) => {
     const normalized = sanitizeBreakdownPayload(bd);
     const brs = normalized.nodes.filter((n: BreakdownNode) => n.type === 'branch').length;
     const lvs = normalized.nodes.filter((n: BreakdownNode) => n.type === 'leaf').length;
@@ -1353,7 +1386,7 @@ export function StudySpacePage({
       api.get<{ session: any }>(`/api/sessions/${snapshot.sessionId}`)
         .then(({ session }) => {
           if (session?.visual_table_json) {
-            const vt = parseJsonSafe<VisualTable>(session.visual_table_json);
+            const vt = parseJsonSafe<VisualTableData>(session.visual_table_json);
             if (vt) {
               setSessionVisualTable(vt);
               console.debug('[VisualTable] Restored from cloud.');
@@ -1466,7 +1499,7 @@ export function StudySpacePage({
           const parsed = parseJsonSafe<ProblemBreakdown>(target.breakdown_json);
           if (parsed) {
             parsed.id = target.id;
-            const vt = target.visual_table_json ? parseJsonSafe<VisualTable>(target.visual_table_json) : null;
+            const vt = target.visual_table_json ? parseJsonSafe<VisualTableData>(target.visual_table_json) : null;
             hydrateBreakdown(parsed, vt);
           }
         } catch {
@@ -1928,7 +1961,7 @@ export function StudySpacePage({
         has_upload_id: !!breakdownPayload.upload_id,
         problemPreview: trimmedProblem.slice(0, 160),
       });
-      const { breakdown: bd, visualTable: vt } = await api.post<{ breakdown: ProblemBreakdown; visualTable?: VisualTable }>(
+      const { breakdown: bd, visualTable: vt } = await api.post<{ breakdown: ProblemBreakdown; visualTable?: VisualTableData }>(
         '/api/ai/breakdown',
         breakdownPayload
       );
@@ -2748,7 +2781,8 @@ export function StudySpacePage({
 
   const handleAskDeepDive = async () => {
     if (!selectedNode || !breakdown) return;
-    const question = composerInput.trim();
+    const question = composerInput.trim()
+      || (deepDiveUploadId ? 'Please analyze this image in the context of this node.' : '');
     if (!question || composerLoading) return;
 
     setComposerError(null);
@@ -2791,7 +2825,7 @@ Instructions:
         return { role: 'model', content: m.content };
       });
 
-      const { response, session_id, finish_reason, visualTable } = await api.post<{ response: string; session_id?: string; finish_reason?: string; visualTable?: VisualTable }>('/api/ai/chat', {
+      const { response, session_id, finish_reason, visualTable } = await api.post<{ response: string; session_id?: string; finish_reason?: string; visualTable?: VisualTableData }>('/api/ai/chat', {
         messages,
         subject: breakdown.subject,
         session_id: sessionId ?? undefined,
@@ -2834,7 +2868,7 @@ IMPORTANT:
           { role: 'model', content: finalResponse },
           { role: 'user', content: continuePrompt },
         ];
-        const continuation = await api.post<{ response: string; session_id?: string; visualTable?: VisualTable }>('/api/ai/chat', {
+        const continuation = await api.post<{ response: string; session_id?: string; visualTable?: VisualTableData }>('/api/ai/chat', {
           messages: continuationMessages,
           subject: breakdown.subject,
           session_id: effectiveSessionId,
@@ -2850,6 +2884,20 @@ IMPORTANT:
         if (continuation.visualTable) {
           finalVisualTable = continuation.visualTable;
         }
+      }
+
+      // Fallback: if the backend didn't extract a JSON table block (e.g. the
+      // response had Khmer text before the ``\`json fence, or the first block
+      // was truncated and the continuation added a second complete block),
+      // extract it here and clean the raw JSON out of the displayed text.
+      if (!finalVisualTable && finalResponse.includes('```json')) {
+        const extracted = extractChatJsonBlocks(finalResponse);
+        if (extracted.visualTable) finalVisualTable = extracted.visualTable;
+        if (extracted.cleanText) finalResponse = extracted.cleanText;
+      } else if (finalVisualTable && finalResponse.includes('```json')) {
+        // Backend did extract the table but left the JSON block in the text — strip it.
+        const extracted = extractChatJsonBlocks(finalResponse);
+        if (extracted.cleanText) finalResponse = extracted.cleanText;
       }
 
       const modelMessage: NodeConversationMessage = {
@@ -3512,7 +3560,7 @@ IMPORTANT:
                 try {
                   const { session } = await api.get<{ session: any }>(`/api/sessions/${sessionId}`);
                   if (session?.visual_table_json) {
-                    const vt = parseJsonSafe<VisualTable>(session.visual_table_json);
+                    const vt = parseJsonSafe<VisualTableData>(session.visual_table_json);
                     setSessionVisualTable(vt);
                     showActionToast('Table restored!');
                   } else {

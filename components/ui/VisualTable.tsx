@@ -38,15 +38,26 @@ export type VisualTableData =
       rows: GenericTableRow[];
     };
 
-function SignCell({ value }: { value: string }) {
+function SignCell({ value, rowType }: { value: string; rowType: 'value' | 'interval' }) {
   const base = 'flex items-center justify-center w-full h-full text-sm font-bold';
+
+  if (rowType === 'value') {
+    if (value === '0') {
+      // Option B: anchor the marker on the border line between rows
+      return (
+        <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 z-10 w-4 h-4 rounded-full border border-amber-400/90 bg-surface-container-highest flex items-center justify-center text-[10px] font-bold text-amber-400 shadow-sm pointer-events-none">
+          0
+        </span>
+      );
+    }
+    // +/− must not appear in value rows — silently suppressed
+    return null;
+  }
+
+  // Interval row signs
   if (value === '+') return <span className={`${base} text-emerald-400`}>+</span>;
-  if (value === '-') return <span className={`${base} text-rose-400`}>−</span>;
-  if (value === '0') return (
-    <span className={`${base} text-amber-400`}>
-      <span className="w-4 h-4 rounded-full border-2 border-amber-400 inline-flex items-center justify-center text-[10px]">0</span>
-    </span>
-  );
+  if (value === '-' || value === '−') return <span className={`${base} text-rose-400`}>−</span>;
+
   return <SafeText className="text-xs text-on-surface/80">{value}</SafeText>;
 }
 
@@ -54,10 +65,49 @@ interface VisualTableProps {
   table: VisualTableData;
 }
 
+/** Returns true if label looks like a single exact value (not an interval). */
+function looksLikePointLabel(label: string): boolean {
+  const t = label.trim();
+  // Interval notation: starts with ( or [ or −∞, +∞
+  if (/^[([−-]/.test(t) || t.includes(',')) return false;
+  // Single value: digits, fractions, ±∞, or simple expressions like 9/2
+  return /^[0-9−-]/.test(t) || t === '+∞' || t === '-∞';
+}
+
+/**
+ * Normalizes legacy or ambiguous rows to follow stricter mathematical semantics.
+ * Logs dev-mode warnings for rows that violate the spec.
+ */
+function normalizeSignTableRows(rows: SignTableRow[]): SignTableRow[] {
+  const isDev = typeof process !== 'undefined'
+    ? process.env.NODE_ENV !== 'production'
+    : !!(import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV;
+
+  return rows.map((row, i) => {
+    // Rule 1: value row must not contain +/−
+    if (row.type === 'value' && row.cells.some(c => c === '+' || c === '-' || c === '−')) {
+      if (isDev) console.warn(`[VisualTable] row[${i}] type='value' but contains interval signs — reclassified as 'interval'`, row);
+      return { ...row, type: 'interval' };
+    }
+    // Rule 2: interval row must not contain 0
+    if (row.type === 'interval' && row.cells.every(c => !c || c === '0') && row.cells.some(c => c === '0')) {
+      if (isDev) console.warn(`[VisualTable] row[${i}] type='interval' but contains only zeros — reclassified as 'value'`, row);
+      return { ...row, type: 'value' };
+    }
+    // Rule 3/4: interval row with a point-style label (legacy AI output)
+    if (row.type === 'interval' && looksLikePointLabel(row.label)) {
+      if (isDev) console.warn(`[VisualTable] row[${i}] type='interval' but label looks like a point value '${row.label}' — legacy ambiguous format`, row);
+      // Keep rendering as interval (signs belong to the open interval around it),
+      // but don't silently upgrade to a point row unless all cells are 0.
+    }
+    return row;
+  });
+}
+
 export function VisualTable({ table }: VisualTableProps) {
   if (table.type === 'sign_analysis') {
     const allCols = [table.parameterName!, ...table.columns!, table.conclusionLabel!];
-    const rows = table.rows as SignTableRow[];
+    const rows = normalizeSignTableRows(table.rows as SignTableRow[]);
 
     return (
       <div className="overflow-x-auto -mx-1">
@@ -82,38 +132,42 @@ export function VisualTable({ table }: VisualTableProps) {
           </thead>
 
           {/* Body */}
-          <tbody>
+          <tbody className="relative">
             {rows.map((row, ri) => {
               const isValueRow = row.type === 'value';
-              const rowBg = isValueRow
-                ? 'bg-surface-container/60'
-                : 'bg-background/20';
+              
+              const rowClass = isValueRow
+                ? 'h-3 bg-transparent group/value'
+                : 'h-10 bg-background/20 group/interval';
+
+              const cellClass = isValueRow
+                ? 'border-x border-primary/15 px-1 py-0 text-center overflow-visible relative'
+                : 'border border-primary/15 px-1 py-2 text-center';
+
+              const labelClass = isValueRow
+                ? 'border-x border-primary/15 px-2 py-0 text-center font-mono text-[10px] text-on-surface-variant/60'
+                : 'border border-primary/15 px-2 py-2 text-center font-mono text-on-surface-variant';
 
               return (
-                <tr key={ri} className={rowBg}>
-                  {/* m column */}
-                  <td className="border border-primary/15 px-2 py-2 text-center font-mono text-on-surface-variant">
+                <tr key={ri} className={rowClass}>
+                  {/* Parameter column (e.g. m) */}
+                  <td className={labelClass}>
                     {row.label ? (
-                      <SafeText className="block text-xs">{row.label}</SafeText>
+                      <SafeText className="block">{row.label}</SafeText>
                     ) : null}
                   </td>
 
                   {/* Sign columns */}
                   {row.cells.map((cell, ci) => (
-                    <td
-                      key={ci}
-                      className={`border border-primary/15 px-1 py-2 text-center h-9
-                        ${isValueRow && cell === '0' ? 'bg-amber-400/10' : ''}
-                      `}
-                    >
-                      <SignCell value={cell} />
+                    <td key={ci} className={cellClass}>
+                      <SignCell value={cell} rowType={row.type} />
                     </td>
                   ))}
 
                   {/* Conclusion column */}
-                  <td className="border border-primary/15 px-3 py-2 text-left">
+                  <td className={`border-primary/15 px-3 py-1 text-left ${isValueRow ? 'border-x' : 'border'}`}>
                     {row.conclusion ? (
-                      <SafeText className="text-[11px] text-on-surface leading-snug block">
+                      <SafeText className={`block leading-snug ${isValueRow ? 'text-[10px] text-on-surface/50 italic' : 'text-[11px] text-on-surface'}`}>
                         {row.conclusion}
                       </SafeText>
                     ) : null}
