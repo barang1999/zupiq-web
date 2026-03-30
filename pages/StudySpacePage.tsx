@@ -3,10 +3,10 @@ import type { TouchEvent as ReactTouchEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Brain,
-  GitFork, History, Trophy, Archive, Network,
+  GitFork, History, Trophy, Network,
   Plus, X, Loader2, Sparkles,
-  Bookmark, Zap, ArrowRight,
-  ChevronLeft, ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers, Lock, LockOpen,
+  Bookmark, Zap,
+  ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers, Lock, LockOpen,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
 import { AppSidebar } from '../components/layout/AppSidebar';
@@ -17,6 +17,7 @@ import { MathText } from '../components/ui/MathText';
 import { RichText } from '../components/ui/RichText';
 import { VisualTable } from '../components/ui/VisualTable';
 import { ActionPopover } from '../components/ui/ActionPopover';
+import { NodeInsightPanel } from '../components/study/NodeInsightPanel';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
 import { getSessionsCached } from '../lib/sessions';
@@ -68,6 +69,7 @@ interface NodeConversationMessage {
   role: 'user' | 'model';
   content: string;
   createdAt: string;
+  visualTable?: VisualTable;
 }
 
 interface OcrMathSegment {
@@ -942,6 +944,9 @@ export function StudySpacePage({
   const [insightSwipeOffsetX, setInsightSwipeOffsetX] = useState(0);
   const [isInsightSwipeDragging, setIsInsightSwipeDragging] = useState(false);
   const [composerInput,  setComposerInput]  = useState('');
+  const [isDeepDiveImageAnalyzing, setIsDeepDiveImageAnalyzing] = useState(false);
+  const [deepDiveUploadId, setDeepDiveUploadId] = useState<string | null>(null);
+  const [hasDeepDiveAttachment, setHasDeepDiveAttachment] = useState(false);
   const [activeTab,      setActiveTab]      = useState<string>('map');
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [scale,          setScale]          = useState(1);
@@ -955,6 +960,7 @@ export function StudySpacePage({
   const [ocrDetectedSignTable, setOcrDetectedSignTable] = useState(false);
   const lastOcrInsertRef = useRef<string | null>(null);
   const lastOcrUploadIdRef = useRef<string | null>(null);
+  const deepDiveLastOcrInsertRef = useRef<string | null>(null);
   const branchLongPressTimerRef = useRef<number | null>(null);
   const branchTouchGestureRef = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
   const suppressBranchClickRef = useRef(false);
@@ -2362,6 +2368,119 @@ export function StudySpacePage({
     }
   };
 
+  const handleAttachDeepDiveFile = async (file: File) => {
+    const traceId = nextAttachmentTraceId();
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let currentStage = 'init';
+    const logAttach = (stage: string, payload: Record<string, unknown> = {}) => {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const elapsedMs = Math.max(0, Math.round(now - startedAt));
+      console.log('[StudySpace DeepDive attachment debug]', {
+        traceId,
+        stage,
+        elapsedMs,
+        ...payload,
+      });
+    };
+
+    const lowerName = file.name.toLowerCase();
+    const hasMissingMimeFallback = !file.type && (lowerName.endsWith('.pdf') || lowerName.endsWith('.txt'));
+    const normalizedFile = hasMissingMimeFallback
+      ? new File(
+        [file],
+        file.name,
+        {
+          type: lowerName.endsWith('.pdf') ? 'application/pdf' : 'text/plain',
+          lastModified: file.lastModified,
+        }
+      )
+      : file;
+
+    currentStage = 'file:normalized';
+    logAttach(currentStage, {
+      originalName: file.name,
+      originalType: file.type || '(empty)',
+      normalizedName: normalizedFile.name,
+      normalizedType: normalizedFile.type || '(empty)',
+      sizeBytes: normalizedFile.size,
+      usedMimeFallback: hasMissingMimeFallback,
+    });
+
+    const validationError = hasMissingMimeFallback
+      ? (normalizedFile.size > MAX_FILE_SIZE_MB * 1024 * 1024
+        ? `File must be smaller than ${MAX_FILE_SIZE_MB}MB`
+        : null)
+      : validateFile(normalizedFile);
+    if (validationError) {
+      logAttach('file:validation-error', { validationError });
+      setComposerError(validationError);
+      return;
+    }
+
+    const isImageFile = normalizedFile.type.startsWith('image/');
+    const isPdfFile = normalizedFile.type === 'application/pdf';
+    const isTextFile = normalizedFile.type === 'text/plain';
+    if (!isImageFile && !isPdfFile && !isTextFile) {
+      logAttach('file:unsupported-type', {
+        normalizedType: normalizedFile.type,
+      });
+      setComposerError('Unsupported file type. Please upload JPG, PNG, WebP, PDF, or TXT.');
+      return;
+    }
+
+    logAttach('file:type-resolved', {
+      category: isImageFile ? 'image' : isPdfFile ? 'pdf' : 'text',
+    });
+
+    debugStudy('attachment:deepdive:attach:start', {
+      name: normalizedFile.name,
+      type: normalizedFile.type,
+      size: normalizedFile.size,
+      usedMimeFallback: hasMissingMimeFallback,
+      category: isImageFile ? 'image' : isPdfFile ? 'pdf' : 'text',
+    });
+
+    setComposerError(null);
+    setIsDeepDiveImageAnalyzing(true);
+    try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error('You are offline. Please reconnect and try again.');
+      }
+
+      currentStage = 'signed-url:start';
+      const signedUploadResponse = await api.post<SignedUploadPayload>('/api/uploads/signed-upload-url', {
+        original_name: normalizedFile.name,
+        mime_type: normalizedFile.type,
+        size_bytes: normalizedFile.size,
+        context: 'ai_query',
+        attach_trace_id: traceId,
+      });
+      const uploadId = signedUploadResponse.upload?.id;
+      const signedUpload = signedUploadResponse.signed_upload;
+      if (!uploadId || !signedUpload?.signedUrl) {
+        throw new Error('Failed to initialize direct upload.');
+      }
+
+      currentStage = 'storage-upload:start';
+      const directUploadResponse = await uploadToSignedStorageUrl(signedUpload.signedUrl, normalizedFile);
+      if (!directUploadResponse.ok) {
+        throw new Error(`Direct upload failed with HTTP ${directUploadResponse.status}`);
+      }
+
+      setDeepDiveUploadId(uploadId);
+      setHasDeepDiveAttachment(true);
+      showActionToast('Image attached.');
+    } catch (err: any) {
+      const message = resolveAttachmentErrorMessage(err, {
+        stage: currentStage,
+        traceId,
+      });
+      setComposerError(message);
+    } finally {
+      setIsDeepDiveImageAnalyzing(false);
+    }
+  };
+
   const handleExpand = async (node: BreakdownNode) => {
     if (!breakdown) return;
     setExpandingId(node.id);
@@ -2672,36 +2791,50 @@ Instructions:
         return { role: 'model', content: m.content };
       });
 
-      const { response, session_id } = await api.post<{ response: string; session_id?: string }>('/api/ai/chat', {
+      const { response, session_id, finish_reason, visualTable } = await api.post<{ response: string; session_id?: string; finish_reason?: string; visualTable?: VisualTable }>('/api/ai/chat', {
         messages,
         subject: breakdown.subject,
         session_id: sessionId ?? undefined,
+        upload_id: deepDiveUploadId ?? undefined,
       });
+
+      setDeepDiveUploadId(null);
+      setHasDeepDiveAttachment(false);
+      deepDiveLastOcrInsertRef.current = null;
 
       let effectiveSessionId = session_id ?? sessionId ?? undefined;
       if (session_id && !sessionId) setSessionId(session_id);
 
       let finalResponse = (response ?? '').trim();
+      let finalVisualTable = visualTable;
+
       if (/(\$[^$\n]+\$\s*\*:)|\\frac|\\\$|\$|\\[a-zA-Z]+/.test(finalResponse)) {
         console.log('[DeepDive raw model response]', finalResponse);
         logPageMathDebug('deep-dive:model-response', finalResponse, {
           nodeId: selectedNode.id,
         });
       }
-      const looksTruncated = finalResponse.length > 0 && !/[.!?]"?$/.test(finalResponse);
+      
+      const endsWithTerminator = /[.!?។៕]"?$/.test(finalResponse);
+      const looksTruncated = (finalResponse.length > 0 && !endsWithTerminator) || finish_reason === 'MAX_TOKENS';
 
       // If response appears cut mid-sentence, request continuation once.
       if (looksTruncated) {
         const continuePrompt = `${contextPrompt}
 
-Continue exactly from your last sentence for the same selected branch.
-Do not repeat content already given.`;
+Continue your previous explanation exactly where you left off. 
+IMPORTANT: 
+- START IMMEDIATELY with the next word of your sentence. 
+- DO NOT repeat your introduction. 
+- DO NOT say "Sure" or "Continuing".
+- DO NOT repeat any text you already wrote.`;
+
         const continuationMessages: Array<{ role: 'user' | 'model'; content: string }> = [
           ...messages,
           { role: 'model', content: finalResponse },
           { role: 'user', content: continuePrompt },
         ];
-        const continuation = await api.post<{ response: string; session_id?: string }>('/api/ai/chat', {
+        const continuation = await api.post<{ response: string; session_id?: string; visualTable?: VisualTable }>('/api/ai/chat', {
           messages: continuationMessages,
           subject: breakdown.subject,
           session_id: effectiveSessionId,
@@ -2714,12 +2847,16 @@ Do not repeat content already given.`;
         if (continuedText) {
           finalResponse = `${finalResponse}\n\n${continuedText}`;
         }
+        if (continuation.visualTable) {
+          finalVisualTable = continuation.visualTable;
+        }
       }
 
       const modelMessage: NodeConversationMessage = {
         role: 'model',
         content: finalResponse || 'No response generated. Try rephrasing your question.',
         createdAt: new Date().toISOString(),
+        visualTable: finalVisualTable,
       };
       const completedMessages = [...nextMessages, modelMessage];
       const completedConversations = { ...nextConversations, [selectedNode.id]: completedMessages };
@@ -2824,10 +2961,6 @@ Do not repeat content already given.`;
     }))
   ), [activeTab, navigateToKnowledgeMap, navigateToQuiz, onNavigateAchievements, onNavigateFlashcards, onNavigateHistory, onNavigateQuantumPrism]);
 
-  const isBranchSelected = !!selectedNode;
-  const activeBranchConversation = selectedNode
-    ? (nodeConversations[selectedNode.id] ?? [])
-    : [];
   const selectedNodeKeyFormulaLines = useMemo(() => {
     if (!selectedNode) return [];
     const formula = nodeInsights[selectedNode.id]?.keyFormula ?? '';
@@ -2859,9 +2992,6 @@ Do not repeat content already given.`;
     });
   }, [nodeInsights, selectedNode]);
 
-  const composerPlaceholder = selectedNode
-    ? `Ask Zupiq about ${selectedNode.label}...`
-    : 'Select a node to start deep dive...';
   const activeBranchActionNode = useMemo(() => {
     if (!branchActionPortal || !breakdown) return null;
     const node = breakdown.nodes.find((n) => n.id === branchActionPortal.nodeId);
@@ -3355,256 +3485,54 @@ Do not repeat content already given.`;
           }}
           className="h-full bg-surface-container-low/80 backdrop-blur-md border-l border-outline-variant/10 shrink-0 relative overflow-hidden z-20"
         >
-          {selectedNode && isInsightPanelOpen && <><div
-            className="h-full overflow-y-auto p-8 pb-[200px]"
-            style={{ width: 384, touchAction: 'pan-y' }}
-            onTouchStart={handleInsightSwipeStart}
-            onTouchMove={handleInsightSwipeMove}
-            onTouchEnd={handleInsightSwipeEnd}
-            onTouchCancel={handleInsightSwipeEnd}
-          >
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
-                <h2 className="font-headline font-bold text-xl">Node Insights</h2>
-                {sessionId && (
-                  <button
-                    onClick={async () => {
-                      if (!sessionId) return;
-                      showActionToast('Syncing from cloud...');
-                      try {
-                        const { session } = await api.get<{ session: any }>(`/api/sessions/${sessionId}`);
-                        if (session?.visual_table_json) {
-                          const vt = parseJsonSafe<VisualTable>(session.visual_table_json);
-                          setSessionVisualTable(vt);
-                          showActionToast('Table restored!');
-                        } else {
-                          showActionToast('No table found in cloud.');
-                        }
-                      } catch {
-                        showActionToast('Sync failed.');
-                      }
-                    }}
-                    className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all"
-                    title="Sync from Cloud"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-              {selectedNode && (
-                <button onClick={closeInsightPanel} className="text-on-surface-variant hover:text-on-surface">
-                  <X className="w-5 h-5" />
-                </button>
-              )}
-            </div>
-
-            {!selectedNode && (
-              <div className="text-center py-16">
-                <div className="w-12 h-12 rounded-full bg-surface-container-highest mx-auto flex items-center justify-center mb-4">
-                  <Sparkles className="w-6 h-6 text-on-surface-variant" />
-                </div>
-                <p className="text-on-surface-variant text-sm leading-relaxed">
-                  Click any node on the neural map to see a detailed breakdown.
-                </p>
-              </div>
-            )}
-
-            {selectedNode && breakdown && (
-              <motion.div
-                key={selectedNode.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="space-y-6"
-              >
-                {/* Node header */}
-                <div>
-                  <span className={`text-[10px] font-bold uppercase tracking-widest ${
-                    selectedNode.type === 'root' ? 'text-primary' :
-                    selectedNode.type === 'branch' ? 'text-secondary' : 'text-tertiary'
-                  }`}>
-                    {selectedNode.type === 'root' ? 'Core Problem' : selectedNode.type === 'branch' ? 'Step' : 'Concept'}
-                  </span>
-                  <h3 className="font-headline text-xl font-bold mt-1 leading-tight"><MathText>{selectedNode.label}</MathText></h3>
-                  <RichText className="text-sm text-on-surface-variant mt-1 leading-relaxed">
-                    {selectedNode.description}
-                  </RichText>
-                </div>
-
-                {/* Math content */}
-                {selectedNode.mathContent && (
-                  <div className="bg-background/60 rounded-xl px-4 py-3 border border-outline-variant/20">
-                    <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-2">Expression</span>
-                    <div className="space-y-1.5">
-                      {selectedNodeExpressionLines.map((line, idx) => (
-                        <MathText key={`expr_${selectedNode.id}_${idx}`} className="text-base text-primary leading-relaxed whitespace-pre-wrap block no-scrollbar">
-                          {line}
-                        </MathText>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sign Table — session-level visual logic */}
-                {sessionVisualTable && (
-                  <div>
-                    <label className="text-[10px] font-bold text-tertiary uppercase tracking-widest mb-3 block flex items-center gap-1.5">
-                      Visual Logic · {sessionVisualTable.type === 'sign_analysis' ? 'Sign Table' : 'Structured Data'}
-                    </label>
-                    <div className="rounded-2xl border border-tertiary/25 bg-surface-container overflow-hidden">
-                      <VisualTable table={sessionVisualTable} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Simple breakdown — per-node, fetched on selection */}
-                <div>
-                  <label className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-3 block">
-                    Simple Breakdown
-                  </label>
-                  <div className="bg-surface-container rounded-2xl p-5 relative overflow-x-hidden overflow-y-visible min-h-[80px]">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-tertiary/5 rounded-full -mr-12 -mt-12 blur-xl" />
-                    {insightLoading && !nodeInsights[selectedNode.id] ? (
-                      <div className="flex items-center gap-2 text-on-surface-variant text-sm relative">
-                        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                        <span>Generating insight…</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-3 relative">
-                        {selectedNodeKeyFormulaLines.length > 0 && (
-                          <div className="bg-background/50 p-3 rounded-xl text-center mb-1">
-                            <div className="space-y-2">
-                              {selectedNodeKeyFormulaLines.map((line, idx) => (
-                                <MathText
-                                  key={`key_formula_${idx}`}
-                                  math={selectedNodeKeyFormulaLines.length > 1}
-                                  className="text-sm text-primary whitespace-pre-wrap block no-scrollbar"
-                                >
-                                  {line}
-                                </MathText>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        <RichText className="text-on-surface leading-relaxed text-sm break-words [overflow-wrap:anywhere]">
-                          {nodeInsights[selectedNode.id]?.simpleBreakdown ?? ''}
-                        </RichText>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Quick actions */}
-                <div className="flex flex-col gap-3">
-                  <button className="flex items-center justify-between w-full p-4 rounded-xl bg-surface-container-highest/50 border border-outline-variant/20 hover:border-primary/50 transition-all">
-                    <span className="text-sm font-medium">Add to Workspace</span>
-                    <Bookmark className="w-4 h-4 text-primary" />
-                  </button>
-                  <button
-                    onClick={handleExplainToFiveYearOld}
-                    disabled={insightLoading}
-                    className="flex items-center justify-between w-full p-4 rounded-xl bg-surface-container-highest/50 border border-outline-variant/20 hover:border-secondary/50 transition-all disabled:opacity-60"
-                  >
-                    <span className="text-sm font-medium">Explain to a 5-year-old</span>
-                    {insightLoading
-                      ? <Loader2 className="w-4 h-4 text-secondary animate-spin" />
-                      : <Zap className="w-4 h-4 text-secondary" />
-                    }
-                  </button>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-primary uppercase tracking-widest mb-3 block">
-                    Deep Dive
-                  </label>
-                  <div className="space-y-3">
-                    {activeBranchConversation.length === 0 && !composerLoading && (
-                      <p className="text-xs text-on-surface-variant">
-                        Use the floating composer below to ask follow-up questions.
-                      </p>
-                    )}
-                    {activeBranchConversation.map((message, idx) => (
-                      <div
-                        key={`${selectedNode.id}_${idx}`}
-                        className={`rounded-xl px-4 py-3 text-xs leading-relaxed ${
-                          message.role === 'user'
-                            ? 'bg-primary/10 border border-primary/20 text-on-surface'
-                            : 'bg-transparent text-on-surface-variant'
-                        }`}
-                      >
-                        {message.role === 'user'
-                          ? <span>{message.content}</span>
-                          : <RichText className="text-xs leading-relaxed">{message.content}</RichText>
-                        }
-                      </div>
-                    ))}
-                    {composerLoading && (
-                      <div className="flex items-center gap-2 text-on-surface-variant text-xs px-2">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        <span>Generating response…</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-xs text-on-surface-variant">Subject:</span>
-                  <span className="text-xs font-bold text-tertiary bg-tertiary/10 px-3 py-1 rounded-full">{breakdown.subject}</span>
-                </div>
-              </motion.div>
-            )}
-          </div>
-
-          {/* Floating composer */}
-          <div className="absolute inset-x-4 bottom-4 z-30">
-            <div className="bg-surface-container-highest/95 rounded-[24px] p-4 border border-outline-variant/20 shadow-2xl backdrop-blur-xl">
-              <textarea
-                value={composerInput}
-                onChange={e => setComposerInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleAskDeepDive();
+          {selectedNode && isInsightPanelOpen && (
+            <NodeInsightPanel
+              selectedNode={selectedNode}
+              breakdown={breakdown}
+              nodeInsights={nodeInsights}
+              nodeConversations={nodeConversations}
+              sessionVisualTable={sessionVisualTable}
+              expressionLines={selectedNodeExpressionLines}
+              keyFormulaLines={selectedNodeKeyFormulaLines}
+              insightLoading={insightLoading}
+              composerLoading={composerLoading}
+              composerError={composerError}
+              composerInput={composerInput}
+              sessionId={sessionId}
+              isInsightSwipeDragging={isInsightSwipeDragging}
+              imageLoading={isDeepDiveImageAnalyzing}
+              hasAttachment={hasDeepDiveAttachment}
+              onComposerInputChange={setComposerInput}
+              onAskDeepDive={handleAskDeepDive}
+              onExplainToFiveYearOld={handleExplainToFiveYearOld}
+              onClose={closeInsightPanel}
+              onSyncVisualTable={async () => {
+                if (!sessionId) return;
+                showActionToast('Syncing from cloud...');
+                try {
+                  const { session } = await api.get<{ session: any }>(`/api/sessions/${sessionId}`);
+                  if (session?.visual_table_json) {
+                    const vt = parseJsonSafe<VisualTable>(session.visual_table_json);
+                    setSessionVisualTable(vt);
+                    showActionToast('Table restored!');
+                  } else {
+                    showActionToast('No table found in cloud.');
                   }
-                }}
-                rows={1}
-                disabled={!isBranchSelected || composerLoading}
-                placeholder={composerPlaceholder}
-                className="w-full bg-transparent text-on-surface text-sm placeholder:text-on-surface/40 outline-none resize-none px-1 mb-2 min-h-[40px]"
-              />
+                } catch {
+                  showActionToast('Sync failed.');
+                }
+              }}
+              onAttachFile={handleAttachDeepDiveFile}
+              onClearAttachment={() => {
+                setDeepDiveUploadId(null);
+                setHasDeepDiveAttachment(false);
+              }}
+              onTouchStart={handleInsightSwipeStart}
+              onTouchMove={handleInsightSwipeMove}
+              onTouchEnd={handleInsightSwipeEnd}
+            />
 
-              <div className="flex items-center justify-between mt-1">
-                <div className="flex items-center gap-4 text-on-surface-variant/60">
-                  <button type="button" className="hover:text-primary transition-colors disabled:opacity-30" disabled={!isBranchSelected}>
-                    <Plus className="w-5 h-5" />
-                  </button>
-                  <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
-                    <Archive className="w-5 h-5" />
-                    <ChevronLeft className="w-3 h-3 rotate-[-90deg]" />
-                  </div>
-                  <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
-                    <Zap className="w-5 h-5" />
-                    <ChevronLeft className="w-3 h-3 rotate-[-90deg]" />
-                  </div>
-                  <div className="w-[1px] h-4 bg-outline-variant/30 mx-1" />
-                  <button type="button" className="text-primary">
-                    <Sparkles className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <button
-                  onClick={handleAskDeepDive}
-                  disabled={!isBranchSelected || composerLoading || !composerInput.trim()}
-                  className="w-10 h-10 rounded-full bg-on-surface-variant/20 text-on-surface flex items-center justify-center hover:bg-on-surface-variant/30 transition-all disabled:opacity-30"
-                >
-                  {composerLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5 rotate-[-90deg]" />}
-                </button>
-              </div>
-            </div>
-
-            {composerError && (
-              <p className="mt-2 text-[10px] text-error px-2">{composerError}</p>
-            )}
-          </div></>}
+          )}
         </motion.aside>
       </motion.main>
 
