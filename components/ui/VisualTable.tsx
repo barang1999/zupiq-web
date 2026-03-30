@@ -117,8 +117,10 @@ function normalizeSignTableRows(rows: SignTableRow[]): SignTableRow[] {
 export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
   // Two-layer approach: outer holds the border + radius (no overflow clip so
   // corners stay sharp), inner clips the table content at a matching radius.
-  const outerClass = "relative group/table rounded-xl ring-1 ring-inset ring-outline-variant/20 bg-surface-container";
-  const innerClass = "overflow-hidden rounded-xl";
+  // We add p-px and rounded-xl to both, then use border-separate on the table
+  // to prevent internal borders from being clipped by the rounded corners.
+  const outerClass = "relative group/table rounded-xl ring-1 ring-inset ring-outline-variant/30 bg-surface-container p-px";
+  const innerClass = "overflow-hidden rounded-[11px]";
 
   const expandButton = expandable && onExpand && (
     <button
@@ -126,7 +128,7 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
         e.stopPropagation();
         onExpand();
       }}
-      className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-surface-container-highest/80 backdrop-blur-md text-on-surface-variant hover:text-primary border border-white/5 opacity-0 group-hover/table:opacity-100 transition-all shadow-lg"
+      className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-surface-container-highest/80 backdrop-blur-md text-on-surface-variant hover:text-primary border border-white/5 invisible opacity-0 group-hover/table:visible group-hover/table:opacity-100 transition-all shadow-lg"
       title="Expand Table"
     >
       <Maximize2 className="w-4 h-4" />
@@ -146,7 +148,7 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
         {expandButton}
         <div className={innerClass}>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[320px] border-collapse text-xs">
+          <table className="w-full min-w-[320px] border-separate border-spacing-0 text-xs">
             {/* Header */}
             <thead>
               <tr>
@@ -154,7 +156,8 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
                   <th
                     key={i}
                     className={`
-                      border border-primary/25 px-2 py-2 font-bold text-center
+                      border-b border-primary/25 px-2 py-2 font-bold text-center
+                      ${i < allCols.length - 1 ? 'border-r' : ''}
                       ${i === 0 ? 'text-on-surface-variant w-14' : ''}
                       ${i > 0 && i < allCols.length - 1 ? 'text-secondary w-10' : ''}
                       ${i === allCols.length - 1 ? 'text-primary text-left pl-3' : ''}
@@ -170,18 +173,31 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
             <tbody className="relative">
               {rows.map((row, ri) => {
                 const isValueRow = row.type === 'value';
+                const isLastRow = ri === rows.length - 1;
                 
                 const rowClass = isValueRow
                   ? 'h-3 bg-transparent group/value'
                   : 'h-10 bg-background/20 group/interval';
 
-                const cellClass = isValueRow
-                  ? 'border-x border-primary/15 px-1 py-0 text-center overflow-visible relative'
-                  : 'border border-primary/15 px-1 py-2 text-center';
+                const cellClass = `
+                  px-1 text-center relative
+                  ${isValueRow ? 'py-0 overflow-visible' : 'py-2'}
+                  ${!isLastRow ? 'border-b border-primary/15' : ''}
+                  border-r border-primary/15
+                `;
 
-                const labelClass = isValueRow
-                  ? 'border-x border-primary/15 px-2 py-0 text-center font-mono text-[10px] text-on-surface-variant/60'
-                  : 'border border-primary/15 px-2 py-2 text-center font-mono text-on-surface-variant';
+                const labelClass = `
+                  px-2 text-center font-mono
+                  ${isValueRow ? 'py-0 text-[10px] text-on-surface-variant/60' : 'py-2 text-on-surface-variant'}
+                  ${!isLastRow ? 'border-b border-primary/15' : ''}
+                  border-r border-primary/15
+                `;
+
+                const conclusionClass = `
+                  px-3 py-1 text-left
+                  ${!isLastRow ? 'border-b border-primary/15' : ''}
+                  ${isValueRow ? 'text-[10px] text-on-surface/50 italic' : 'text-[11px] text-on-surface'}
+                `;
 
                 return (
                   <tr key={ri} className={rowClass}>
@@ -200,9 +216,9 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
                     ))}
 
                     {/* Conclusion column */}
-                    <td className={`border-primary/15 px-3 py-1 text-left ${isValueRow ? 'border-x' : 'border'}`}>
+                    <td className={conclusionClass}>
                       {row.conclusion ? (
-                        <SafeText className={`block leading-snug ${isValueRow ? 'text-[10px] text-on-surface/50 italic' : 'text-[11px] text-on-surface'}`}>
+                        <SafeText className="block leading-snug">
                           {row.conclusion}
                         </SafeText>
                       ) : null}
@@ -227,14 +243,17 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
         {expandButton}
         <div className={innerClass}>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[320px] border-collapse text-xs">
+          <table className="w-full min-w-[320px] border-separate border-spacing-0 text-xs">
             {headers.length > 0 && (
               <thead>
                 <tr className="bg-surface-container/40">
                   {headers.map((header, i) => (
                     <th
                       key={i}
-                      className="border border-primary/25 px-3 py-2 font-bold text-left text-secondary"
+                      className={`
+                        border-b border-primary/25 px-3 py-2 font-bold text-left text-secondary
+                        ${i < headers.length - 1 ? 'border-r' : ''}
+                      `}
                     >
                       <SafeText>{header}</SafeText>
                     </th>
@@ -243,15 +262,25 @@ export function VisualTable({ table, expandable, onExpand }: VisualTableProps) {
               </thead>
             )}
             <tbody>
-              {rows.map((row, ri) => (
-                <tr key={ri} className={ri % 2 === 0 ? 'bg-background/10' : 'bg-surface-container/20'}>
-                  {row.cells.map((cell, ci) => (
-                    <td key={ci} className="border border-primary/15 px-3 py-2 text-on-surface">
-                      <SafeText>{cell}</SafeText>
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {rows.map((row, ri) => {
+                const isLastRow = ri === rows.length - 1;
+                return (
+                  <tr key={ri} className={ri % 2 === 0 ? 'bg-background/10' : 'bg-surface-container/20'}>
+                    {row.cells.map((cell, ci) => (
+                      <td 
+                        key={ci} 
+                        className={`
+                          px-3 py-2 text-on-surface
+                          ${!isLastRow ? 'border-b border-primary/15' : ''}
+                          ${ci < row.cells.length - 1 ? 'border-r border-primary/15' : ''}
+                        `}
+                      >
+                        <SafeText>{cell}</SafeText>
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
