@@ -15,6 +15,17 @@ export interface SessionMember {
   joined_at: string;
 }
 
+export interface ActivityLogEntry {
+  id: string;
+  session_id: string;
+  user_id: string | null;
+  action: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  actor_name?: string | null;
+  actor_avatar?: string | null;
+}
+
 interface CollabEvent {
   type: string;
   sessionId: string;
@@ -40,6 +51,8 @@ export function useSessionCollaboration(
   const [members, setMembers]             = useState<SessionMember[]>([]);
   const [connected, setConnected]         = useState(false);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [activity, setActivity]           = useState<ActivityLogEntry[]>([]);
+  const [isLoadingActivity, setIsLoadingActivity] = useState(false);
 
   const abortRef  = useRef<AbortController | null>(null);
   const optionRef = useRef(options);
@@ -62,6 +75,23 @@ export function useSessionCollaboration(
     }
   }, [sessionId]);
 
+  // ─── Fetch activity log ────────────────────────────────────────────────────
+
+  const fetchActivity = useCallback(async () => {
+    if (!sessionId) return;
+    setIsLoadingActivity(true);
+    try {
+      const { activity: log } = await api.get<{ activity: ActivityLogEntry[] }>(
+        `/api/sessions/${sessionId}/activity`
+      );
+      setActivity(log);
+    } catch {
+      // Non-fatal
+    } finally {
+      setIsLoadingActivity(false);
+    }
+  }, [sessionId]);
+
   // ─── SSE connection ────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -72,6 +102,7 @@ export function useSessionCollaboration(
     }
 
     fetchMembers();
+    fetchActivity();
 
     const token = tokenStorage.getAccess();
     if (!token) return;
@@ -122,10 +153,14 @@ export function useSessionCollaboration(
                   optionRef.current?.onSessionUpdated?.(payload.updatedBy as string);
                 } else if (currentEvent === 'member_joined') {
                   fetchMembers();
+                  fetchActivity();
                   optionRef.current?.onMemberJoined?.(payload.userId as string);
                 } else if (currentEvent === 'member_left') {
                   fetchMembers();
+                  fetchActivity();
                   optionRef.current?.onMemberLeft?.(payload.userId as string);
+                } else if (currentEvent === 'activity_logged') {
+                  fetchActivity();
                 }
               } catch {
                 // Ignore parse errors
@@ -145,7 +180,7 @@ export function useSessionCollaboration(
       abort.abort();
       setConnected(false);
     };
-  }, [sessionId, fetchMembers]);
+  }, [sessionId, fetchMembers, fetchActivity]);
 
   // ─── Actions ───────────────────────────────────────────────────────────────
 
@@ -178,8 +213,11 @@ export function useSessionCollaboration(
     members,
     connected,
     isLoadingMembers,
+    activity,
+    isLoadingActivity,
     createInviteLink,
     removeMember,
     refreshMembers: fetchMembers,
+    refreshActivity: fetchActivity,
   };
 }

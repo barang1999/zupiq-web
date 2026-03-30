@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
-import { Copy, Check, Loader2, UserMinus, Users } from 'lucide-react';
+import { Copy, Check, Loader2, UserMinus, Users, Activity } from 'lucide-react';
 import { Modal } from '../ui/Modal';
-import type { SessionMember, MemberRole } from '../../hooks/useSessionCollaboration';
+import type { SessionMember, MemberRole, ActivityLogEntry } from '../../hooks/useSessionCollaboration';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -11,6 +11,8 @@ interface Props {
   currentUserId: string | null;
   members: SessionMember[];
   isLoadingMembers: boolean;
+  activity: ActivityLogEntry[];
+  isLoadingActivity: boolean;
   onClose: () => void;
   onCreateInviteLink: (role: 'editor' | 'viewer') => Promise<string | null>;
   onRemoveMember: (memberUserId: string) => Promise<void>;
@@ -39,12 +41,40 @@ function initials(name: string, email: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+function actionLabel(action: string, metadata: Record<string, unknown>): string {
+  switch (action) {
+    case 'session_created': return 'created this session';
+    case 'session_updated': {
+      const fields = metadata.fields as string[] | undefined;
+      return fields?.length ? `updated ${fields.join(', ')}` : 'updated the session';
+    }
+    case 'deep_dive_message': return 'sent a deep dive message';
+    case 'invitation_created': return `created a ${metadata.role ?? ''} invite link`;
+    case 'member_joined':      return `joined as ${metadata.role ?? 'member'}`;
+    case 'member_left':        return 'left the session';
+    case 'member_removed':     return 'was removed from the session';
+    default:                   return action.replace(/_/g, ' ');
+  }
+}
+
+function formatRelativeShort(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 export function CollabInviteModal({
   isOpen,
   sessionId,
   currentUserId,
   members,
   isLoadingMembers,
+  activity,
+  isLoadingActivity,
   onClose,
   onCreateInviteLink,
   onRemoveMember,
@@ -175,7 +205,7 @@ export function CollabInviteModal({
       </div>
 
       {/* ── Members list ─────────────────────────────────────────────── */}
-      <div>
+      <div className="mb-6">
         <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-3">
           Members · {members.length}
         </p>
@@ -244,6 +274,40 @@ export function CollabInviteModal({
                 </li>
               );
             })}
+          </ul>
+        )}
+      </div>
+      {/* ── Activity log ─────────────────────────────────────────────── */}
+      <div>
+        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-3 flex items-center gap-1.5">
+          <Activity className="w-3 h-3" /> Activity
+        </p>
+
+        {isLoadingActivity && activity.length === 0 ? (
+          <div className="flex items-center justify-center py-6 text-on-surface-variant">
+            <Loader2 className="w-4 h-4 animate-spin" />
+          </div>
+        ) : activity.length === 0 ? (
+          <p className="text-xs text-on-surface-variant text-center py-4">No activity yet.</p>
+        ) : (
+          <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
+            {activity.map(entry => (
+              <li key={entry.id} className="flex items-start gap-2.5">
+                {/* Actor avatar */}
+                <div className="w-6 h-6 rounded-full bg-primary/20 text-primary text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                  {entry.actor_name ? entry.actor_name.slice(0, 2).toUpperCase() : '??'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-on-surface leading-snug">
+                    <span className="font-semibold">{entry.actor_name ?? 'Someone'}</span>
+                    {' '}{actionLabel(entry.action, entry.metadata)}
+                  </p>
+                  <p className="text-[10px] text-on-surface-variant mt-0.5">
+                    {formatRelativeShort(entry.created_at)}
+                  </p>
+                </div>
+              </li>
+            ))}
           </ul>
         )}
       </div>

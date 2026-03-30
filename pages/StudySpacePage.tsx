@@ -6,7 +6,7 @@ import {
   GitFork, History, Trophy, Network,
   Plus, X, Loader2, Sparkles,
   Bookmark, Zap,
-  ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers, Lock, LockOpen, Users,
+  ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers, Lock, LockOpen, Users, Activity,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
 import { AppSidebar } from '../components/layout/AppSidebar';
@@ -996,6 +996,7 @@ export function StudySpacePage({
   const [expandedTable, setExpandedTable] = useState<VisualTableData | null>(null);
   const [ocrDetectedSignTable, setOcrDetectedSignTable] = useState(false);
   const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
+  const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
   const lastOcrInsertRef = useRef<string | null>(null);
   const lastOcrUploadIdRef = useRef<string | null>(null);
   const deepDiveLastOcrInsertRef = useRef<string | null>(null);
@@ -1212,6 +1213,8 @@ export function StudySpacePage({
     members: collabMembers,
     connected: collabConnected,
     isLoadingMembers: collabLoadingMembers,
+    activity: collabActivity,
+    isLoadingActivity: collabLoadingActivity,
     createInviteLink,
     removeMember: removeCollabMember,
   } = useSessionCollaboration(sessionId, {
@@ -1224,6 +1227,40 @@ export function StudySpacePage({
     onMemberJoined: () => showActionToast('A collaborator joined the session.'),
     onMemberLeft:   () => showActionToast('A collaborator left the session.'),
   });
+
+  const [lastViewedAt, setLastViewedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sessionId) {
+      setLastViewedAt(null);
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(`zupiq_last_viewed_activity_${sessionId}`);
+      setLastViewedAt(saved);
+    } catch {
+      // Ignore storage failures
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (isActivityDrawerOpen && collabActivity.length > 0 && sessionId) {
+      const latest = collabActivity[0].created_at; // collabActivity is sorted DESC
+      setLastViewedAt(latest);
+      try {
+        localStorage.setItem(`zupiq_last_viewed_activity_${sessionId}`, latest);
+      } catch {
+        // Ignore storage failures
+      }
+    }
+  }, [isActivityDrawerOpen, collabActivity, sessionId]);
+
+  const unseenActivityCount = useMemo(() => {
+    if (!sessionId) return 0;
+    if (!lastViewedAt) return collabActivity.length;
+    const lastViewedTime = new Date(lastViewedAt).getTime();
+    return collabActivity.filter((a) => new Date(a.created_at).getTime() > lastViewedTime).length;
+  }, [collabActivity, lastViewedAt, sessionId]);
 
   const openBranchActionPortal = useCallback((node: BreakdownNode, clientX: number, clientY: number) => {
     if (typeof window === 'undefined') return;
@@ -3164,7 +3201,10 @@ IMPORTANT:
         activeMobileMenu="study"
         showInstallAppButton={showInstallAppButton}
         onInstallAppClick={onInstallApp}
+        onNotificationClick={sessionId ? () => setIsActivityDrawerOpen(true) : undefined}
+        notificationCount={sessionId ? unseenActivityCount : 0}
         left={
+
           <nav className="hidden md:flex gap-6 items-center">
             {['Focus Mode', 'Workspace', 'Library'].map((label, i) => (
               <a key={label} href="#"
@@ -3730,10 +3770,109 @@ IMPORTANT:
         currentUserId={user?.id ?? user?.sub ?? null}
         members={collabMembers}
         isLoadingMembers={collabLoadingMembers}
+        activity={collabActivity}
+        isLoadingActivity={collabLoadingActivity}
         onClose={() => setIsCollabModalOpen(false)}
         onCreateInviteLink={createInviteLink}
         onRemoveMember={removeCollabMember}
       />
+
+      {/* ── Activity Drawer ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {isActivityDrawerOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              key="activity-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[80] bg-background/50 backdrop-blur-sm"
+              onClick={() => setIsActivityDrawerOpen(false)}
+            />
+            {/* Drawer */}
+            <motion.div
+              key="activity-drawer"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+              className="fixed top-0 right-0 h-full w-full max-w-sm z-[81] bg-surface-container-low border-l border-outline-variant/20 shadow-2xl flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/20 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-primary" />
+                  <h2 className="font-headline font-bold text-sm uppercase tracking-widest">Activity Log</h2>
+                </div>
+                <button
+                  onClick={() => setIsActivityDrawerOpen(false)}
+                  className="w-7 h-7 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest flex items-center justify-center transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                {collabLoadingActivity && collabActivity.length === 0 ? (
+                  <div className="flex items-center justify-center py-12 text-on-surface-variant">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  </div>
+                ) : collabActivity.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant gap-3">
+                    <Activity className="w-8 h-8 opacity-30" />
+                    <p className="text-sm">No activity yet.</p>
+                  </div>
+                ) : (
+                  <ul className="space-y-4">
+                    {collabActivity.map((entry, i) => {
+                      const actionText = (() => {
+                        switch (entry.action) {
+                          case 'session_created':   return 'created this session';
+                          case 'session_updated': {
+                            const fields = entry.metadata.fields as string[] | undefined;
+                            return fields?.length ? `updated ${fields.join(', ')}` : 'updated the session';
+                          }
+                          case 'deep_dive_message':  return 'sent a deep dive message';
+                          case 'invitation_created': return `created a ${entry.metadata.role ?? ''} invite link`;
+                          case 'member_joined':      return `joined as ${entry.metadata.role ?? 'member'}`;
+                          case 'member_left':        return 'left the session';
+                          case 'member_removed':     return 'was removed from the session';
+                          default:                   return (entry.action as string).replace(/_/g, ' ');
+                        }
+                      })();
+                      const diff = Date.now() - new Date(entry.created_at).getTime();
+                      const mins = Math.floor(diff / 60000);
+                      const timeLabel = mins < 1 ? 'just now' : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : new Date(entry.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                      return (
+                        <li key={entry.id} className="flex gap-3 relative">
+                          {/* Connector line */}
+                          {i < collabActivity.length - 1 && (
+                            <div className="absolute left-3 top-7 bottom-0 w-px bg-outline-variant/20" />
+                          )}
+                          {/* Avatar */}
+                          <div className="w-6 h-6 rounded-full bg-primary/20 text-primary text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5 z-10">
+                            {entry.actor_name ? entry.actor_name.slice(0, 2).toUpperCase() : '??'}
+                          </div>
+                          <div className="flex-1 min-w-0 pb-1">
+                            <p className="text-sm text-on-surface leading-snug">
+                              <span className="font-semibold">{entry.actor_name ?? 'Someone'}</span>
+                              {' '}{actionText}
+                            </p>
+                            <p className="text-[11px] text-on-surface-variant mt-0.5">{timeLabel}</p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Table modal chrome — fixed to screen edges */}
       <AnimatePresence>

@@ -35,6 +35,8 @@ interface AppHeaderProps {
   activeMobileMenu?: 'study' | 'history' | 'flashcards' | 'quiz' | 'quantum-prism' | 'knowledge-map' | 'achievements' | 'settings' | null;
   showInstallAppButton?: boolean;
   onInstallAppClick?: () => void;
+  onNotificationClick?: () => void;
+  notificationCount?: number;
 }
 
 export function AppHeader({
@@ -53,6 +55,8 @@ export function AppHeader({
   activeMobileMenu = null,
   showInstallAppButton = false,
   onInstallAppClick,
+  onNotificationClick,
+  notificationCount = 0,
 }: AppHeaderProps) {
   const displayName = user?.full_name || user?.email?.split('@')[0] || 'U';
   const initials = displayName
@@ -243,8 +247,16 @@ export function AppHeader({
             </div>
           )}
           <div className="flex items-center gap-1 text-on-surface-variant">
-            <button className="p-2 rounded-full hover:bg-surface-container-highest transition-colors">
+            <button
+              onClick={onNotificationClick}
+              className="p-2 rounded-full hover:bg-surface-container-highest transition-colors relative"
+            >
               <Bell className="w-5 h-5" />
+              {notificationCount > 0 && (
+                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-secondary text-on-secondary text-[8px] font-bold flex items-center justify-center">
+                  {notificationCount > 9 ? '9+' : notificationCount}
+                </span>
+              )}
             </button>
             <button
               onClick={onSettingsClick}
