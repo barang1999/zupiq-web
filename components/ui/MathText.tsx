@@ -310,6 +310,12 @@ function autoWrapInlineMathForRender(text: string): string {
         const trimmed = match.trim();
         // If it looks like a legitimate math fragment (has a command or sub/sup and some structure)
         if (trimmed.length > 2 && (/\\[a-zA-Z{}]+|\\\\/.test(trimmed) || /[_^]/.test(trimmed))) {
+          // Don't wrap if braces are unbalanced — means the regex captured a partial LaTeX
+          // command like \text{ whose argument contains non-ASCII characters (e.g. Khmer)
+          // that stop the match before the closing brace.
+          const openBraces = (trimmed.match(/\{/g) ?? []).length;
+          const closeBraces = (trimmed.match(/\}/g) ?? []).length;
+          if (openBraces !== closeBraces) return match;
           return `$${trimmed}$`;
         }
         return match;

@@ -25,6 +25,13 @@ import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
 import { getSessionsCached } from '../lib/sessions';
 import { MAX_FILE_SIZE_MB, validateFile } from '../utils/validators';
+import {
+  saveInsight,
+  saveVisualTable,
+  saveConversationMessage,
+  saveNodeBreakdown,
+} from '../lib/knowledge';
+import { ImageCropModal } from '../components/ui/ImageCropModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1004,6 +1011,19 @@ export function StudySpacePage({
   const [ocrDetectedSignTable, setOcrDetectedSignTable] = useState(false);
   const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
   const [isActivityDrawerOpen, setIsActivityDrawerOpen] = useState(false);
+  const [globalCropState, setGlobalCropState] = useState<{
+    src: string;
+    name: string;
+    onConfirm: (file: File) => Promise<void>;
+  } | null>(null);
+
+  const handleImageCropRequest = useCallback((
+    src: string,
+    name: string,
+    onConfirm: (file: File) => Promise<void>,
+  ) => {
+    setGlobalCropState({ src, name, onConfirm });
+  }, []);
   const lastOcrInsertRef = useRef<string | null>(null);
   const lastOcrUploadIdRef = useRef<string | null>(null);
   const deepDiveLastOcrInsertRef = useRef<string | null>(null);
@@ -2984,10 +3004,11 @@ export function StudySpacePage({
     }
   };
 
-  const handleAskDeepDive = async () => {
+  const handleAskDeepDive = async (contextBlock?: string) => {
     if (!selectedNode || !breakdown) return;
-    const question = composerInput.trim()
+    const baseQuestion = composerInput.trim()
       || (deepDiveUploadId ? 'Please analyze this image in the context of this node.' : '');
+    const question = contextBlock ? `${baseQuestion}\n\n${contextBlock}` : baseQuestion;
     if (!question || composerLoading) return;
 
     setComposerError(null);
@@ -3808,6 +3829,7 @@ IMPORTANT:
                 }
               }}
               onAttachFile={handleAttachDeepDiveFile}
+              onImageCropRequest={handleImageCropRequest}
               onClearAttachment={() => {
                 setDeepDiveUploadId(null);
                 setHasDeepDiveAttachment(false);
@@ -3815,6 +3837,44 @@ IMPORTANT:
               onExpandTable={setExpandedTable}
               isExpanded={isInsightExpanded}
               onToggleExpand={handleToggleInsightExpand}
+              onSaveInsight={async (node) => {
+                const insight = nodeInsights[node.id];
+                if (!insight) return;
+                await saveInsight({
+                  nodeLabel: node.label,
+                  subject: breakdown?.subject ?? 'General',
+                  simpleBreakdown: insight.simpleBreakdown,
+                  keyFormula: insight.keyFormula,
+                });
+                showActionToast('Insight saved to Knowledge.');
+              }}
+              onSaveVisualTable={async (table, label) => {
+                await saveVisualTable({
+                  title: label ?? selectedNode?.label ?? 'Table',
+                  subject: breakdown?.subject ?? 'General',
+                  nodeLabel: selectedNode?.label ?? null,
+                  table,
+                });
+                showActionToast('Table saved to Knowledge.');
+              }}
+              onSaveConversationMessage={async (question, answer) => {
+                await saveConversationMessage({
+                  question,
+                  answer,
+                  subject: breakdown?.subject ?? 'General',
+                  nodeLabel: selectedNode?.label ?? '',
+                });
+                showActionToast('Q&A saved to Knowledge.');
+              }}
+              onSaveNodeBreakdown={async (node) => {
+                await saveNodeBreakdown({
+                  label: node.label,
+                  description: node.description,
+                  mathContent: node.mathContent,
+                  subject: breakdown?.subject ?? 'General',
+                });
+                showActionToast('Node saved to Knowledge.');
+              }}
               onTouchStart={handleInsightSwipeStart}
               onTouchMove={handleInsightSwipeMove}
               onTouchEnd={handleInsightSwipeEnd}
@@ -3868,6 +3928,7 @@ IMPORTANT:
         onSubmit={handleSubmit}
         onClose={() => setShowInput(false)}
         onAttachFile={handleAttachProblemFile}
+        onImageCropRequest={handleImageCropRequest}
       />
 
       {showDebugOverlay && (
@@ -4057,6 +4118,23 @@ IMPORTANT:
           </>
         )}
       </AnimatePresence>
+
+      {/* Global image crop modal */}
+      {globalCropState && (
+        <ImageCropModal
+          imageSrc={globalCropState.src}
+          fileName={globalCropState.name}
+          onConfirm={async (file) => {
+            const handler = globalCropState.onConfirm;
+            setGlobalCropState(null);
+            await handler(file);
+          }}
+          onCancel={() => {
+            URL.revokeObjectURL(globalCropState.src);
+            setGlobalCropState(null);
+          }}
+        />
+      )}
 
       {/* Table modal chrome — fixed to screen edges */}
       <AnimatePresence>

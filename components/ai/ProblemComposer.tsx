@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Camera, Paperclip, Sparkles, Minus, Network, Upload, X, Table as TableIcon } from 'lucide-react';
 import { RichText } from '../ui/RichText';
 import SweepText from '../ui/SweepText.jsx';
-import { ImageCropModal } from '../ui/ImageCropModal';
 
 function isComposerDebugEnabled(): boolean {
   if (typeof window === 'undefined') return false;
@@ -107,6 +106,7 @@ interface ProblemComposerProps {
   onSubmit: () => void;
   onClose: () => void;
   onAttachFile?: (file: File) => void | Promise<void>;
+  onImageCropRequest?: (src: string, name: string, onConfirm: (file: File) => Promise<void>) => void;
 }
 
 export function ProblemComposer({
@@ -120,6 +120,7 @@ export function ProblemComposer({
   onSubmit,
   onClose,
   onAttachFile,
+  onImageCropRequest,
 }: ProblemComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const uploadFileInputRef = useRef<HTMLInputElement>(null);
@@ -127,7 +128,6 @@ export function ProblemComposer({
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
-  const [cropState, setCropState] = useState<{ src: string; name: string } | null>(null);
   const previousValueRef = useRef(value);
   const previousImageLoadingRef = useRef(imageLoading);
   const previousPreviewVisibleRef = useRef(false);
@@ -280,23 +280,15 @@ export function ProblemComposer({
       });
     }
     e.target.value = '';
-    if (file.type.startsWith('image/')) {
+    if (file.type.startsWith('image/') && onImageCropRequest) {
       const objectUrl = URL.createObjectURL(file);
-      setCropState({ src: objectUrl, name: file.name });
+      onImageCropRequest(objectUrl, file.name, async (croppedFile) => {
+        URL.revokeObjectURL(objectUrl);
+        await onAttachFile(croppedFile);
+      });
     } else {
       onAttachFile(file);
     }
-  };
-
-  const handleCropConfirm = async (croppedFile: File) => {
-    if (cropState) URL.revokeObjectURL(cropState.src);
-    setCropState(null);
-    if (onAttachFile) await onAttachFile(croppedFile);
-  };
-
-  const handleCropCancel = () => {
-    if (cropState) URL.revokeObjectURL(cropState.src);
-    setCropState(null);
   };
 
   return (
@@ -318,15 +310,6 @@ export function ProblemComposer({
             className="hidden"
             onChange={(e) => handleFileChange(e, 'camera')}
           />
-
-          {cropState && (
-            <ImageCropModal
-              imageSrc={cropState.src}
-              fileName={cropState.name}
-              onConfirm={handleCropConfirm}
-              onCancel={handleCropCancel}
-            />
-          )}
 
           <div className="fixed inset-0 z-[91] pointer-events-none">
             <button

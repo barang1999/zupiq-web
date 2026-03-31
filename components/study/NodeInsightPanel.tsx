@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState, type ChangeEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { useEffect, useRef, useState, useCallback, type ChangeEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { listKnowledgeRecords, type KnowledgeRecord } from '../../lib/knowledge';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   X, Loader2, Sparkles, Bookmark, Zap,
   ArrowRight, Archive, ChevronLeft, RefreshCw,
   Paperclip, Camera, Upload, Table, Maximize2, Minimize2,
+  MessageSquare, FileText, Check,
 } from 'lucide-react';
 import { MathText } from '../ui/MathText';
 import { RichText } from '../ui/RichText';
 import { VisualTable, type VisualTableData } from '../ui/VisualTable';
-import { ImageCropModal } from '../ui/ImageCropModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,15 +56,20 @@ interface Props {
   imageLoading?: boolean;
   hasAttachment?: boolean;
   onComposerInputChange: (value: string) => void;
-  onAskDeepDive: () => void;
+  onAskDeepDive: (contextBlock?: string) => void;
   onExplainToFiveYearOld: () => void;
   onClose: () => void;
   onSyncVisualTable: () => void;
   onAttachFile?: (file: File) => void | Promise<void>;
   onClearAttachment?: () => void;
+  onImageCropRequest?: (src: string, name: string, onConfirm: (file: File) => Promise<void>) => void;
   onExpandTable: (table: VisualTableData) => void;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  onSaveInsight?: (node: BreakdownNode) => Promise<void>;
+  onSaveVisualTable?: (table: VisualTableData, label?: string) => Promise<void>;
+  onSaveConversationMessage?: (question: string, answer: string) => Promise<void>;
+  onSaveNodeBreakdown?: (node: BreakdownNode) => Promise<void>;
   onTouchStart: (e: ReactTouchEvent<HTMLDivElement>) => void;
   onTouchMove: (e: ReactTouchEvent<HTMLDivElement>) => void;
   onTouchEnd: () => void;
@@ -94,9 +100,14 @@ export function NodeInsightPanel({
   onSyncVisualTable,
   onAttachFile,
   onClearAttachment,
+  onImageCropRequest,
   onExpandTable,
   isExpanded,
   onToggleExpand,
+  onSaveInsight,
+  onSaveVisualTable,
+  onSaveConversationMessage,
+  onSaveNodeBreakdown,
   onTouchStart,
   onTouchMove,
   onTouchEnd,
@@ -114,7 +125,91 @@ export function NodeInsightPanel({
   const attachButtonRef = useRef<HTMLButtonElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
-  const [cropState, setCropState] = useState<{ src: string; name: string } | null>(null);
+
+  // ── Context-record popover ────────────────────────────────────────────────────
+  const contextButtonRef = useRef<HTMLButtonElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [contextRecords, setContextRecords] = useState<KnowledgeRecord[] | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [selectedContextIds, setSelectedContextIds] = useState<Set<string>>(new Set());
+
+  // ── Saved-keys: localStorage cache + backend source of truth ─────────────────
+  const STORAGE_KEY = 'zupiq_knowledge_saved_keys';
+
+  const [savedKeys, setSavedKeys] = useState<Set<string>>(() => {
+    // Seed from localStorage for instant paint before backend responds
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
+
+  /**
+   * Map a backend KnowledgeRecord to the UI key(s) it represents.
+   * Matches the same keys used in handleSave calls below.
+   */
+  const recordToKeys = useCallback((
+    record: { content_type: string; node_label: string | null },
+    nodeId: string,
+    nodeLabel: string,
+  ): string[] => {
+    if (record.node_label !== nodeLabel) return [];
+    switch (record.content_type) {
+      case 'insight':         return [`insight_${nodeId}`];
+      case 'node_breakdown':  return [`node_${nodeId}`, `wb_${nodeId}`];
+      case 'visual_table':    return [`vt_session`];
+      case 'conversation_message': return []; // matched by content, not node — skip
+      default: return [];
+    }
+  }, []);
+
+  // When selected node changes, reconcile saved state with the backend
+  useEffect(() => {
+    if (!selectedNode || !breakdown?.subject) return;
+    let cancelled = false;
+
+    listKnowledgeRecords({ subject: breakdown.subject })
+      .then(({ records }) => {
+        if (cancelled) return;
+        const backendKeys = new Set<string>();
+        for (const rec of records) {
+          for (const k of recordToKeys(rec, selectedNode.id, selectedNode.label)) {
+            backendKeys.add(k);
+          }
+        }
+        if (backendKeys.size === 0) return;
+        setSavedKeys(prev => {
+          const merged = new Set([...prev, ...backendKeys]);
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...merged])); } catch { /* ignore */ }
+          return merged;
+        });
+      })
+      .catch(() => { /* network error — rely on localStorage cache */ });
+
+    return () => { cancelled = true; };
+  }, [selectedNode?.id, breakdown?.subject, recordToKeys]);
+
+  const markSaving = (key: string) =>
+    setSavingKeys(prev => new Set(prev).add(key));
+
+  const markSaved = (key: string) => {
+    setSavingKeys(prev => { const s = new Set(prev); s.delete(key); return s; });
+    setSavedKeys(prev => {
+      const next = new Set(prev).add(key);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch { /* quota exceeded — silently skip */ }
+      return next;
+    });
+  };
+
+  async function handleSave(key: string, fn: () => Promise<void>) {
+    if (savingKeys.has(key) || savedKeys.has(key)) return;
+    markSaving(key);
+    try { await fn(); markSaved(key); } catch { setSavingKeys(prev => { const s = new Set(prev); s.delete(key); return s; }); }
+  }
 
   // Close attach menu on outside click or when upload completes
   useEffect(() => {
@@ -132,6 +227,72 @@ export function NodeInsightPanel({
   useEffect(() => {
     if (!imageLoading) setIsAttachMenuOpen(false);
   }, [imageLoading]);
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!isContextMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (contextMenuRef.current?.contains(target)) return;
+      if (contextButtonRef.current?.contains(target)) return;
+      setIsContextMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [isContextMenuOpen]);
+
+  // Fetch records when popover opens
+  useEffect(() => {
+    if (!isContextMenuOpen) return;
+    if (contextRecords !== null) return; // already loaded
+    setContextLoading(true);
+    listKnowledgeRecords({ subject: breakdown?.subject, limit: 50 })
+      .then(({ records }) => setContextRecords(records))
+      .catch(() => setContextRecords([]))
+      .finally(() => setContextLoading(false));
+  }, [isContextMenuOpen, breakdown?.subject, contextRecords]);
+
+  const toggleContextRecord = (id: string) => {
+    setSelectedContextIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const buildContextBlock = (): string | undefined => {
+    if (!contextRecords || selectedContextIds.size === 0) return undefined;
+    const selected = contextRecords.filter(r => selectedContextIds.has(r.id));
+    if (!selected.length) return undefined;
+    const lines = ['[Use the following saved knowledge as reference]:'];
+    for (const rec of selected) {
+      const c = rec.content;
+      switch (rec.content_type) {
+        case 'insight':
+          lines.push(`• ${rec.title}: ${String(c.simpleBreakdown ?? '').slice(0, 250)}`);
+          if (c.keyFormula) lines.push(`  Formula: ${String(c.keyFormula).slice(0, 120)}`);
+          break;
+        case 'visual_table':
+          lines.push(`• ${rec.title}: ${rec.summary ?? ''}`);
+          break;
+        case 'conversation_message':
+          lines.push(`• Q: ${String(c.question ?? '').slice(0, 120)}`);
+          lines.push(`  A: ${String(c.answer ?? '').slice(0, 200)}`);
+          break;
+        case 'node_breakdown':
+          lines.push(`• ${rec.title}: ${String(c.description ?? '').slice(0, 250)}`);
+          if (c.mathContent) lines.push(`  Math: ${String(c.mathContent).slice(0, 120)}`);
+          break;
+      }
+    }
+    return lines.join('\n');
+  };
+
+  const handleSendWithContext = () => {
+    onAskDeepDive(buildContextBlock());
+    setSelectedContextIds(new Set());
+    setIsContextMenuOpen(false);
+  };
 
   const openAttachOptions = () => {
     if (!onAttachFile || composerLoading || imageLoading) return;
@@ -154,23 +315,15 @@ export function NodeInsightPanel({
     const file = e.target.files?.[0];
     if (!file || !onAttachFile) return;
     e.target.value = '';
-    if (file.type.startsWith('image/')) {
+    if (file.type.startsWith('image/') && onImageCropRequest) {
       const objectUrl = URL.createObjectURL(file);
-      setCropState({ src: objectUrl, name: file.name });
+      onImageCropRequest(objectUrl, file.name, async (croppedFile) => {
+        URL.revokeObjectURL(objectUrl);
+        await onAttachFile(croppedFile);
+      });
     } else {
       onAttachFile(file);
     }
-  };
-
-  const handleCropConfirm = async (croppedFile: File) => {
-    if (cropState) URL.revokeObjectURL(cropState.src);
-    setCropState(null);
-    if (onAttachFile) await onAttachFile(croppedFile);
-  };
-
-  const handleCropCancel = () => {
-    if (cropState) URL.revokeObjectURL(cropState.src);
-    setCropState(null);
   };
 
   return (
@@ -191,15 +344,6 @@ export function NodeInsightPanel({
         className="hidden"
         onChange={handleFileChange}
       />
-
-      {cropState && (
-        <ImageCropModal
-          imageSrc={cropState.src}
-          fileName={cropState.name}
-          onConfirm={handleCropConfirm}
-          onCancel={handleCropCancel}
-        />
-      )}
 
       {/* Scrollable content */}
       <div
@@ -264,12 +408,32 @@ export function NodeInsightPanel({
           >
             {/* Node header */}
             <div>
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${
-                selectedNode.type === 'root' ? 'text-primary' :
-                selectedNode.type === 'branch' ? 'text-secondary' : 'text-tertiary'
-              }`}>
-                {selectedNode.type === 'root' ? 'Core Problem' : selectedNode.type === 'branch' ? 'Step' : 'Concept'}
-              </span>
+              <div className="flex items-start justify-between gap-2">
+                <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                  selectedNode.type === 'root' ? 'text-primary' :
+                  selectedNode.type === 'branch' ? 'text-secondary' : 'text-tertiary'
+                }`}>
+                  {selectedNode.type === 'root' ? 'Core Problem' : selectedNode.type === 'branch' ? 'Step' : 'Concept'}
+                </span>
+                {onSaveNodeBreakdown && (
+                  <button
+                    onClick={() => handleSave(`node_${selectedNode.id}`, () => onSaveNodeBreakdown(selectedNode))}
+                    className={`shrink-0 p-1 rounded-lg transition-all ${
+                      savedKeys.has(`node_${selectedNode.id}`)
+                        ? 'text-amber-400 bg-amber-400/15'
+                        : 'text-on-surface-variant/50 hover:text-primary hover:bg-primary/10'
+                    }`}
+                    title={savedKeys.has(`node_${selectedNode.id}`) ? 'Saved!' : 'Save to Knowledge'}
+                  >
+                    {savingKeys.has(`node_${selectedNode.id}`)
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : savedKeys.has(`node_${selectedNode.id}`)
+                      ? <Bookmark className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      : <Bookmark className="w-3.5 h-3.5" />
+                    }
+                  </button>
+                )}
+              </div>
               <h3 className="font-headline text-xl font-bold mt-1 leading-tight">
                 <MathText>{selectedNode.label}</MathText>
               </h3>
@@ -298,9 +462,29 @@ export function NodeInsightPanel({
             {/* Visual Logic — session-level sign table */}
             {sessionVisualTable && (
               <div>
-                <label className="text-[10px] font-bold text-tertiary uppercase tracking-widest mb-3 block flex items-center gap-1.5">
-                  Visual Logic · {sessionVisualTable.type === 'sign_analysis' ? 'Sign Table' : 'Structured Data'}
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-[10px] font-bold text-tertiary uppercase tracking-widest">
+                    Visual Logic · {sessionVisualTable.type === 'sign_analysis' ? 'Sign Table' : 'Structured Data'}
+                  </label>
+                  {onSaveVisualTable && (
+                    <button
+                      onClick={() => handleSave(`vt_session`, () => onSaveVisualTable(sessionVisualTable, selectedNode.label))}
+                      className={`p-1 rounded-lg transition-all ${
+                        savedKeys.has('vt_session')
+                          ? 'text-amber-400 bg-amber-400/15'
+                          : 'text-on-surface-variant/50 hover:text-tertiary hover:bg-tertiary/10'
+                      }`}
+                      title={savedKeys.has('vt_session') ? 'Saved!' : 'Save table to Knowledge'}
+                    >
+                      {savingKeys.has('vt_session')
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : savedKeys.has('vt_session')
+                        ? <Bookmark className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        : <Bookmark className="w-3.5 h-3.5" />
+                      }
+                    </button>
+                  )}
+                </div>
                 <div className="rounded-2xl border border-tertiary/25 bg-surface-container overflow-hidden">
                   <VisualTable
                     table={sessionVisualTable}
@@ -313,9 +497,29 @@ export function NodeInsightPanel({
 
             {/* Simple Breakdown */}
             <div>
-              <label className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-3 block">
-                Simple Breakdown
-              </label>
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">
+                  Simple Breakdown
+                </label>
+                {onSaveInsight && nodeInsights[selectedNode.id] && (
+                  <button
+                    onClick={() => handleSave(`insight_${selectedNode.id}`, () => onSaveInsight(selectedNode))}
+                    className={`p-1 rounded-lg transition-all ${
+                      savedKeys.has(`insight_${selectedNode.id}`)
+                        ? 'text-amber-400 bg-amber-400/15'
+                        : 'text-on-surface-variant/50 hover:text-secondary hover:bg-secondary/10'
+                    }`}
+                    title={savedKeys.has(`insight_${selectedNode.id}`) ? 'Saved!' : 'Save insight to Knowledge'}
+                  >
+                    {savingKeys.has(`insight_${selectedNode.id}`)
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : savedKeys.has(`insight_${selectedNode.id}`)
+                      ? <Bookmark className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      : <Bookmark className="w-3.5 h-3.5" />
+                    }
+                  </button>
+                )}
+              </div>
               <div className="bg-surface-container rounded-2xl p-5 relative overflow-x-hidden overflow-y-visible min-h-[80px]">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-tertiary/5 rounded-full -mr-12 -mt-12 blur-xl" />
                 {insightLoading && !nodeInsights[selectedNode.id] ? (
@@ -350,9 +554,24 @@ export function NodeInsightPanel({
 
             {/* Quick actions */}
             <div className="flex flex-col gap-3">
-              <button className="flex items-center justify-between w-full p-4 rounded-xl bg-surface-container-highest/50 border border-outline-variant/20 hover:border-primary/50 transition-all">
-                <span className="text-sm font-medium">Add to Workspace</span>
-                <Bookmark className="w-4 h-4 text-primary" />
+              <button
+                onClick={() => onSaveNodeBreakdown && handleSave(`wb_${selectedNode.id}`, () => onSaveNodeBreakdown(selectedNode))}
+                disabled={!onSaveNodeBreakdown}
+                className={`flex items-center justify-between w-full p-4 rounded-xl border transition-all disabled:opacity-40 ${
+                  savedKeys.has(`wb_${selectedNode.id}`)
+                    ? 'bg-amber-400/10 border-amber-400/40 text-amber-400'
+                    : 'bg-surface-container-highest/50 border-outline-variant/20 hover:border-primary/50'
+                }`}
+              >
+                <span className="text-sm font-medium">
+                  {savedKeys.has(`wb_${selectedNode.id}`) ? 'Saved to Knowledge' : 'Save to Knowledge'}
+                </span>
+                {savingKeys.has(`wb_${selectedNode.id}`)
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : savedKeys.has(`wb_${selectedNode.id}`)
+                  ? <Bookmark className="w-4 h-4 fill-amber-400 text-amber-400" />
+                  : <Bookmark className="w-4 h-4 text-primary" />
+                }
               </button>
               <button
                 onClick={onExplainToFiveYearOld}
@@ -378,34 +597,84 @@ export function NodeInsightPanel({
                     Use the floating composer below to ask follow-up questions.
                   </p>
                 )}
-                {activeBranchConversation.map((message, idx) => (
-                  <div
-                    key={`${selectedNode.id}_${idx}`}
-                    className={`rounded-xl px-4 py-3 text-xs leading-relaxed space-y-3 ${
-                      message.role === 'user'
-                        ? 'bg-primary/10 border border-primary/20 text-on-surface'
-                        : 'bg-transparent text-on-surface-variant'
-                    }`}
-                  >
-                    {message.role === 'user'
-                      ? <span>{message.content}</span>
-                      : (
-                        <>
-                          <RichText className="text-xs leading-relaxed">{message.content}</RichText>
-                          {message.visualTable && (
-                            <div className="mt-3 rounded-xl border border-outline-variant/20 bg-surface-container overflow-hidden">
-                              <VisualTable
-                                table={message.visualTable}
-                                expandable
-                                onExpand={() => onExpandTable(message.visualTable!)}
-                              />
+                {activeBranchConversation.map((message, idx) => {
+                  const prevMsg = activeBranchConversation[idx - 1];
+                  const isModel = message.role === 'model';
+                  const saveKey = `conv_${selectedNode.id}_${idx}`;
+                  const question = isModel && prevMsg?.role === 'user' ? prevMsg.content : null;
+
+                  return (
+                    <div
+                      key={`${selectedNode.id}_${idx}`}
+                      className={`rounded-xl px-4 py-3 text-xs leading-relaxed space-y-3 ${
+                        message.role === 'user'
+                          ? 'bg-primary/10 border border-primary/20 text-on-surface'
+                          : 'bg-transparent text-on-surface-variant'
+                      }`}
+                    >
+                      {message.role === 'user'
+                        ? <span>{message.content}</span>
+                        : (
+                          <>
+                            <div className="flex items-start justify-between gap-2">
+                              <RichText className="text-xs leading-relaxed flex-1">{message.content}</RichText>
+                              {onSaveConversationMessage && question && (
+                                <button
+                                  onClick={() => handleSave(saveKey, () => onSaveConversationMessage(question, message.content))}
+                                  className={`shrink-0 p-1 rounded-lg transition-all ${
+                                    savedKeys.has(saveKey)
+                                      ? 'text-amber-400 bg-amber-400/15'
+                                      : 'text-on-surface-variant/40 hover:text-primary hover:bg-primary/10'
+                                  }`}
+                                  title={savedKeys.has(saveKey) ? 'Saved!' : 'Save Q&A to Knowledge'}
+                                >
+                                  {savingKeys.has(saveKey)
+                                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                                    : savedKeys.has(saveKey)
+                                    ? <Bookmark className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                    : <Bookmark className="w-3 h-3" />
+                                  }
+                                </button>
+                              )}
                             </div>
-                          )}
-                        </>
-                      )
-                    }
-                  </div>
-                ))}
+                            {message.visualTable && (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] text-on-surface-variant/50 uppercase tracking-wider">Visual Table</span>
+                                  {onSaveVisualTable && (
+                                    <button
+                                      onClick={() => handleSave(`vt_conv_${saveKey}`, () => onSaveVisualTable(message.visualTable!, selectedNode.label))}
+                                      className={`p-1 rounded-lg transition-all ${
+                                        savedKeys.has(`vt_conv_${saveKey}`)
+                                          ? 'text-amber-400 bg-amber-400/15'
+                                          : 'text-on-surface-variant/40 hover:text-tertiary hover:bg-tertiary/10'
+                                      }`}
+                                      title={savedKeys.has(`vt_conv_${saveKey}`) ? 'Saved!' : 'Save table to Knowledge'}
+                                    >
+                                      {savingKeys.has(`vt_conv_${saveKey}`)
+                                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                                        : savedKeys.has(`vt_conv_${saveKey}`)
+                                        ? <Bookmark className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                        : <Bookmark className="w-3 h-3" />
+                                      }
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="rounded-xl border border-outline-variant/20 bg-surface-container overflow-hidden">
+                                  <VisualTable
+                                    table={message.visualTable}
+                                    expandable
+                                    onExpand={() => onExpandTable(message.visualTable!)}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )
+                      }
+                    </div>
+                  );
+                })}
                 {composerLoading && (
                   <div className="flex items-center gap-2 text-on-surface-variant text-xs px-2">
                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -458,7 +727,7 @@ export function NodeInsightPanel({
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey && (composerInput.trim() || hasAttachment)) {
                 e.preventDefault();
-                onAskDeepDive();
+                handleSendWithContext();
               }
             }}
             rows={1}
@@ -520,10 +789,118 @@ export function NodeInsightPanel({
                 </AnimatePresence>
               </div>
 
-              <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
-                <Archive className="w-5 h-5" />
-                <ChevronLeft className="w-3 h-3 rotate-[-90deg]" />
+              {/* Knowledge context picker */}
+              <div className="relative">
+                <button
+                  ref={contextButtonRef}
+                  type="button"
+                  onClick={() => setIsContextMenuOpen(prev => !prev)}
+                  disabled={!isBranchSelected || composerLoading}
+                  className={`flex items-center gap-1 transition-colors disabled:opacity-30 ${
+                    selectedContextIds.size > 0
+                      ? 'text-secondary'
+                      : 'hover:text-primary text-on-surface-variant/60'
+                  }`}
+                  title="Use saved knowledge as context"
+                  aria-expanded={isContextMenuOpen}
+                >
+                  <Archive className="w-5 h-5" />
+                  <ChevronLeft className={`w-3 h-3 transition-transform ${isContextMenuOpen ? 'rotate-90' : 'rotate-[-90deg]'}`} />
+                  {selectedContextIds.size > 0 && (
+                    <span className="absolute -top-1.5 -right-1 text-[9px] font-bold bg-secondary text-on-secondary rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                      {selectedContextIds.size}
+                    </span>
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {isContextMenuOpen && (
+                    <motion.div
+                      ref={contextMenuRef}
+                      initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.97 }}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
+                      className="absolute bottom-10 left-0 z-40 w-72 rounded-2xl border border-secondary/25 bg-surface-container-highest/97 backdrop-blur-xl shadow-[0_12px_36px_rgba(0,0,0,0.32)] overflow-hidden"
+                    >
+                      {/* Header */}
+                      <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-outline-variant/15">
+                        <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">
+                          Saved Knowledge
+                        </span>
+                        {selectedContextIds.size > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedContextIds(new Set())}
+                            className="text-[10px] text-on-surface-variant/60 hover:text-on-surface transition-colors"
+                          >
+                            Clear {selectedContextIds.size} selected
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Record list */}
+                      <div className="max-h-56 overflow-y-auto">
+                        {contextLoading ? (
+                          <div className="flex items-center justify-center py-8 gap-2 text-on-surface-variant text-xs">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Loading…</span>
+                          </div>
+                        ) : !contextRecords || contextRecords.length === 0 ? (
+                          <p className="text-xs text-on-surface-variant/60 text-center py-8 px-4">
+                            No saved knowledge yet. Save insights or tables to use them as context.
+                          </p>
+                        ) : (
+                          contextRecords.map(rec => {
+                            const isSelected = selectedContextIds.has(rec.id);
+                            const Icon = rec.content_type === 'visual_table' ? Table
+                              : rec.content_type === 'conversation_message' ? MessageSquare
+                              : rec.content_type === 'node_breakdown' ? FileText
+                              : Bookmark;
+                            return (
+                              <button
+                                key={rec.id}
+                                type="button"
+                                onClick={() => toggleContextRecord(rec.id)}
+                                className={`w-full flex items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/5 ${
+                                  isSelected ? 'bg-secondary/10' : ''
+                                }`}
+                              >
+                                <div className={`mt-0.5 shrink-0 w-4 h-4 rounded border transition-colors flex items-center justify-center ${
+                                  isSelected
+                                    ? 'bg-secondary border-secondary'
+                                    : 'border-outline-variant/40'
+                                }`}>
+                                  {isSelected && <Check className="w-2.5 h-2.5 text-on-secondary" />}
+                                </div>
+                                <Icon className={`mt-0.5 w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-secondary' : 'text-on-surface-variant/50'}`} />
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-xs font-medium truncate ${isSelected ? 'text-on-surface' : 'text-on-surface/80'}`}>
+                                    {rec.title}
+                                  </p>
+                                  {rec.summary && (
+                                    <p className="text-[10px] text-on-surface-variant/60 mt-0.5 line-clamp-2">{rec.summary}</p>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Footer hint */}
+                      {(contextRecords?.length ?? 0) > 0 && (
+                        <div className="px-4 py-2 border-t border-outline-variant/15">
+                          <p className="text-[10px] text-on-surface-variant/50">
+                            Selected records are sent as reference context with your next message.
+                          </p>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
+
               <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
                 <Zap className="w-5 h-5" />
                 <ChevronLeft className="w-3 h-3 rotate-[-90deg]" />
@@ -548,7 +925,7 @@ export function NodeInsightPanel({
             </div>
 
             <button
-              onClick={onAskDeepDive}
+              onClick={handleSendWithContext}
               disabled={!isBranchSelected || composerLoading || imageLoading || (!composerInput.trim() && !hasAttachment)}
               className="w-10 h-10 rounded-full bg-on-surface-variant/20 text-on-surface flex items-center justify-center hover:bg-on-surface-variant/30 transition-all disabled:opacity-30"
             >
