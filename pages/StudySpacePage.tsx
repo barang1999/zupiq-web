@@ -993,7 +993,6 @@ export function StudySpacePage({
   const [branchActionPortal, setBranchActionPortal] = useState<BranchActionPortalState | null>(null);
   const [insightSwipeOffsetX, setInsightSwipeOffsetX] = useState(0);
   const [isInsightSwipeDragging, setIsInsightSwipeDragging] = useState(false);
-  const [composerInput,  setComposerInput]  = useState('');
   const [isDeepDiveImageAnalyzing, setIsDeepDiveImageAnalyzing] = useState(false);
   const [deepDiveUploadId, setDeepDiveUploadId] = useState<string | null>(null);
   const [hasDeepDiveAttachment, setHasDeepDiveAttachment] = useState(false);
@@ -1570,7 +1569,6 @@ export function StudySpacePage({
     setSelectedNode(rootNode);
     setIsInsightPanelOpen(false);
     setShowInput(false);
-    setComposerInput('');
     if (normalized.id) localStorage.setItem('zupiq_lastSessionId', normalized.id);
     debugStudy('hydrate:breakdown', {
       source: 'session-or-initial',
@@ -1621,7 +1619,6 @@ export function StudySpacePage({
     setIsInsightPanelOpen(false);
     setActiveTab(snapshot.activeTab || 'map');
     setShowInput(false);
-    setComposerInput('');
     if (bd.id) localStorage.setItem('zupiq_lastSessionId', bd.id);
     debugStudy('hydrate:workspaceSnapshot', {
       sessionId: snapshot.sessionId ?? bd.id ?? null,
@@ -2135,7 +2132,7 @@ export function StudySpacePage({
     }
   }, [clearBranchLongPressTimer]);
 
-  useEffect(() => { setComposerInput(''); setComposerError(null); }, [selectedNode?.id]);
+  useEffect(() => { setComposerError(null); }, [selectedNode?.id]);
 
   const handleSubmit = async () => {
     if (isImageAnalyzing) return;
@@ -2226,7 +2223,6 @@ export function StudySpacePage({
       lastOcrInsertRef.current = null;
       lastOcrUploadIdRef.current = null;
       setOcrDetectedSignTable(false);
-      setComposerInput('');
       debugStudy('submit:success', {
         newSessionId,
         nodes: bd.nodes.length,
@@ -3004,9 +3000,9 @@ export function StudySpacePage({
     }
   };
 
-  const handleAskDeepDive = async (contextBlock?: string) => {
+  const handleAskDeepDive = async (rawQuestion: string, contextBlock?: string) => {
     if (!selectedNode || !breakdown) return;
-    const baseQuestion = composerInput.trim()
+    const baseQuestion = rawQuestion.trim()
       || (deepDiveUploadId ? 'Please analyze this image in the context of this node.' : '');
     const question = contextBlock ? `${baseQuestion}\n\n${contextBlock}` : baseQuestion;
     if (!question || composerLoading) return;
@@ -3022,7 +3018,6 @@ export function StudySpacePage({
     const nextConversations = { ...nodeConversations, [selectedNode.id]: nextMessages };
     setNodeConversations(nextConversations);
     persistNodeConversations(nextConversations);
-    setComposerInput('');
     setComposerLoading(true);
 
     try {
@@ -3138,7 +3133,6 @@ IMPORTANT:
       persistNodeConversations(completedConversations);
     } catch (err: any) {
       console.error('Failed to generate deep dive response:', err);
-      setComposerInput(question);
       setComposerError(resolveQuotaAwareErrorMessage(err, 'Failed to generate deep dive response'));
     } finally {
       setComposerLoading(false);
@@ -3803,12 +3797,10 @@ IMPORTANT:
               insightLoading={insightLoading}
               composerLoading={composerLoading}
               composerError={composerError}
-              composerInput={composerInput}
               sessionId={sessionId}
               isInsightSwipeDragging={isInsightSwipeDragging}
               imageLoading={isDeepDiveImageAnalyzing}
               hasAttachment={hasDeepDiveAttachment}
-              onComposerInputChange={setComposerInput}
               onAskDeepDive={handleAskDeepDive}
               onExplainToFiveYearOld={handleExplainToFiveYearOld}
               onClose={closeInsightPanel}

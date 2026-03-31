@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, type ChangeEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { useEffect, useRef, useState, useCallback, type ChangeEvent, type DragEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { toPng } from 'html-to-image';
 import { listKnowledgeRecords, type KnowledgeRecord } from '../../lib/knowledge';
 import { AnimatePresence, motion } from 'motion/react';
@@ -51,13 +51,11 @@ interface Props {
   insightLoading: boolean;
   composerLoading: boolean;
   composerError: string | null;
-  composerInput: string;
   sessionId?: string | null;
   isInsightSwipeDragging: boolean;
   imageLoading?: boolean;
   hasAttachment?: boolean;
-  onComposerInputChange: (value: string) => void;
-  onAskDeepDive: (contextBlock?: string) => void;
+  onAskDeepDive: (question: string, contextBlock?: string) => void;
   onExplainToFiveYearOld: () => void;
   onClose: () => void;
   onSyncVisualTable: () => void;
@@ -76,6 +74,434 @@ interface Props {
   onTouchEnd: () => void;
 }
 
+// ─── ComposerBox ──────────────────────────────────────────────────────────────
+
+interface ComposerBoxProps {
+  isBranchSelected: boolean;
+  composerLoading: boolean;
+  composerError: string | null;
+  imageLoading: boolean;
+  hasAttachment: boolean;
+  placeholder: string;
+  selectedNodeId: string | undefined;
+  breakdownSubject: string | undefined;
+  onSend: (question: string, contextBlock?: string) => void;
+  onAttachFile?: (file: File) => void | Promise<void>;
+  onClearAttachment?: () => void;
+  onImageCropRequest?: (src: string, name: string, onConfirm: (file: File) => Promise<void>) => void;
+}
+
+function ComposerBox({
+  isBranchSelected,
+  composerLoading,
+  composerError,
+  imageLoading,
+  hasAttachment,
+  placeholder,
+  selectedNodeId,
+  breakdownSubject,
+  onSend,
+  onAttachFile,
+  onClearAttachment,
+  onImageCropRequest,
+}: ComposerBoxProps) {
+  const [composerInput, setComposerInput] = useState('');
+  useEffect(() => { setComposerInput(''); }, [selectedNodeId]);
+
+  const uploadFileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const attachButtonRef = useRef<HTMLButtonElement>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
+  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  const contextButtonRef = useRef<HTMLButtonElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [contextRecords, setContextRecords] = useState<KnowledgeRecord[] | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [selectedContextIds, setSelectedContextIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!isAttachMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (attachMenuRef.current?.contains(target)) return;
+      if (attachButtonRef.current?.contains(target)) return;
+      setIsAttachMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [isAttachMenuOpen]);
+
+  useEffect(() => {
+    if (!imageLoading) setIsAttachMenuOpen(false);
+  }, [imageLoading]);
+
+  useEffect(() => {
+    if (!isContextMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (contextMenuRef.current?.contains(target)) return;
+      if (contextButtonRef.current?.contains(target)) return;
+      setIsContextMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [isContextMenuOpen]);
+
+  useEffect(() => {
+    if (!isContextMenuOpen) return;
+    if (contextRecords !== null) return;
+    setContextLoading(true);
+    listKnowledgeRecords({ subject: breakdownSubject, limit: 50 })
+      .then(({ records }) => setContextRecords(records))
+      .catch(() => setContextRecords([]))
+      .finally(() => setContextLoading(false));
+  }, [isContextMenuOpen, breakdownSubject, contextRecords]);
+
+  const toggleContextRecord = (id: string) => {
+    setSelectedContextIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const buildContextBlock = (): string | undefined => {
+    if (!contextRecords || selectedContextIds.size === 0) return undefined;
+    const selected = contextRecords.filter(r => selectedContextIds.has(r.id));
+    if (!selected.length) return undefined;
+    const lines = ['[Use the following saved knowledge as reference]:'];
+    for (const rec of selected) {
+      const c = rec.content;
+      switch (rec.content_type) {
+        case 'insight':
+          lines.push(`• ${rec.title}: ${String(c.simpleBreakdown ?? '').slice(0, 250)}`);
+          if (c.keyFormula) lines.push(`  Formula: ${String(c.keyFormula).slice(0, 120)}`);
+          break;
+        case 'visual_table':
+          lines.push(`• ${rec.title}: ${rec.summary ?? ''}`);
+          break;
+        case 'conversation_message':
+          lines.push(`• Q: ${String(c.question ?? '').slice(0, 120)}`);
+          lines.push(`  A: ${String(c.answer ?? '').slice(0, 200)}`);
+          break;
+        case 'node_breakdown':
+          lines.push(`• ${rec.title}: ${String(c.description ?? '').slice(0, 250)}`);
+          if (c.mathContent) lines.push(`  Math: ${String(c.mathContent).slice(0, 120)}`);
+          break;
+      }
+    }
+    return lines.join('\n');
+  };
+
+  const handleSend = () => {
+    onSend(composerInput, buildContextBlock());
+    setComposerInput('');
+    setSelectedContextIds(new Set());
+    setIsContextMenuOpen(false);
+  };
+
+  const handleComposerDragEnter = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.types.includes('Files')) setIsDragOver(true);
+  };
+
+  const handleComposerDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) setIsDragOver(false);
+  };
+
+  const handleComposerDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleComposerDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDragOver(false);
+    if (!onAttachFile || composerLoading || imageLoading || !isBranchSelected) return;
+    const file = e.dataTransfer.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    if (onImageCropRequest) {
+      const objectUrl = URL.createObjectURL(file);
+      onImageCropRequest(objectUrl, file.name, async (croppedFile) => {
+        URL.revokeObjectURL(objectUrl);
+        await onAttachFile(croppedFile);
+      });
+    } else {
+      onAttachFile(file);
+    }
+  };
+
+  const openAttachOptions = () => {
+    if (!onAttachFile || composerLoading || imageLoading) return;
+    setIsAttachMenuOpen(prev => !prev);
+  };
+
+  const pickFromLibrary = () => {
+    if (!onAttachFile || composerLoading || imageLoading) return;
+    setIsAttachMenuOpen(false);
+    uploadFileInputRef.current?.click();
+  };
+
+  const pickFromCamera = () => {
+    if (!onAttachFile || composerLoading || imageLoading) return;
+    setIsAttachMenuOpen(false);
+    cameraInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onAttachFile) return;
+    e.target.value = '';
+    if (file.type.startsWith('image/') && onImageCropRequest) {
+      const objectUrl = URL.createObjectURL(file);
+      onImageCropRequest(objectUrl, file.name, async (croppedFile) => {
+        URL.revokeObjectURL(objectUrl);
+        await onAttachFile(croppedFile);
+      });
+    } else {
+      onAttachFile(file);
+    }
+  };
+
+  return (
+    <>
+      <input ref={uploadFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+
+      <div className="absolute inset-x-4 bottom-4 z-30">
+        <div
+          className={`relative bg-surface-container-highest/95 rounded-[24px] p-4 border shadow-2xl backdrop-blur-xl transition-colors ${
+            isDragOver ? 'border-primary/60 bg-primary/5' : 'border-outline-variant/20'
+          }`}
+          onDragEnter={handleComposerDragEnter}
+          onDragLeave={handleComposerDragLeave}
+          onDragOver={handleComposerDragOver}
+          onDrop={handleComposerDrop}
+        >
+          {isDragOver && (
+            <div className="absolute inset-0 z-10 rounded-[24px] flex flex-col items-center justify-center gap-2 pointer-events-none bg-surface-container-highest/60 backdrop-blur-sm">
+              <Upload className="w-6 h-6 text-primary" />
+              <span className="text-xs font-medium text-primary">Drop image to attach</span>
+            </div>
+          )}
+          <AnimatePresence>
+            {hasAttachment && (
+              <motion.div
+                initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                className="flex items-center gap-2 mb-2 px-2 py-1.5 bg-primary/10 rounded-xl border border-primary/20 w-fit"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Upload className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-[10px] font-bold text-primary uppercase tracking-wider">File attached</span>
+                </div>
+                <button onClick={onClearAttachment} className="p-0.5 hover:bg-primary/20 rounded-full transition-colors" aria-label="Clear attachment">
+                  <X className="w-3 h-3 text-primary" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <textarea
+            value={composerInput}
+            onChange={e => setComposerInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey && (composerInput.trim() || hasAttachment)) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            rows={1}
+            disabled={!isBranchSelected || composerLoading || imageLoading}
+            placeholder={imageLoading ? 'Attaching file…' : placeholder}
+            className="w-full bg-transparent text-on-surface text-sm placeholder:text-on-surface/40 outline-none resize-none px-1 mb-2 min-h-[40px]"
+          />
+
+          <div className="flex items-center justify-between mt-1">
+            <div className="flex items-center gap-4 text-on-surface-variant/60">
+              {/* Attach button */}
+              <div className="relative">
+                <button
+                  ref={attachButtonRef}
+                  type="button"
+                  onClick={openAttachOptions}
+                  disabled={!onAttachFile || !isBranchSelected || composerLoading || imageLoading}
+                  className="hover:text-primary transition-colors disabled:opacity-30"
+                  aria-label="Attach image"
+                  aria-expanded={isAttachMenuOpen}
+                >
+                  {imageLoading
+                    ? <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    : <Paperclip className="w-5 h-5" />
+                  }
+                </button>
+                <AnimatePresence>
+                  {isAttachMenuOpen && (
+                    <motion.div
+                      ref={attachMenuRef}
+                      role="menu"
+                      initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                      transition={{ duration: 0.16, ease: 'easeOut' }}
+                      className="absolute bottom-10 left-0 z-40 min-w-[160px] rounded-2xl border border-primary/25 bg-surface-container-highest/95 backdrop-blur-xl p-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)]"
+                    >
+                      <button type="button" role="menuitem" onClick={pickFromCamera} className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-on-surface hover:bg-white/5 transition-colors">
+                        <Camera className="h-4 w-4 text-primary" />
+                        <span>Take Photo</span>
+                      </button>
+                      <button type="button" role="menuitem" onClick={pickFromLibrary} className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-on-surface hover:bg-white/5 transition-colors">
+                        <Upload className="h-4 w-4 text-secondary" />
+                        <span>Upload Image</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Knowledge context picker */}
+              <div className="relative">
+                <button
+                  ref={contextButtonRef}
+                  type="button"
+                  onClick={() => setIsContextMenuOpen(prev => !prev)}
+                  disabled={!isBranchSelected || composerLoading}
+                  className={`flex items-center gap-1 transition-colors disabled:opacity-30 ${
+                    selectedContextIds.size > 0 ? 'text-secondary' : 'hover:text-primary text-on-surface-variant/60'
+                  }`}
+                  title="Use saved knowledge as context"
+                  aria-expanded={isContextMenuOpen}
+                >
+                  <Archive className="w-5 h-5" />
+                  <ChevronLeft className={`w-3 h-3 transition-transform ${isContextMenuOpen ? 'rotate-90' : 'rotate-[-90deg]'}`} />
+                  {selectedContextIds.size > 0 && (
+                    <span className="absolute -top-1.5 -right-1 text-[9px] font-bold bg-secondary text-on-secondary rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                      {selectedContextIds.size}
+                    </span>
+                  )}
+                </button>
+                <AnimatePresence>
+                  {isContextMenuOpen && (
+                    <motion.div
+                      ref={contextMenuRef}
+                      initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.97 }}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
+                      className="absolute bottom-10 left-0 z-40 w-72 rounded-2xl border border-secondary/25 bg-surface-container-highest/97 backdrop-blur-xl shadow-[0_12px_36px_rgba(0,0,0,0.32)] overflow-hidden"
+                    >
+                      <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-outline-variant/15">
+                        <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">Saved Knowledge</span>
+                        {selectedContextIds.size > 0 && (
+                          <button type="button" onClick={() => setSelectedContextIds(new Set())} className="text-[10px] text-on-surface-variant/60 hover:text-on-surface transition-colors">
+                            Clear {selectedContextIds.size} selected
+                          </button>
+                        )}
+                      </div>
+                      <div className="max-h-56 overflow-y-auto">
+                        {contextLoading ? (
+                          <div className="flex items-center justify-center py-8 gap-2 text-on-surface-variant text-xs">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Loading…</span>
+                          </div>
+                        ) : !contextRecords || contextRecords.length === 0 ? (
+                          <p className="text-xs text-on-surface-variant/60 text-center py-8 px-4">
+                            No saved knowledge yet. Save insights or tables to use them as context.
+                          </p>
+                        ) : (
+                          contextRecords.map(rec => {
+                            const isSelected = selectedContextIds.has(rec.id);
+                            const Icon = rec.content_type === 'visual_table' ? Table
+                              : rec.content_type === 'conversation_message' ? MessageSquare
+                              : rec.content_type === 'node_breakdown' ? FileText
+                              : Bookmark;
+                            return (
+                              <button
+                                key={rec.id}
+                                type="button"
+                                onClick={() => toggleContextRecord(rec.id)}
+                                className={`w-full flex items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/5 ${isSelected ? 'bg-secondary/10' : ''}`}
+                              >
+                                <div className={`mt-0.5 shrink-0 w-4 h-4 rounded border transition-colors flex items-center justify-center ${isSelected ? 'bg-secondary border-secondary' : 'border-outline-variant/40'}`}>
+                                  {isSelected && <Check className="w-2.5 h-2.5 text-on-secondary" />}
+                                </div>
+                                <Icon className={`mt-0.5 w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-secondary' : 'text-on-surface-variant/50'}`} />
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-xs font-medium truncate ${isSelected ? 'text-on-surface' : 'text-on-surface/80'}`}>{rec.title}</p>
+                                  {rec.summary && <p className="text-[10px] text-on-surface-variant/60 mt-0.5 line-clamp-2">{rec.summary}</p>}
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                      {(contextRecords?.length ?? 0) > 0 && (
+                        <div className="px-4 py-2 border-t border-outline-variant/15">
+                          <p className="text-[10px] text-on-surface-variant/50">
+                            Selected records are sent as reference context with your next message.
+                          </p>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
+                <Zap className="w-5 h-5" />
+                <ChevronLeft className="w-3 h-3 rotate-[-90deg]" />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const suffix = ' Please generate a table for this.';
+                  if (!composerInput.includes(suffix)) setComposerInput(composerInput + suffix);
+                }}
+                className="hover:text-primary transition-colors"
+                title="Generate Table"
+              >
+                <Table className="w-5 h-5" />
+              </button>
+              <div className="w-[1px] h-4 bg-outline-variant/30 mx-1" />
+              <button type="button" className="text-primary">
+                <Sparkles className="w-5 h-5" />
+              </button>
+            </div>
+
+            <button
+              onClick={handleSend}
+              disabled={!isBranchSelected || composerLoading || imageLoading || (!composerInput.trim() && !hasAttachment)}
+              className="w-10 h-10 rounded-full bg-on-surface-variant/20 text-on-surface flex items-center justify-center hover:bg-on-surface-variant/30 transition-all disabled:opacity-30"
+            >
+              {composerLoading
+                ? <Loader2 className="w-5 h-5 animate-spin" />
+                : <ArrowRight className="w-5 h-5 rotate-[-90deg]" />
+              }
+            </button>
+          </div>
+        </div>
+
+        {composerError && (
+          <p className="mt-2 text-[10px] text-error px-2">{composerError}</p>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function NodeInsightPanel({
@@ -89,12 +515,10 @@ export function NodeInsightPanel({
   insightLoading,
   composerLoading,
   composerError,
-  composerInput,
   sessionId,
   isInsightSwipeDragging,
   imageLoading = false,
   hasAttachment = false,
-  onComposerInputChange,
   onAskDeepDive,
   onExplainToFiveYearOld,
   onClose,
@@ -120,12 +544,6 @@ export function NodeInsightPanel({
   const composerPlaceholder = selectedNode
     ? `Ask Zupiq about ${selectedNode.label}...`
     : 'Select a node to start deep dive...';
-
-  const uploadFileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const attachButtonRef = useRef<HTMLButtonElement>(null);
-  const attachMenuRef = useRef<HTMLDivElement>(null);
-  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
 
   // ── Snapshot copy ────────────────────────────────────────────────────────────
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
@@ -206,14 +624,6 @@ export function NodeInsightPanel({
     }
   };
 
-  // ── Context-record popover ────────────────────────────────────────────────────
-  const contextButtonRef = useRef<HTMLButtonElement>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
-  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
-  const [contextRecords, setContextRecords] = useState<KnowledgeRecord[] | null>(null);
-  const [contextLoading, setContextLoading] = useState(false);
-  const [selectedContextIds, setSelectedContextIds] = useState<Set<string>>(new Set());
-
   // ── Saved-keys: localStorage cache + backend source of truth ─────────────────
   const STORAGE_KEY = 'zupiq_knowledge_saved_keys';
 
@@ -291,140 +701,8 @@ export function NodeInsightPanel({
     try { await fn(); markSaved(key); } catch { setSavingKeys(prev => { const s = new Set(prev); s.delete(key); return s; }); }
   }
 
-  // Close attach menu on outside click or when upload completes
-  useEffect(() => {
-    if (!isAttachMenuOpen) return;
-    const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as Node;
-      if (attachMenuRef.current?.contains(target)) return;
-      if (attachButtonRef.current?.contains(target)) return;
-      setIsAttachMenuOpen(false);
-    };
-    window.addEventListener('pointerdown', onPointerDown);
-    return () => window.removeEventListener('pointerdown', onPointerDown);
-  }, [isAttachMenuOpen]);
-
-  useEffect(() => {
-    if (!imageLoading) setIsAttachMenuOpen(false);
-  }, [imageLoading]);
-
-  // Close context menu on outside click
-  useEffect(() => {
-    if (!isContextMenuOpen) return;
-    const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as Node;
-      if (contextMenuRef.current?.contains(target)) return;
-      if (contextButtonRef.current?.contains(target)) return;
-      setIsContextMenuOpen(false);
-    };
-    window.addEventListener('pointerdown', onPointerDown);
-    return () => window.removeEventListener('pointerdown', onPointerDown);
-  }, [isContextMenuOpen]);
-
-  // Fetch records when popover opens
-  useEffect(() => {
-    if (!isContextMenuOpen) return;
-    if (contextRecords !== null) return; // already loaded
-    setContextLoading(true);
-    listKnowledgeRecords({ subject: breakdown?.subject, limit: 50 })
-      .then(({ records }) => setContextRecords(records))
-      .catch(() => setContextRecords([]))
-      .finally(() => setContextLoading(false));
-  }, [isContextMenuOpen, breakdown?.subject, contextRecords]);
-
-  const toggleContextRecord = (id: string) => {
-    setSelectedContextIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const buildContextBlock = (): string | undefined => {
-    if (!contextRecords || selectedContextIds.size === 0) return undefined;
-    const selected = contextRecords.filter(r => selectedContextIds.has(r.id));
-    if (!selected.length) return undefined;
-    const lines = ['[Use the following saved knowledge as reference]:'];
-    for (const rec of selected) {
-      const c = rec.content;
-      switch (rec.content_type) {
-        case 'insight':
-          lines.push(`• ${rec.title}: ${String(c.simpleBreakdown ?? '').slice(0, 250)}`);
-          if (c.keyFormula) lines.push(`  Formula: ${String(c.keyFormula).slice(0, 120)}`);
-          break;
-        case 'visual_table':
-          lines.push(`• ${rec.title}: ${rec.summary ?? ''}`);
-          break;
-        case 'conversation_message':
-          lines.push(`• Q: ${String(c.question ?? '').slice(0, 120)}`);
-          lines.push(`  A: ${String(c.answer ?? '').slice(0, 200)}`);
-          break;
-        case 'node_breakdown':
-          lines.push(`• ${rec.title}: ${String(c.description ?? '').slice(0, 250)}`);
-          if (c.mathContent) lines.push(`  Math: ${String(c.mathContent).slice(0, 120)}`);
-          break;
-      }
-    }
-    return lines.join('\n');
-  };
-
-  const handleSendWithContext = () => {
-    onAskDeepDive(buildContextBlock());
-    setSelectedContextIds(new Set());
-    setIsContextMenuOpen(false);
-  };
-
-  const openAttachOptions = () => {
-    if (!onAttachFile || composerLoading || imageLoading) return;
-    setIsAttachMenuOpen((prev) => !prev);
-  };
-
-  const pickFromLibrary = () => {
-    if (!onAttachFile || composerLoading || imageLoading) return;
-    setIsAttachMenuOpen(false);
-    uploadFileInputRef.current?.click();
-  };
-
-  const pickFromCamera = () => {
-    if (!onAttachFile || composerLoading || imageLoading) return;
-    setIsAttachMenuOpen(false);
-    cameraInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !onAttachFile) return;
-    e.target.value = '';
-    if (file.type.startsWith('image/') && onImageCropRequest) {
-      const objectUrl = URL.createObjectURL(file);
-      onImageCropRequest(objectUrl, file.name, async (croppedFile) => {
-        URL.revokeObjectURL(objectUrl);
-        await onAttachFile(croppedFile);
-      });
-    } else {
-      onAttachFile(file);
-    }
-  };
-
   return (
     <>
-      {/* Hidden file inputs */}
-      <input
-        ref={uploadFileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-
       {/* Scrollable content */}
       <div
         className="h-full overflow-y-auto p-8 pb-[200px]"
@@ -811,252 +1089,21 @@ export function NodeInsightPanel({
         )}
       </div>
 
-      {/* Floating composer */}
-      <div className="absolute inset-x-4 bottom-4 z-30">
-        <div className="bg-surface-container-highest/95 rounded-[24px] p-4 border border-outline-variant/20 shadow-2xl backdrop-blur-xl">
-          <AnimatePresence>
-            {hasAttachment && (
-              <motion.div
-                initial={{ opacity: 0, y: 4, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                className="flex items-center gap-2 mb-2 px-2 py-1.5 bg-primary/10 rounded-xl border border-primary/20 w-fit"
-              >
-                <div className="flex items-center gap-1.5">
-                  <Upload className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-[10px] font-bold text-primary uppercase tracking-wider">File attached</span>
-                </div>
-                <button
-                  onClick={onClearAttachment}
-                  className="p-0.5 hover:bg-primary/20 rounded-full transition-colors"
-                  aria-label="Clear attachment"
-                >
-                  <X className="w-3 h-3 text-primary" />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <textarea
-            value={composerInput}
-            onChange={e => onComposerInputChange(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey && (composerInput.trim() || hasAttachment)) {
-                e.preventDefault();
-                handleSendWithContext();
-              }
-            }}
-            rows={1}
-            disabled={!isBranchSelected || composerLoading || imageLoading}
-            placeholder={imageLoading ? 'Attaching file…' : composerPlaceholder}
-            className="w-full bg-transparent text-on-surface text-sm placeholder:text-on-surface/40 outline-none resize-none px-1 mb-2 min-h-[40px]"
-          />
-
-          <div className="flex items-center justify-between mt-1">
-            <div className="flex items-center gap-4 text-on-surface-variant/60">
-              {/* Attach button */}
-              <div className="relative">
-                <button
-                  ref={attachButtonRef}
-                  type="button"
-                  onClick={openAttachOptions}
-                  disabled={!onAttachFile || !isBranchSelected || composerLoading || imageLoading}
-                  className="hover:text-primary transition-colors disabled:opacity-30"
-                  aria-label="Attach image"
-                  aria-expanded={isAttachMenuOpen}
-                >
-                  {imageLoading
-                    ? <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                    : <Paperclip className="w-5 h-5" />
-                  }
-                </button>
-
-                <AnimatePresence>
-                  {isAttachMenuOpen && (
-                    <motion.div
-                      ref={attachMenuRef}
-                      role="menu"
-                      initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                      transition={{ duration: 0.16, ease: 'easeOut' }}
-                      className="absolute bottom-10 left-0 z-40 min-w-[160px] rounded-2xl border border-primary/25 bg-surface-container-highest/95 backdrop-blur-xl p-1.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)]"
-                    >
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={pickFromCamera}
-                        className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-on-surface hover:bg-white/5 transition-colors"
-                      >
-                        <Camera className="h-4 w-4 text-primary" />
-                        <span>Take Photo</span>
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={pickFromLibrary}
-                        className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-on-surface hover:bg-white/5 transition-colors"
-                      >
-                        <Upload className="h-4 w-4 text-secondary" />
-                        <span>Upload Image</span>
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Knowledge context picker */}
-              <div className="relative">
-                <button
-                  ref={contextButtonRef}
-                  type="button"
-                  onClick={() => setIsContextMenuOpen(prev => !prev)}
-                  disabled={!isBranchSelected || composerLoading}
-                  className={`flex items-center gap-1 transition-colors disabled:opacity-30 ${
-                    selectedContextIds.size > 0
-                      ? 'text-secondary'
-                      : 'hover:text-primary text-on-surface-variant/60'
-                  }`}
-                  title="Use saved knowledge as context"
-                  aria-expanded={isContextMenuOpen}
-                >
-                  <Archive className="w-5 h-5" />
-                  <ChevronLeft className={`w-3 h-3 transition-transform ${isContextMenuOpen ? 'rotate-90' : 'rotate-[-90deg]'}`} />
-                  {selectedContextIds.size > 0 && (
-                    <span className="absolute -top-1.5 -right-1 text-[9px] font-bold bg-secondary text-on-secondary rounded-full w-3.5 h-3.5 flex items-center justify-center">
-                      {selectedContextIds.size}
-                    </span>
-                  )}
-                </button>
-
-                <AnimatePresence>
-                  {isContextMenuOpen && (
-                    <motion.div
-                      ref={contextMenuRef}
-                      initial={{ opacity: 0, y: 8, scale: 0.97 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.97 }}
-                      transition={{ duration: 0.15, ease: 'easeOut' }}
-                      className="absolute bottom-10 left-0 z-40 w-72 rounded-2xl border border-secondary/25 bg-surface-container-highest/97 backdrop-blur-xl shadow-[0_12px_36px_rgba(0,0,0,0.32)] overflow-hidden"
-                    >
-                      {/* Header */}
-                      <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-outline-variant/15">
-                        <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">
-                          Saved Knowledge
-                        </span>
-                        {selectedContextIds.size > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedContextIds(new Set())}
-                            className="text-[10px] text-on-surface-variant/60 hover:text-on-surface transition-colors"
-                          >
-                            Clear {selectedContextIds.size} selected
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Record list */}
-                      <div className="max-h-56 overflow-y-auto">
-                        {contextLoading ? (
-                          <div className="flex items-center justify-center py-8 gap-2 text-on-surface-variant text-xs">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Loading…</span>
-                          </div>
-                        ) : !contextRecords || contextRecords.length === 0 ? (
-                          <p className="text-xs text-on-surface-variant/60 text-center py-8 px-4">
-                            No saved knowledge yet. Save insights or tables to use them as context.
-                          </p>
-                        ) : (
-                          contextRecords.map(rec => {
-                            const isSelected = selectedContextIds.has(rec.id);
-                            const Icon = rec.content_type === 'visual_table' ? Table
-                              : rec.content_type === 'conversation_message' ? MessageSquare
-                              : rec.content_type === 'node_breakdown' ? FileText
-                              : Bookmark;
-                            return (
-                              <button
-                                key={rec.id}
-                                type="button"
-                                onClick={() => toggleContextRecord(rec.id)}
-                                className={`w-full flex items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/5 ${
-                                  isSelected ? 'bg-secondary/10' : ''
-                                }`}
-                              >
-                                <div className={`mt-0.5 shrink-0 w-4 h-4 rounded border transition-colors flex items-center justify-center ${
-                                  isSelected
-                                    ? 'bg-secondary border-secondary'
-                                    : 'border-outline-variant/40'
-                                }`}>
-                                  {isSelected && <Check className="w-2.5 h-2.5 text-on-secondary" />}
-                                </div>
-                                <Icon className={`mt-0.5 w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-secondary' : 'text-on-surface-variant/50'}`} />
-                                <div className="flex-1 min-w-0">
-                                  <p className={`text-xs font-medium truncate ${isSelected ? 'text-on-surface' : 'text-on-surface/80'}`}>
-                                    {rec.title}
-                                  </p>
-                                  {rec.summary && (
-                                    <p className="text-[10px] text-on-surface-variant/60 mt-0.5 line-clamp-2">{rec.summary}</p>
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-
-                      {/* Footer hint */}
-                      {(contextRecords?.length ?? 0) > 0 && (
-                        <div className="px-4 py-2 border-t border-outline-variant/15">
-                          <p className="text-[10px] text-on-surface-variant/50">
-                            Selected records are sent as reference context with your next message.
-                          </p>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
-                <Zap className="w-5 h-5" />
-                <ChevronLeft className="w-3 h-3 rotate-[-90deg]" />
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const suffix = ' Please generate a table for this.';
-                  if (!composerInput.includes(suffix)) {
-                    onComposerInputChange(composerInput + suffix);
-                  }
-                }}
-                className="hover:text-primary transition-colors"
-                title="Generate Table"
-              >
-                <Table className="w-5 h-5" />
-              </button>
-              <div className="w-[1px] h-4 bg-outline-variant/30 mx-1" />
-              <button type="button" className="text-primary">
-                <Sparkles className="w-5 h-5" />
-              </button>
-            </div>
-
-            <button
-              onClick={handleSendWithContext}
-              disabled={!isBranchSelected || composerLoading || imageLoading || (!composerInput.trim() && !hasAttachment)}
-              className="w-10 h-10 rounded-full bg-on-surface-variant/20 text-on-surface flex items-center justify-center hover:bg-on-surface-variant/30 transition-all disabled:opacity-30"
-            >
-              {composerLoading
-                ? <Loader2 className="w-5 h-5 animate-spin" />
-                : <ArrowRight className="w-5 h-5 rotate-[-90deg]" />
-              }
-            </button>
-          </div>
-        </div>
-
-        {composerError && (
-          <p className="mt-2 text-[10px] text-error px-2">{composerError}</p>
-        )}
-      </div>
+      {/* Floating composer — isolated in its own component so typing only re-renders ComposerBox */}
+      <ComposerBox
+        isBranchSelected={isBranchSelected}
+        composerLoading={composerLoading}
+        composerError={composerError}
+        imageLoading={imageLoading}
+        hasAttachment={hasAttachment}
+        placeholder={composerPlaceholder}
+        selectedNodeId={selectedNode?.id}
+        breakdownSubject={breakdown?.subject}
+        onSend={onAskDeepDive}
+        onAttachFile={onAttachFile}
+        onClearAttachment={onClearAttachment}
+        onImageCropRequest={onImageCropRequest}
+      />
 
     </>
   );
