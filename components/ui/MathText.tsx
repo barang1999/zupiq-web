@@ -177,7 +177,7 @@ function renderKaTeX(src: string, displayMode: boolean): string {
     // unless it's handled very carefully. To prevent console errors and broken renders,
     // we fallback to plain text rendering for any segment containing these characters.
     if (hasNonMath) {
-       return `<span class="font-sans">${trimmed.replace(/\\[a-zA-Z]+/g, '').replace(/[{}]/g, '')}</span>`;
+       return `<span class="font-sans">${latexToPlainText(trimmed)}</span>`;
     }
 
     return katex.renderToString(trimmed, {
@@ -194,7 +194,7 @@ function renderKaTeX(src: string, displayMode: boolean): string {
         error: err instanceof Error ? err.message : String(err),
       });
     }
-    return hasNonMath ? `<span class="font-sans">${trimmed}</span>` : latexToPlainText(trimmed);
+    return latexToPlainText(trimmed);
   }
 }
 
@@ -305,7 +305,7 @@ function autoWrapInlineMathForRender(text: string): string {
     // e.g. F_x = F \cos\theta, a = b \times c, F_{acting} = F_g F_{air} = 0, x_1 = 0, \{ F_g \}
     // Matches optional assignment, followed by optional terms, and at least one LaTeX command or subscript/superscript.
     next = next.replace(
-      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|\\\\|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}\\\u200b]+)*/g,
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|\\\\|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b,;]*\s*[A-Za-z0-9α-ωΑ-Ω{}\\\u200b]+)*/g,
       (match) => {
         const trimmed = match.trim();
         // If it looks like a legitimate math fragment (has a command or sub/sup and some structure)
@@ -336,8 +336,8 @@ function autoWrapInlineMathForRender(text: string): string {
 
 type Segment = { type: 'text' | 'inline' | 'display'; value: string };
 
-function stripOrphanDollars(s: string): string {
-  return s.replace(/\$+/g, '');
+function stripOrphanMarkers(s: string): string {
+  return s.replace(/\$+/g, '').replace(/[ \t]{2,}/g, ' ');
 }
 
 /**
@@ -369,16 +369,16 @@ function pushMathSegment(out: Segment[], value: string, type: 'inline' | 'displa
 
   while ((m = NON_MATH_RUN.exec(unwrapped)) !== null) {
     if (m.index > last) {
-      const mathPart = unwrapped.slice(last, m.index).trim();
-      if (mathPart) out.push({ type: 'inline', value: mathPart });
+      const mathPart = unwrapped.slice(last, m.index);
+      if (mathPart.trim()) out.push({ type: 'inline', value: mathPart });
     }
     out.push({ type: 'text', value: m[0] });
     last = m.index + m[0].length;
   }
 
   if (last < unwrapped.length) {
-    const mathPart = unwrapped.slice(last).trim();
-    if (mathPart) out.push({ type: 'inline', value: mathPart });
+    const mathPart = unwrapped.slice(last);
+    if (mathPart.trim()) out.push({ type: 'inline', value: mathPart });
   }
 }
 
@@ -393,7 +393,7 @@ function splitMathSegments(text: string): Segment[] {
 
   while ((match = regex.exec(text)) !== null) {
     if (match.index > last) {
-      segments.push({ type: 'text', value: stripOrphanDollars(text.slice(last, match.index)) });
+      segments.push({ type: 'text', value: stripOrphanMarkers(text.slice(last, match.index)) });
     }
     if (match[1] !== undefined) {
       pushMathSegment(segments, match[1], 'display');
@@ -415,7 +415,7 @@ function splitMathSegments(text: string): Segment[] {
     segments.push(
       looksLikePureLaTeX(remaining)
         ? { type: 'inline', value: remaining }
-        : { type: 'text', value: stripOrphanDollars(remaining) }
+        : { type: 'text', value: stripOrphanMarkers(remaining) }
     );
   }
 

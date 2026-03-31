@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, useCallback, type ChangeEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { toPng } from 'html-to-image';
 import { listKnowledgeRecords, type KnowledgeRecord } from '../../lib/knowledge';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   X, Loader2, Sparkles, Bookmark, Zap,
   ArrowRight, Archive, ChevronLeft, RefreshCw,
   Paperclip, Camera, Upload, Table, Maximize2, Minimize2,
-  MessageSquare, FileText, Check,
+  MessageSquare, FileText, Check, Copy,
 } from 'lucide-react';
 import { MathText } from '../ui/MathText';
 import { RichText } from '../ui/RichText';
@@ -125,6 +126,85 @@ export function NodeInsightPanel({
   const attachButtonRef = useRef<HTMLButtonElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
+
+  // ── Snapshot copy ────────────────────────────────────────────────────────────
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [copyingIdx, setCopyingIdx] = useState<number | null>(null);
+  const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  const snapshotMessage = async (idx: number) => {
+    const node = messageRefs.current.get(idx);
+    if (!node || copyingIdx !== null) return;
+    setCopyingIdx(idx);
+
+    // Read exact theme colors from CSS custom properties so the snapshot
+    // matches the app even if the theme changes.
+    const root = document.documentElement;
+    const css = getComputedStyle(root);
+    const bg        = css.getPropertyValue('--color-surface-container').trim()        || '#0f1930';
+    const textColor = css.getPropertyValue('--color-on-surface').trim()               || '#dee5ff';
+    const border    = css.getPropertyValue('--color-outline-variant').trim()          || '#40485d';
+
+    const prepare = (_doc: Document, cloned: HTMLElement) => {
+      // Remove all interactive chrome (buttons) so they don't appear in shot
+      cloned.querySelectorAll('button, [data-snapshot-hide]').forEach(el => el.remove());
+
+      // Apply explicit background + text so semi-transparent Tailwind classes
+      // resolve against a real dark surface rather than white (the clone default)
+      cloned.style.cssText += [
+        `background-color: ${bg}`,
+        `color: ${textColor}`,
+        'padding: 20px 24px',
+        'border-radius: 16px',
+        `border: 1px solid ${border}`,
+        'width: fit-content',
+        'min-width: 320px',
+        'max-width: 640px',
+        'box-sizing: border-box',
+        'font-family: inherit',
+      ].join('; ');
+
+      // Fix child elements whose bg is transparent so they inherit the dark surface
+      // rather than falling through to a white canvas background
+      cloned.querySelectorAll<HTMLElement>('*').forEach(el => {
+        const computed = getComputedStyle(el);
+        if (
+          computed.backgroundColor === 'rgba(0, 0, 0, 0)' ||
+          computed.backgroundColor === 'transparent'
+        ) {
+          el.style.backgroundColor = 'transparent'; // explicit inherit via parent
+        }
+      });
+    };
+
+    const options = {
+      pixelRatio: Math.max(3, window.devicePixelRatio * 2),
+      backgroundColor: bg,
+      onclone: prepare,
+    };
+
+    try {
+      const dataUrl = await toPng(node, options);
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(null), 2000);
+    } catch {
+      // Fallback for browsers that don't support clipboard image write — download instead
+      try {
+        const dataUrl = await toPng(node, options);
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `zupiq-message-${idx + 1}.png`;
+        a.click();
+        setCopiedIdx(idx);
+        setTimeout(() => setCopiedIdx(null), 2000);
+      } catch { /* silent — user sees no feedback change */ }
+    } finally {
+      setCopyingIdx(null);
+    }
+  };
 
   // ── Context-record popover ────────────────────────────────────────────────────
   const contextButtonRef = useRef<HTMLButtonElement>(null);
@@ -606,6 +686,7 @@ export function NodeInsightPanel({
                   return (
                     <div
                       key={`${selectedNode.id}_${idx}`}
+                      ref={el => { if (el) messageRefs.current.set(idx, el); else messageRefs.current.delete(idx); }}
                       className={`rounded-xl px-4 py-3 text-xs leading-relaxed space-y-3 ${
                         message.role === 'user'
                           ? 'bg-primary/10 border border-primary/20 text-on-surface'
@@ -613,29 +694,64 @@ export function NodeInsightPanel({
                       }`}
                     >
                       {message.role === 'user'
-                        ? <span>{message.content}</span>
+                        ? (
+                          <div className="flex items-start justify-between gap-2 group">
+                            <span className="flex-1">{message.content}</span>
+                            <button
+                              type="button"
+                              data-snapshot-hide
+                              onClick={() => snapshotMessage(idx)}
+                              disabled={copyingIdx === idx}
+                              className="shrink-0 p-1 rounded-lg text-on-surface-variant/30 hover:text-primary hover:bg-primary/10 transition-all opacity-0 group-hover:opacity-100 disabled:cursor-wait"
+                              title="Copy as image"
+                            >
+                              {copyingIdx === idx
+                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                : copiedIdx === idx
+                                ? <Check className="w-3 h-3 text-primary" />
+                                : <Copy className="w-3 h-3" />
+                              }
+                            </button>
+                          </div>
+                        )
                         : (
                           <>
                             <div className="flex items-start justify-between gap-2">
                               <RichText className="text-xs leading-relaxed flex-1">{message.content}</RichText>
-                              {onSaveConversationMessage && question && (
+                              <div className="shrink-0 flex items-center gap-0.5" data-snapshot-hide>
                                 <button
-                                  onClick={() => handleSave(saveKey, () => onSaveConversationMessage(question, message.content))}
-                                  className={`shrink-0 p-1 rounded-lg transition-all ${
-                                    savedKeys.has(saveKey)
-                                      ? 'text-amber-400 bg-amber-400/15'
-                                      : 'text-on-surface-variant/40 hover:text-primary hover:bg-primary/10'
-                                  }`}
-                                  title={savedKeys.has(saveKey) ? 'Saved!' : 'Save Q&A to Knowledge'}
+                                  type="button"
+                                  onClick={() => snapshotMessage(idx)}
+                                  disabled={copyingIdx === idx}
+                                  className="p-1 rounded-lg text-on-surface-variant/30 hover:text-primary hover:bg-primary/10 transition-all disabled:cursor-wait"
+                                  title="Copy as image"
                                 >
-                                  {savingKeys.has(saveKey)
+                                  {copyingIdx === idx
                                     ? <Loader2 className="w-3 h-3 animate-spin" />
-                                    : savedKeys.has(saveKey)
-                                    ? <Bookmark className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                    : <Bookmark className="w-3 h-3" />
+                                    : copiedIdx === idx
+                                    ? <Check className="w-3 h-3 text-primary" />
+                                    : <Copy className="w-3 h-3" />
                                   }
                                 </button>
-                              )}
+                                {onSaveConversationMessage && question && (
+                                  <button
+                                    onClick={() => handleSave(saveKey, () => onSaveConversationMessage(question, message.content))}
+                                    className={`p-1 rounded-lg transition-all ${
+                                      savedKeys.has(saveKey)
+                                        ? 'text-amber-400 bg-amber-400/15'
+                                        : 'text-on-surface-variant/40 hover:text-primary hover:bg-primary/10'
+                                    }`}
+                                    title={savedKeys.has(saveKey) ? 'Saved!' : 'Save Q&A to Knowledge'}
+                                  >
+                                    {savingKeys.has(saveKey)
+                                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                                      : savedKeys.has(saveKey)
+                                      ? <Bookmark className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                      : <Bookmark className="w-3 h-3" />
+                                    }
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             {message.visualTable && (
                               <div className="space-y-1.5">

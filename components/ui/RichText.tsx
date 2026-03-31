@@ -122,7 +122,6 @@ function clean(text: string): string {
     .replace(/\n[ \t]*\*[ \t]*\n/g, '\n• ') // normalize isolated * marker lines
     .replace(/\n[ \t]*\*[ \t]+/g, '\n• ')   // normalize markdown bullets with odd spacing
     .replace(/(\$[^$\n]+\$)\s*\*\s*(?=\$[^$\n]+\$)/g, '$1\n• ') // split malformed inline bullet between math chunks
-    .replace(/\$(\s*)\*(?!\*)/g, (_m, ws: string) => `$${ws}`) // `$math$*` -> `$math$`, but keep `**` bold markers
     .replace(/\*{3,}/g, ' ')           // `***` → space
     .replace(/[ \t]{2,}/g, ' ')        // collapse multiple spaces
     .replace(/,\s*,/g, '')            // completely remove redundant commas
@@ -238,11 +237,11 @@ function autoWrapInlineMathForRender(text: string): string {
     // e.g. F_x = F \cos\theta, a = b \times c, F_{acting} = F_g F_{air} = 0, x_1 = 0, \{ F_g \}
     // Matches optional assignment, followed by optional terms, and at least one LaTeX command or subscript/superscript.
     next = next.replace(
-      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*\s*[A-Za-z0-9α-ωΑ-Ω{}\\\u200b]+)*/g,
+      /(?:\b[A-Za-zα-ωΑ-Ω](?:_[a-zA-Z0-9α-ωΑ-Ω{}]+|\^[a-zA-Z0-9α-ωΑ-Ω{}]+)?\s*=\s*)?[A-Za-z0-9α-ωΑ-Ω\s.+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b]*(\\[a-zA-Z]+|\\[{}]|\\\\|[_^]\{[^{}]+\}|[_^][a-zA-Z0-9α-ωΑ-Ω])(?:\s*[=+\-*/^_{}()|[\]<>\\≤≥≈≠±×÷\u200b,;]*\s*[A-Za-z0-9α-ωΑ-Ω{}\\\u200b]+)*/g,
       (match) => {
         const trimmed = match.trim();
         // If it looks like a legitimate math fragment (has a command or sub/sup and some structure)
-        if (trimmed.length > 2 && (/\\[a-zA-Z{}]+/.test(trimmed) || /[_^]/.test(trimmed))) {
+        if (trimmed.length > 2 && (/\\[a-zA-Z{}]+|\\\\/.test(trimmed) || /[_^]/.test(trimmed))) {
           // Don't wrap if braces are unbalanced — means the regex captured a partial LaTeX
           // command like \text{ whose argument contains non-ASCII characters (e.g. Khmer)
           // that stop the match before the closing brace.
@@ -267,10 +266,60 @@ function autoWrapInlineMathForRender(text: string): string {
   return result;
 }
 
+/**
+ * Push a math segment. If the value contains non-math Unicode (e.g. Khmer mixed with LaTeX),
+ * split it into text + math sub-segments so renderKaTeX never receives Khmer alongside LaTeX.
+ *
+ * Strategy:
+ *  1. Unwrap \text{…} / \mathrm{…} wrappers whose argument contains non-math Unicode.
+ *  2. Split the resulting string on runs of non-math Unicode characters.
+ *  3. Non-math-Unicode runs → 'text' segments; everything else → 'math' segments.
+ */
+function pushMathSegment(out: InlineSegment[], value: string, display: boolean): void {
+  if (!containsNonMathUnicode(value)) {
+    out.push({ type: 'math', value, display });
+    return;
+  }
+
+  // Step 1: unwrap \text{…} / \mathrm{…} etc. whose content has non-math Unicode.
+  const unwrapped = value.replace(
+    /\\(?:text|mathrm|mbox|textrm|textit|textbf)\{([^{}]*)\}/g,
+    (_match, inner: string) => (containsNonMathUnicode(inner) ? ` ${inner} ` : _match),
+  );
+
+  // Step 2: split on runs of non-math Unicode characters.
+  const NON_MATH_RUN = /[\u0600-\u06FF\u0900-\u097F\u1780-\u17FF\u4E00-\u9FFF\uAC00-\uD7AF\u3040-\u30FF]+/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  NON_MATH_RUN.lastIndex = 0;
+
+  while ((m = NON_MATH_RUN.exec(unwrapped)) !== null) {
+    if (m.index > last) {
+      const mathPart = unwrapped.slice(last, m.index);
+      if (mathPart.trim()) out.push({ type: 'math', value: mathPart, display });
+    }
+    out.push({ type: 'text', value: m[0] });
+    last = m.index + m[0].length;
+  }
+
+  if (last < unwrapped.length) {
+    const mathPart = unwrapped.slice(last);
+    if (mathPart.trim()) out.push({ type: 'math', value: mathPart, display });
+  }
+}
+
 function parseInline(text: string): InlineSegment[] {
   const segments: InlineSegment[] = [];
-  // Order matters: $$, $, **, *, bare LaTeX
-  const regex = /\$\$([\s\S]+?)\$\$|\$([\s\S]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]|\*\*(.+?)\*\*|\*([^*\n]+?)\*|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|(\\[a-zA-Z]+|\\[{}]|\\,)(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
+  // Order matters: $$, $, \[, \(, **, *, bare LaTeX.
+  // Groups:
+  // 1: $$...$$ (display)
+  // 2: $...$ (inline)
+  // 3: \[...\] (display)
+  // 4: \(...\) (inline)
+  // 5: **bold**
+  // 6: *italic*
+  // 7: bare LaTeX commands (inline)
+  const regex = /\$\$([\s\S]+?)\$\$|\$([\s\S]+?)\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\*\*(.+?)\*\*|\*([^*\n]+?)\*|(\\frac\{[^{}]+\}\{[^{}]+\}|\\sqrt\{[^{}]+\}|(\\[a-zA-Z]+|\\[{}]|\\\\|\\,)(?:\{[^{}]*\})?(?:(?:\^\{[^{}]*\}|\^[^\s{}]+|_\{[^{}]*\}|_[^\s{}]+))*)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
@@ -279,21 +328,20 @@ function parseInline(text: string): InlineSegment[] {
       segments.push({ type: 'text', value: stripOrphanMarkers(text.slice(last, match.index)) });
     }
     if (match[1] !== undefined) {
-      segments.push({ type: 'math', value: match[1], display: true });
+      pushMathSegment(segments, match[1], true);
     } else if (match[2] !== undefined) {
-      segments.push({ type: 'math', value: match[2], display: false });
+      pushMathSegment(segments, match[2], false);
     } else if (match[3] !== undefined) {
-      segments.push({ type: 'math', value: match[3], display: false });
+      pushMathSegment(segments, match[3], true);
     } else if (match[4] !== undefined) {
-      segments.push({ type: 'math', value: match[4], display: true });
+      pushMathSegment(segments, match[4], false);
     } else if (match[5] !== undefined) {
       segments.push({ type: 'bold', value: match[5] });
     } else if (match[6] !== undefined) {
-      // Only treat as italic if it looks intentional (not a stray *)
       const v = match[6];
       if (v.trim().length > 0) segments.push({ type: 'italic', value: v });
     } else if (match[7] !== undefined) {
-      segments.push({ type: 'math', value: match[7], display: false });
+      pushMathSegment(segments, match[7], false);
     }
     last = match.index + match[0].length;
   }
@@ -331,7 +379,6 @@ function stripOrphanMarkers(s: string): string {
   return s
     .replace(/(?<!\*)\*(?!\*)/g, ' ')  // lone * → space (preserve word boundary)
     .replace(/#{1,3}(?!\s)/g, ' ')     // # not followed by space → space
-    .replace(/\$+/g, '')               // orphan $ signs (regex already consumed valid pairs)
     .replace(/[ \t]{2,}/g, ' ');       // collapse any double spaces created above
 }
 
@@ -483,7 +530,8 @@ function renderKaTeX(src: string, displayMode: boolean): string {
       throwOnError: false,
       displayMode,
       output: 'html',
-      trust: false,
+      trust: true,
+      strict: false,
     });
   } catch (err) {
     if (mathDebug) {
