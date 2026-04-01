@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import { createSciencePreview, detectChemistryContent } from '../../lib/aiContent/normalizeScienceContent';
 
 interface Props {
   content: string;
@@ -20,29 +21,15 @@ const REHYPE_PLUGINS = [
   }]
 ];
 
-/**
- * Strips display math blocks and simplifies content for preview mode.
- */
-function createMathPreview(content: string): string {
-  if (!content) return '';
-  return content
-    // Replace display math blocks with their content (or just remove them if too long)
-    .replace(/\$\$([\s\S]*?)\$\$/g, (_, inner) => {
-      const trimmed = inner.trim();
-      return trimmed.length > 50 ? '[Math Equation]' : `$${trimmed}$`;
-    })
-    // Truncate long content
-    .slice(0, 180) + (content.length > 180 ? '...' : '');
-}
-
 function MarkdownMathInner({ content, className, discreet = false, mode = 'full' }: Props) {
   if (import.meta.env.DEV) {
-    console.debug('[MarkdownMath render]', { contentLength: content?.length, mode });
+    const isChem = detectChemistryContent(content);
+    console.debug('[MarkdownMath render]', { contentLength: content?.length, mode, isChem });
   }
   if (!content?.trim()) return null;
 
   const displayContent = useMemo(() => {
-    if (mode === 'preview') return createMathPreview(content);
+    if (mode === 'preview') return createSciencePreview(content);
     return content;
   }, [mode, content]);
 

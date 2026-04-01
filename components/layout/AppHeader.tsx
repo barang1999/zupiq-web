@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useLiveTokenUsage } from '../../hooks/useLiveTokenUsage';
 import { getBillingSubscription } from '../../lib/billing';
+import { RichText } from '../ui/RichText';
 
 interface AppHeaderProps {
   user: any;

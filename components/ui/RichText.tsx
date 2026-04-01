@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { MarkdownMath } from './MarkdownMath';
-import { normalizeMathMarkdown } from '../../lib/aiContent/normalizeMathMarkdown';
+import { normalizeScienceContent } from '../../lib/aiContent/normalizeScienceContent';
 
 interface Props {
   children: string;
@@ -19,7 +19,7 @@ interface Props {
 function RichTextInner({ children, className, discreet = false, mode = 'full' }: Props) {
   const normalized = useMemo(() => {
     if (!children) return '';
-    return normalizeMathMarkdown(children);
+    return normalizeScienceContent(children);
   }, [children]);
 
   if (!normalized) return null;

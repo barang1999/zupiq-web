@@ -1,4 +1,5 @@
 import katex from 'katex';
+import { normalizeChemistryContent } from '../../lib/aiContent/normalizeScienceContent';
 
 interface MathTextProps {
   latex?: string;
@@ -31,7 +32,14 @@ export function MathText({ latex, children, displayMode = false, className }: Ma
   const content = latex || children;
   if (!content?.trim()) return null;
 
-  const src = stripOuterMathDelimiters(content);
+  let src = stripOuterMathDelimiters(content);
+  
+  // Normalize chemistry if needed (e.g. raw reaction text)
+  if (!src.includes('\\') && (src.includes('->') || src.includes('<=>'))) {
+    src = `\\ce{${src}}`;
+  } else if (!src.includes('\\ce{') && /\b(?:H2O|CO2|NaCl|H2SO4|NH3)\b/.test(src)) {
+    src = `\\ce{${src}}`;
+  }
 
   try {
     return (

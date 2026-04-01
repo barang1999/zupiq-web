@@ -14,7 +14,7 @@ import { ProblemComposer } from '../components/ai/ProblemComposer';
 import SweepText from '../components/ui/SweepText.jsx';
 import { api, ApiError } from '../lib/api';
 import { RichText } from '../components/ui/RichText';
-import { normalizeMathMarkdown } from '../lib/aiContent/normalizeMathMarkdown';
+import { normalizeScienceContent } from '../lib/aiContent/normalizeScienceContent';
 import { VisualTable, type VisualTableData } from '../components/ui/VisualTable';
 import { Modal } from '../components/ui/Modal';
 import { ActionPopover } from '../components/ui/ActionPopover';
@@ -169,6 +169,8 @@ const NodeCard = memo(({
     console.debug('[NodeCard render]', node.id, { isSelected, isDragging });
   }
   const mode = isSelected ? 'full' : 'preview';
+  // Show full math in-card unless the expression is very long (> 400 chars)
+  const mathMode = (!node.mathContent || node.mathContent.length > 400) ? mode : 'full';
 
   return (
     <motion.div
@@ -218,7 +220,7 @@ const NodeCard = memo(({
           </span>
           <div className="bg-background/60 rounded-xl px-4 py-3 mb-3">
             <div className="space-y-1.5">
-              <RichText className="text-base text-on-surface leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet mode={mode}>
+              <RichText className="text-base text-on-surface leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet mode={mathMode}>
                 {node.mathContent || node.label}
               </RichText>
             </div>
@@ -255,7 +257,7 @@ const NodeCard = memo(({
           {node.mathContent && (
             <div className="bg-background/50 rounded-lg px-3 py-2">
               <div className="space-y-1.5">
-                <RichText className="text-xs text-primary leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet mode={mode}>
+                <RichText className="text-xs text-primary leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet mode={mathMode}>
                   {node.mathContent}
                 </RichText>
               </div>
@@ -298,7 +300,7 @@ const NodeCard = memo(({
           </div>
           {node.mathContent && (
             <div className="space-y-1">
-              <RichText className="text-[11px] text-on-surface-variant leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet mode={mode}>
+              <RichText className="text-[11px] text-on-surface-variant leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet mode={mathMode}>
                 {node.mathContent}
               </RichText>
             </div>
@@ -682,6 +684,18 @@ function wrapInlineMathCandidates(text: string): string {
         }
         return match;
       }
+    );
+
+    // Chemistry: reaction arrows (e.g. H2 + O2 -> H2O)
+    next = next.replace(
+      /\b[A-Z][a-z]?\d*(?:\s*\+\s*[A-Z][a-z]?\d*)*\s*(?:->|<-|=>|<=|<->|<=>)\s*[A-Z][a-z]?\d*(?:\s*\+\s*[A-Z][a-z]?\d*)*\b/g,
+      (match) => `$\\ce{${match.trim()}}$`
+    );
+
+    // Chemistry: common molecular formulas (e.g. H2O, CO2)
+    next = next.replace(
+      /\b(H2O|CO2|NaCl|H2SO4|NH3|CH4|C6H12O6)\b/g,
+      (match) => `$\\ce{${match}}$`
     );
 
     return next;
@@ -2142,8 +2156,8 @@ export function StudySpacePage({
         
         const normalizedInsight = {
           ...insight,
-          simpleBreakdown: normalizeMathMarkdown(insight.simpleBreakdown),
-          keyFormula: normalizeMathMarkdown(insight.keyFormula),
+          simpleBreakdown: normalizeScienceContent(insight.simpleBreakdown),
+          keyFormula: normalizeScienceContent(insight.keyFormula),
         };
         const next = { ...nodeInsightsRef.current, [requestedNodeId]: normalizedInsight };
         setNodeInsights(next);
@@ -2664,7 +2678,7 @@ export function StudySpacePage({
         || reconstructedStructuredText
         || (analyzeImageResponse.analysis ?? '').trim()
       );
-      const normalizedExtractedText = normalizeMathMarkdown(rawExtractedText);
+      const normalizedExtractedText = normalizeScienceContent(rawExtractedText);
       logAttach('analyze:raw-text-selected', {
         selectedLength: normalizedExtractedText.length,
         usedStructuredText: Boolean(structuredText),
@@ -3121,8 +3135,8 @@ export function StudySpacePage({
       
       const normalizedInsight = {
         ...insight,
-        simpleBreakdown: normalizeMathMarkdown(insight.simpleBreakdown),
-        keyFormula: normalizeMathMarkdown(insight.keyFormula),
+        simpleBreakdown: normalizeScienceContent(insight.simpleBreakdown),
+        keyFormula: normalizeScienceContent(insight.keyFormula),
       };
       const newNodeInsights = { ...nodeInsights, [selectedNode.id]: normalizedInsight };
       setNodeInsights(newNodeInsights);
@@ -3257,7 +3271,7 @@ IMPORTANT:
 
       const modelMessage: NodeConversationMessage = {
         role: 'model',
-        content: normalizeMathMarkdown(finalResponse) || 'No response generated. Try rephrasing your question.',
+        content: normalizeScienceContent(finalResponse) || 'No response generated. Try rephrasing your question.',
         createdAt: new Date().toISOString(),
         visualTable: finalVisualTable,
       };
