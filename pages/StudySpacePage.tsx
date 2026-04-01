@@ -986,6 +986,7 @@ interface Props {
   onInstallApp?: () => void;
   initialBreakdown?: ProblemBreakdown | null;
   onBreakdownConsumed?: () => void;
+  onRegisterNewProblem?: (fn: () => void) => void;
 }
 
 /**
@@ -1074,6 +1075,7 @@ export function StudySpacePage({
   onInstallApp,
   initialBreakdown,
   onBreakdownConsumed,
+  onRegisterNewProblem,
 }: Props) {
   const [breakdown,      setBreakdown]      = useState<ProblemBreakdown | null>(null);
   const [sessionId,      setSessionId]      = useState<string | null>(null);
@@ -1095,6 +1097,7 @@ export function StudySpacePage({
   const [nodeInsights,   setNodeInsights]   = useState<Record<string, NodeInsight>>({});
   const [nodeConversations, setNodeConversations] = useState<Record<string, NodeConversationMessage[]>>({});
   const [showInput,      setShowInput]      = useState(false);
+  useEffect(() => { onRegisterNewProblem?.(() => setShowInput(true)); }, [onRegisterNewProblem]);
   const [problemInput,   setProblemInput]   = useState('');
   const [isImageAnalyzing, setIsImageAnalyzing] = useState(false);
   const [isInsightPanelOpen, setIsInsightPanelOpen] = useState(false);
@@ -3567,7 +3570,7 @@ IMPORTANT:
         actions={
           <button
             onClick={() => setShowInput(true)}
-            className="bg-gradient-to-r from-primary to-secondary text-on-primary px-5 py-1.5 rounded-full font-headline font-bold text-xs uppercase tracking-wider active:scale-95 transition-transform flex items-center gap-1.5"
+            className="hidden lg:flex bg-gradient-to-r from-primary to-secondary text-on-primary px-5 py-1.5 rounded-full font-headline font-bold text-xs uppercase tracking-wider active:scale-95 transition-transform items-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" /> New Problem
           </button>

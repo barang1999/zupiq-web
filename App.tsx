@@ -14,8 +14,9 @@ import {
   GitFork,
   History as HistoryIcon,
   Brain,
+  Plus,
 } from "lucide-react";
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { supabase } from "./lib/supabase";
 import { api, tokenStorage } from "./lib/api";
 import { firebaseSignOut } from "./lib/firebase";
@@ -415,9 +416,11 @@ const Footer = () => {
 const MobileBottomNav = ({
   page,
   onNavigate,
+  onNewProblem,
 }: {
   page: AppShellPage;
   onNavigate: (next: AppShellPage) => void;
+  onNewProblem?: () => void;
 }) => {
   const activeItemForPage = (
     currentPage: AppShellPage
@@ -441,33 +444,47 @@ const MobileBottomNav = ({
     setActiveItem(activeItemForPage(page));
   }, [page]);
 
-  const navItems = [
+  const leftItems = [
     { id: 'study' as const, page: 'study' as const, label: 'Study', Icon: GitFork },
     { id: 'knowledge-map' as const, page: 'knowledge-map' as const, label: 'Map', Icon: Network },
+  ];
+  const rightItems = [
     { id: 'history' as const, page: 'history' as const, label: 'History', Icon: HistoryIcon },
     { id: 'play' as const, page: 'quiz' as const, label: 'Quiz', Icon: Brain },
   ];
 
+  const renderNavItem = ({ id, page: targetPage, label, Icon }: typeof leftItems[number]) => {
+    const isActive = activeItem === id;
+    return (
+      <button
+        key={id}
+        onClick={() => { setActiveItem(id); onNavigate(targetPage); }}
+        className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 transition-colors ${
+          isActive ? 'text-primary' : 'text-on-surface-variant'
+        }`}
+      >
+        <Icon className="w-5 h-5" />
+        <span className="text-[10px] font-medium leading-none">{label}</span>
+      </button>
+    );
+  };
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex sm:hidden bg-surface-container-low/95 backdrop-blur-md border-t border-outline-variant/20">
-      {navItems.map(({ id, page: targetPage, label, Icon }) => {
-        const isActive = activeItem === id;
-        return (
-          <button
-            key={id}
-            onClick={() => {
-              setActiveItem(id);
-              onNavigate(targetPage);
-            }}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2 transition-colors ${
-              isActive ? 'text-primary' : 'text-on-surface-variant'
-            }`}
-          >
-            <Icon className="w-5 h-5" />
-            <span className="text-[10px] font-medium leading-none">{label}</span>
-          </button>
-        );
-      })}
+    <nav className="fixed bottom-0 left-0 right-0 z-50 flex sm:hidden items-center bg-surface-container-low/95 backdrop-blur-md border-t border-outline-variant/20">
+      {leftItems.map(renderNavItem)}
+
+      {/* Center new problem button */}
+      <button
+        onClick={onNewProblem}
+        className="flex flex-col items-center justify-center gap-1 px-5 py-2 -mt-4"
+        aria-label="New Problem"
+      >
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-[0_0_16px_rgba(161,250,255,0.4)]">
+          <Plus className="w-5 h-5 text-on-primary" />
+        </div>
+      </button>
+
+      {rightItems.map(renderNavItem)}
     </nav>
   );
 };
@@ -521,6 +538,7 @@ export default function App() {
     return value?.trim() ? value : null;
   });
   const [initialBreakdown, setInitialBreakdown] = useState<any>(null);
+  const newProblemRef = useRef<(() => void) | null>(null);
 
   const setPage = (
     next: AppShellPage,
@@ -936,6 +954,7 @@ export default function App() {
           onInstallApp={handleInstallApp}
           initialBreakdown={initialBreakdown}
           onBreakdownConsumed={() => setInitialBreakdown(null)}
+          onRegisterNewProblem={(fn) => { newProblemRef.current = fn; }}
         />
       );
     }
@@ -944,7 +963,7 @@ export default function App() {
       <>
         {authenticatedPage}
         {page !== 'plan' && page !== 'billingsubscription' && (
-          <MobileBottomNav page={page} onNavigate={setPage} />
+          <MobileBottomNav page={page} onNavigate={setPage} onNewProblem={() => { setPage('study'); newProblemRef.current?.(); }} />
         )}
       </>
     );
