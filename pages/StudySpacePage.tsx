@@ -3265,6 +3265,66 @@ IMPORTANT:
     }
   };
 
+  const handleBreakdownConversation = async (question: string, answer: string) => {
+    if (!breakdown) return;
+    setLoading(true);
+    setError(null);
+    setIsInsightPanelOpen(false);
+
+    try {
+      const problemText = `[Context from previous session: ${breakdown.title}]\n\nQuestion: ${question}\n\nAnswer: ${answer}\n\nPlease provide a new study breakdown based on this specific concept.`;
+      
+      const { breakdown: bd, visualTable: vt } = await api.post<{ breakdown: ProblemBreakdown; visualTable?: VisualTableData }>(
+        '/api/ai/breakdown',
+        { problem: problemText }
+      );
+
+      let newSessionId: string | null = null;
+      let newSessionSubjectId: string | null = null;
+      try {
+        const { session } = await api.post<{ session: { id: string; subject_id: string | null } }>('/api/sessions', {
+          title: bd.title,
+          subject: bd.subject,
+          problem: problemText,
+          node_count: bd.nodes.length,
+          breakdown_json: JSON.stringify(bd),
+          visual_table_json: vt ? JSON.stringify(vt) : undefined,
+        });
+        newSessionId = session.id;
+        newSessionSubjectId = session.subject_id ?? null;
+      } catch {
+        // Saving the session is non-blocking
+      }
+
+      const normalized = sanitizeBreakdownPayload(bd);
+      normalized.id = newSessionId ?? bd.id;
+      
+      setBreakdown(normalized);
+      setSessionId(newSessionId);
+      setSessionSubjectId(newSessionSubjectId);
+      setSessionVisualTable(vt ?? null);
+      setNodeInsights(normalized.nodeInsights ?? {});
+      setNodeConversations(normalized.nodeConversations ?? {});
+      
+      const brs = normalized.nodes.filter(n => n.type === 'branch').length;
+      const lvs = normalized.nodes.filter(n => n.type === 'leaf').length;
+      const w = Math.max(1000, (brs + 1) * 320);
+      const h = lvs > 0 ? 700 : 540;
+      const initialPos = resolveCollisions(computeInitialPositions(normalized.nodes, w, h));
+      setPositions(initialPos);
+      
+      const rootNode = normalized.nodes.find(n => n.type === 'root') ?? null;
+      setSelectedNode(rootNode);
+      if (newSessionId) localStorage.setItem('zupiq_lastSessionId', newSessionId);
+      
+      showActionToast('New study session created from thread!');
+    } catch (err) {
+      setError(resolveQuotaAwareErrorMessage(err, 'Failed to create new breakdown.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const NAV_ITEMS = [
     { id: 'map',         label: 'Neural Map',   Icon: GitFork },
@@ -3839,6 +3899,7 @@ IMPORTANT:
                 });
                 showActionToast('Q&A saved to Knowledge.');
               }}
+              onBreakdownConversation={handleBreakdownConversation}
               onSaveNodeBreakdown={async (node) => {
                 await saveNodeBreakdown({
                   label: node.label,

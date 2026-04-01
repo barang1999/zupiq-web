@@ -6,7 +6,7 @@ import {
   X, Loader2, Sparkles, Bookmark, Zap,
   ArrowRight, Archive, ChevronLeft, RefreshCw,
   Paperclip, Camera, Upload, Table, Maximize2, Minimize2,
-  MessageSquare, FileText, Check, Copy,
+  MessageSquare, FileText, Check, Copy, GitFork,
 } from 'lucide-react';
 import { RichText } from '../ui/RichText';
 import { VisualTable, type VisualTableData } from '../ui/VisualTable';
@@ -67,6 +67,7 @@ interface Props {
   onSaveInsight?: (node: BreakdownNode) => Promise<void>;
   onSaveVisualTable?: (table: VisualTableData, label?: string) => Promise<void>;
   onSaveConversationMessage?: (question: string, answer: string) => Promise<void>;
+  onBreakdownConversation?: (question: string, answer: string) => Promise<void>;
   onSaveNodeBreakdown?: (node: BreakdownNode) => Promise<void>;
   onTouchStart: (e: ReactTouchEvent<HTMLDivElement>) => void;
   onTouchMove: (e: ReactTouchEvent<HTMLDivElement>) => void;
@@ -578,6 +579,7 @@ function NodeInsightPanelInner({
   onSaveInsight,
   onSaveVisualTable,
   onSaveConversationMessage,
+  onBreakdownConversation,
   onSaveNodeBreakdown,
   onTouchStart,
   onTouchMove,
@@ -1084,6 +1086,15 @@ function NodeInsightPanelInner({
                                       ? <Bookmark className="w-3 h-3 fill-amber-400 text-amber-400" />
                                       : <Bookmark className="w-3 h-3" />
                                     }
+                                  </button>
+                                )}
+                                {onBreakdownConversation && question && (
+                                  <button
+                                    onClick={() => onBreakdownConversation(question, message.content)}
+                                    className="p-1 rounded-lg text-on-surface-variant/40 hover:text-secondary hover:bg-secondary/10 transition-all"
+                                    title="Create new map from this thread"
+                                  >
+                                    <GitFork className="w-3 h-3" />
                                   </button>
                                 )}
                               </div>
