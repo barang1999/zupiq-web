@@ -483,11 +483,11 @@ export default function KnowledgeMapPage({
       />
 
       <motion.main
-        animate={{ marginLeft: isMobile ? 0 : (sidebarExpanded ? 256 : 64) }}
+        animate={{ paddingLeft: isMobile ? 0 : (sidebarExpanded ? 256 : 64) }}
         transition={{ duration: 0.25, ease: "easeInOut" }}
-        className="relative z-10 px-4 pb-24 pt-20 sm:px-8 sm:pt-24"
+        className="relative z-10 pb-24 pt-20 sm:pt-24"
       >
-        <div className="mx-auto max-w-7xl">
+        <div className="w-full">
           {loading ? (
             <div className="inline-flex items-center gap-2 rounded-full bg-surface-container px-4 py-2 text-sm text-on-surface-variant">
               <Loader2 className="h-4 w-4 animate-spin" />
