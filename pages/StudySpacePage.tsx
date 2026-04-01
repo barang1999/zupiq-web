@@ -196,7 +196,8 @@ const NodeCard = memo(({
         e.stopPropagation();
         openBranchActionPortal(node, e.clientX, e.clientY);
       }}
-      onClick={() => {
+      onClick={(e) => {
+        e.stopPropagation();
         console.log('[Panel] node onClick fired', node.id, { suppress: suppressBranchClickRef.current });
         if (suppressBranchClickRef.current) {
           suppressBranchClickRef.current = false;
@@ -3700,6 +3701,7 @@ IMPORTANT:
             ref={scrollerRef}
             className="absolute inset-0 overflow-auto"
             style={{ cursor: draggingId ? 'grabbing' : 'default' }}
+            onClick={() => { if (isInsightPanelOpen) closeInsightPanel(); }}
           >
 
             {/* Loading overlay */}
