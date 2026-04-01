@@ -8,7 +8,6 @@ import {
   Paperclip, Camera, Upload, Table, Maximize2, Minimize2,
   MessageSquare, FileText, Check, Copy,
 } from 'lucide-react';
-import { MathText } from '../ui/MathText';
 import { RichText } from '../ui/RichText';
 import { VisualTable, type VisualTableData } from '../ui/VisualTable';
 
@@ -44,10 +43,10 @@ interface Props {
   nodeInsights: Record<string, NodeInsight>;
   nodeConversations: Record<string, NodeConversationMessage[]>;
   sessionVisualTable: VisualTableData | null;
-  /** Pre-computed math lines for the selected node's mathContent/label */
-  expressionLines: string[];
-  /** Pre-computed math lines for the selected node's key formula */
-  keyFormulaLines: string[];
+  /** Math content for the selected node */
+  expression: string;
+  /** Key formula for the selected node from insights */
+  keyFormula: string;
   insightLoading: boolean;
   composerLoading: boolean;
   composerError: string | null;
@@ -504,14 +503,14 @@ function ComposerBox({
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function NodeInsightPanel({
+function NodeInsightPanelInner({
   selectedNode,
   breakdown,
   nodeInsights,
   nodeConversations,
   sessionVisualTable,
-  expressionLines,
-  keyFormulaLines,
+  expression,
+  keyFormula,
   insightLoading,
   composerLoading,
   composerError,
@@ -538,12 +537,22 @@ export function NodeInsightPanel({
   onTouchEnd,
 }: Props) {
   const isBranchSelected = !!selectedNode;
-  const activeBranchConversation = selectedNode
-    ? (nodeConversations[selectedNode.id] ?? [])
-    : [];
+  
+  const activeBranchConversation = useMemo(() => {
+    return selectedNode ? (nodeConversations[selectedNode.id] ?? []) : [];
+  }, [selectedNode, nodeConversations]);
+
   const composerPlaceholder = selectedNode
     ? `Ask Zupiq about ${selectedNode.label}...`
     : 'Select a node to start deep dive...';
+
+  const expressionLines = useMemo(() => {
+    return (expression || '').split('\n').filter(line => line.trim() !== '');
+  }, [expression]);
+
+  const keyFormulaLines = useMemo(() => {
+    return (keyFormula || '').split('\n').filter(line => line.trim() !== '');
+  }, [keyFormula]);
 
   // ── Snapshot copy ────────────────────────────────────────────────────────────
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
@@ -792,9 +801,9 @@ export function NodeInsightPanel({
                   </button>
                 )}
               </div>
-              <h3 className="font-headline text-xl font-bold mt-1 leading-tight">
-                <MathText>{selectedNode.label}</MathText>
-              </h3>
+              <div className="font-headline text-xl font-bold mt-1 leading-tight">
+                <RichText>{selectedNode.label}</RichText>
+              </div>
               <RichText className="text-sm text-on-surface-variant mt-1 leading-relaxed">
                 {selectedNode.description}
               </RichText>
@@ -806,12 +815,13 @@ export function NodeInsightPanel({
                 <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-2">Expression</span>
                 <div className="space-y-1.5">
                   {expressionLines.map((line, idx) => (
-                    <MathText
+                    <RichText
                       key={`expr_${selectedNode.id}_${idx}`}
                       className="text-base text-primary leading-relaxed whitespace-pre-wrap block no-scrollbar"
+                      discreet
                     >
                       {line}
-                    </MathText>
+                    </RichText>
                   ))}
                 </div>
               </div>
@@ -891,13 +901,13 @@ export function NodeInsightPanel({
                       <div className="bg-background/50 p-3 rounded-xl text-center mb-1">
                         <div className="space-y-2">
                           {keyFormulaLines.map((line, idx) => (
-                            <MathText
+                            <RichText
                               key={`key_formula_${idx}`}
-                              math={keyFormulaLines.length > 1}
                               className="text-sm text-primary whitespace-pre-wrap block no-scrollbar"
+                              discreet
                             >
                               {line}
-                            </MathText>
+                            </RichText>
                           ))}
                         </div>
                       </div>
@@ -1108,3 +1118,5 @@ export function NodeInsightPanel({
     </>
   );
 }
+
+export const NodeInsightPanel = React.memo(NodeInsightPanelInner);

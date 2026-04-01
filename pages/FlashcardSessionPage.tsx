@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { AppHeader } from "../components/layout/AppHeader";
 import { Button } from "../components/ui/Button";
-import { MathText } from "../components/ui/MathText";
 import { RichText } from "../components/ui/RichText";
 import { useFlashcards } from "../hooks/useFlashcards";
 import { supabase } from "../lib/supabase";
@@ -433,12 +432,12 @@ export default function FlashcardSessionPage({
                         </div>
                       ) : (
                         <h2 className="px-3 font-headline text-3xl font-bold leading-tight tracking-tight text-on-surface md:text-5xl">
-                          <MathText>{currentCard?.front ?? ""}</MathText>
+                          <RichText>{currentCard?.front ?? ""}</RichText>
                         </h2>
                       )}
                       {currentCard?.hint && !isFlipped && (
                         <p className="mx-auto mt-6 max-w-xl text-lg text-on-surface-variant/80">
-                          Hint: <MathText>{currentCard.hint}</MathText>
+                          Hint: <RichText>{currentCard.hint}</RichText>
                         </p>
                       )}
                     </div>

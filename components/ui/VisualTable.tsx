@@ -1,22 +1,10 @@
-import { MathText } from './MathText';
+import { RichText } from './RichText';
 import { Maximize2 } from 'lucide-react';
 import React from 'react';
 
-/**
- * Detects non-Latin scripts (Khmer, Arabic, etc.) that should bypass direct KaTeX 
- * rendering if they don't have math delimiters.
- */
-function containsNonMathUnicode(text: string): boolean {
-  return /[\u0600-\u06FF\u0900-\u097F\u1780-\u17FF\u4E00-\u9FFF\uAC00-\uD7AF\u3040-\u30FF]/.test(text);
-}
-
 function SafeText({ children, className }: { children: string; className?: string }) {
   if (!children) return null;
-  const hasMathDelimiters = /\$/.test(children);
-  if (containsNonMathUnicode(children) && !hasMathDelimiters) {
-    return <span className={className}>{children}</span>;
-  }
-  return <MathText className={className}>{children}</MathText>;
+  return <RichText className={className} discreet>{children}</RichText>;
 }
 
 export interface SignTableRow {

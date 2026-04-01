@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { Brain, Lightbulb, RotateCcw } from "lucide-react";
 import type { Flashcard } from "../../types/flashcard.types";
 import { DifficultyBadge } from "../ui/Badge";
-import { MathText } from "../ui/MathText";
 import { RichText } from "../ui/RichText";
 
 interface FlashcardItemProps {
@@ -66,7 +65,7 @@ export function FlashcardItem({
                   </span>
                 </div>
                 <h3 className="font-headline text-2xl font-bold leading-tight text-on-surface">
-                  <MathText>{card.front}</MathText>
+                  <RichText>{card.front}</RichText>
                 </h3>
               </div>
 
@@ -158,7 +157,7 @@ export function FlashcardItem({
                 </span>
               </div>
               <p className="text-xl font-medium text-on-surface leading-relaxed">
-                <MathText>{card.front}</MathText>
+                <RichText>{card.front}</RichText>
               </p>
               {card.hint && !isFlipped && (
                 <button

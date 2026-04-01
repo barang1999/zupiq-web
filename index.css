@@ -97,3 +97,17 @@
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* KaTeX display blocks normalization */
+.katex-display {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+  margin: 0.35rem 0;
+}
+
+.katex-display > .katex {
+  white-space: nowrap;
+}

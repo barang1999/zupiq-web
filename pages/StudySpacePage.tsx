@@ -13,8 +13,8 @@ import { AppSidebar } from '../components/layout/AppSidebar';
 import { ProblemComposer } from '../components/ai/ProblemComposer';
 import SweepText from '../components/ui/SweepText.jsx';
 import { api, ApiError } from '../lib/api';
-import { MathText } from '../components/ui/MathText';
 import { RichText } from '../components/ui/RichText';
+import { normalizeMathMarkdown } from '../lib/aiContent/normalizeMathMarkdown';
 import { VisualTable, type VisualTableData } from '../components/ui/VisualTable';
 import { Modal } from '../components/ui/Modal';
 import { ActionPopover } from '../components/ui/ActionPopover';
@@ -424,102 +424,7 @@ function stripLatexTabular(text: string): string {
     .trim();
 }
 
-function expandMultilineInlineMathPreview(raw: string): string {
-  return (raw ?? '').replace(/\$([\s\S]+?)\$/g, (_match, inner: string) => {
-    const normalizedInner = (inner ?? '')
-      .replace(/\\+n(?![a-zA-Z])/g, '\n')
-      .replace(/\r\n?/g, '\n')
-      .trim();
-
-    if (!normalizedInner) return '$$';
-    if (!normalizedInner.includes('\n')) return `$${normalizedInner}$`;
-
-    const lines = normalizedInner
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean);
-    if (lines.length <= 1) return `$${normalizedInner}$`;
-
-    return lines.map((line) => `$${line}$`).join('\n');
-  });
-}
-
-function normalizeMathPreviewText(raw: string): string {
-  if (!raw) return '';
-  return normalizeMathDelimiters(expandMultilineInlineMathPreview(stripLatexTabular(raw)))
-    // Handle LaTeX line-break command explicitly first.
-    .replace(/\\newline\b/g, '\n')
-    // Convert LaTeX double-backslash line break (\\) to newline.
-    .replace(/\\\\(?![a-zA-Z])/g, '\n')
-    // Convert escaped "\n" (including over-escaped variants) when standalone.
-    .replace(/\\+n(?![a-zA-Z])/g, '\n')
-    .replace(/\\+r(?![a-zA-Z])/g, ' ')
-    .replace(/\\+t(?![a-zA-Z])/g, ' ')
-    .replace(/\\+b(?![a-zA-Z])/g, ' ')
-    .replace(/\\+f(?![a-zA-Z])/g, ' ')
-    // Heal legacy malformed text produced by older normalization ("\newline" -> "ewline").
-    .replace(/(^|[ \t])ewline(?=\s+[\u1780-\u17FFA-Za-z])/g, '$1\n')
-    .replace(/\r\n?/g, '\n')
-    .replace(/\$\$/g, '$')
-    .replace(/[ \t]*\n[ \t]*/g, '\n')
-    // Strip consecutive-comma separator artifacts from LaTeX align/cases environments.
-    .replace(/,\s*,/g, '')
-    .trim();
-}
-
-function splitMathPreviewLines(raw: string): string[] {
-  const normalized = normalizeMathPreviewText(raw);
-  if (!normalized) return [];
-  const baseLines = normalized.includes('\n')
-    ? normalized.split('\n').map((line) => line.trim()).filter((line) => Boolean(line) && !/^[,;\s\\]+$/.test(line))
-    : [normalized];
-  const extracted: string[] = [];
-
-  baseLines.forEach((line) => {
-    const tokenLines = line.match(/\$[^$\n]+?\$(?:\s*\(\d+\))?/g) ?? [];
-    if (tokenLines.length > 0) {
-      extracted.push(...tokenLines.map((token) => token.trim()).filter(Boolean));
-      const trailing = line
-        .replace(/\$[^$\n]+?\$(?:\s*\(\d+\))?/g, ' ')
-        .replace(/[ \t]{2,}/g, ' ')
-        .trim();
-      if (trailing && !/^[,;\s\\]+$/.test(trailing)) extracted.push(trailing);
-      return;
-    }
-    extracted.push(line);
-  });
-
-  const normalizedLines = extracted
-    .map((line) => normalizeMathPreviewLineForRender(line))
-    .filter(Boolean);
-
-  // If OCR/model splits a dangling brace into its own line, re-attach it.
-  const merged: string[] = [];
-  normalizedLines.forEach((line) => {
-    if (/^[)\]}]+$/.test(line) && merged.length > 0) {
-      merged[merged.length - 1] = `${merged[merged.length - 1]}${line}`;
-      return;
-    }
-    merged.push(line);
-  });
-
-  return merged;
-}
-
 const NON_MATH_UNICODE_RE = /[\u0600-\u06FF\u0900-\u097F\u1780-\u17FF\u4E00-\u9FFF\uAC00-\uD7AF\u3040-\u30FF]/;
-
-function normalizeMathPreviewLineForRender(line: string): string {
-  const t = (line ?? '').trim();
-  if (!t) return '';
-  if (t.includes('$')) return t;
-  // Don't wrap as a single math block if it contains non-math Unicode (e.g. Khmer).
-  // Let MathText's autoWrapInlineMathForRender handle the mixed content instead,
-  // otherwise renderKaTeX's non-math fallback strips LaTeX commands like \Delta → gone,
-  // \frac{9}{2} → "92", etc.
-  if (NON_MATH_UNICODE_RE.test(t)) return t;
-  if (looksLikeMathPreviewExpression(t)) return `$${t}$`;
-  return t;
-}
 
 function looksLikeMathPreviewExpression(line: string): boolean {
   const t = line.trim();
@@ -563,6 +468,10 @@ function wrapInlineMathCandidates(text: string): string {
         }
         // If it looks like a legitimate math fragment (has a command or sub/sup and some structure)
         if (trimmed.length > 2 && (/\\[a-zA-Z{}]+|\\\\/.test(trimmed) || /[_^]/.test(trimmed))) {
+          // Additional protection: never wrap if it contains non-math Unicode (Khmer, etc.)
+          if (NON_MATH_UNICODE_RE.test(trimmed)) {
+            return match;
+          }
           return `$${trimmed}$`;
         }
         return match;
@@ -2019,7 +1928,13 @@ export function StudySpacePage({
           level: 'standard',
         });
         insightRetryNotBeforeRef.current[requestedNodeId] = 0;
-        const next = { ...nodeInsightsRef.current, [requestedNodeId]: insight };
+        
+        const normalizedInsight = {
+          ...insight,
+          simpleBreakdown: normalizeMathMarkdown(insight.simpleBreakdown),
+          keyFormula: normalizeMathMarkdown(insight.keyFormula),
+        };
+        const next = { ...nodeInsightsRef.current, [requestedNodeId]: normalizedInsight };
         setNodeInsights(next);
         persistNodeInsights(next);
       })
@@ -2536,8 +2451,9 @@ export function StudySpacePage({
         || reconstructedStructuredText
         || (analyzeImageResponse.analysis ?? '').trim()
       );
+      const normalizedExtractedText = normalizeMathMarkdown(rawExtractedText);
       logAttach('analyze:raw-text-selected', {
-        selectedLength: rawExtractedText.length,
+        selectedLength: normalizedExtractedText.length,
         usedStructuredText: Boolean(structuredText),
         usedReconstructedText: !structuredText && Boolean(reconstructedStructuredText),
       });
@@ -2556,7 +2472,7 @@ export function StudySpacePage({
         });
       }
 
-      insertExtractedText(rawExtractedText, uploadId, {
+      insertExtractedText(normalizedExtractedText, uploadId, {
         source: isPdfFile ? 'upload:pdf' : 'upload:image',
         hasStructured: Boolean(structured),
         structuredMathSegments: structuredMathSegments.length,
@@ -2990,7 +2906,12 @@ export function StudySpacePage({
         });
       }
       
-      const newNodeInsights = { ...nodeInsights, [selectedNode.id]: insight };
+      const normalizedInsight = {
+        ...insight,
+        simpleBreakdown: normalizeMathMarkdown(insight.simpleBreakdown),
+        keyFormula: normalizeMathMarkdown(insight.keyFormula),
+      };
+      const newNodeInsights = { ...nodeInsights, [selectedNode.id]: normalizedInsight };
       setNodeInsights(newNodeInsights);
       persistNodeInsights(newNodeInsights);
     } catch (err) {
@@ -3123,7 +3044,7 @@ IMPORTANT:
 
       const modelMessage: NodeConversationMessage = {
         role: 'model',
-        content: finalResponse || 'No response generated. Try rephrasing your question.',
+        content: normalizeMathMarkdown(finalResponse) || 'No response generated. Try rephrasing your question.',
         createdAt: new Date().toISOString(),
         visualTable: finalVisualTable,
       };
@@ -3229,15 +3150,13 @@ IMPORTANT:
     }))
   ), [activeTab, navigateToKnowledgeMap, navigateToQuiz, onNavigateAchievements, onNavigateFlashcards, onNavigateHistory, onNavigateQuantumPrism]);
 
-  const selectedNodeKeyFormulaLines = useMemo(() => {
-    if (!selectedNode) return [];
-    const formula = nodeInsights[selectedNode.id]?.keyFormula ?? '';
-    return splitMathPreviewLines(formula);
+  const selectedNodeKeyFormula = useMemo(() => {
+    if (!selectedNode) return '';
+    return nodeInsights[selectedNode.id]?.keyFormula ?? '';
   }, [nodeInsights, selectedNode]);
-  const selectedNodeExpressionLines = useMemo(() => {
-    if (!selectedNode) return [];
-    const expression = selectedNode.mathContent || selectedNode.label || '';
-    return splitMathPreviewLines(expression);
+  const selectedNodeExpression = useMemo(() => {
+    if (!selectedNode) return '';
+    return selectedNode.mathContent || selectedNode.label || '';
   }, [selectedNode]);
   useEffect(() => {
     if (!selectedNode) return;
@@ -3412,10 +3331,10 @@ IMPORTANT:
             <div className="px-2 sm:px-4 md:px-6 pt-1.5 sm:pt-2 md:pt-2.5 pb-0 shrink-0 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <span className="text-tertiary text-[9px] sm:text-[10px] font-bold tracking-[0.1em] sm:tracking-[0.14em] uppercase">Active Analysis</span>
-                <h1 className="font-headline text-sm sm:text-lg md:text-xl font-bold text-on-surface mt-0 sm:mt-0.5 tracking-tight leading-snug">
-                  {breakdown.title.split(' ').slice(0, -1).join(' ')}{' '}
-                  <span className="text-secondary">{breakdown.title.split(' ').slice(-1)}</span>
-                </h1>
+                <div className="font-headline text-sm sm:text-lg md:text-xl font-bold text-on-surface mt-0 sm:mt-0.5 tracking-tight leading-snug">
+                  <RichText discreet>{breakdown.title.split(' ').slice(0, -1).join(' ') + ' '}</RichText>
+                  <span className="text-secondary"><RichText discreet>{breakdown.title.split(' ').slice(-1)[0]}</RichText></span>
+                </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {/* Invite collaborators */}
@@ -3577,7 +3496,6 @@ IMPORTANT:
                   if (!pos) return null;
                   const isSelected  = selectedNode?.id === node.id;
                   const isDragging  = draggingId === node.id;
-                  const nodeMathPreviewLines = splitMathPreviewLines(node.mathContent || (node.type === 'root' ? node.label : ''));
 
                   return (
                     <motion.div
@@ -3627,11 +3545,9 @@ IMPORTANT:
                           </span>
                           <div className="bg-background/60 rounded-xl px-4 py-3 mb-3">
                             <div className="space-y-1.5">
-                              {nodeMathPreviewLines.map((line, idx) => (
-                                <MathText key={`root_${node.id}_${idx}`} className="text-base text-on-surface leading-relaxed whitespace-pre-wrap block no-scrollbar">
-                                  {line}
-                                </MathText>
-                              ))}
+                              <RichText className="text-base text-on-surface leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet>
+                                {node.mathContent || node.label}
+                              </RichText>
                             </div>
                           </div>
                           {node.tags && node.tags.length > 0 && (
@@ -3659,18 +3575,16 @@ IMPORTANT:
                               <GitFork className="w-4 h-4 text-secondary" />
                             </div>
                             <div>
-                              <h3 className="text-sm font-headline font-bold text-on-surface"><MathText>{node.label}</MathText></h3>
-                              <p className="text-[10px] text-on-surface-variant mt-0.5 leading-relaxed"><MathText>{node.description}</MathText></p>
+                              <div className="text-sm font-headline font-bold text-on-surface"><RichText>{node.label}</RichText></div>
+                              <div className="text-[10px] text-on-surface-variant mt-0.5 leading-relaxed"><RichText>{node.description}</RichText></div>
                             </div>
                           </div>
                           {node.mathContent && (
                             <div className="bg-background/50 rounded-lg px-3 py-2">
                               <div className="space-y-1.5">
-                                {nodeMathPreviewLines.map((line, idx) => (
-                                  <MathText key={`branch_${node.id}_${idx}`} className="text-xs text-primary leading-relaxed whitespace-pre-wrap block no-scrollbar">
-                                    {line}
-                                  </MathText>
-                                ))}
+                                <RichText className="text-xs text-primary leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet>
+                                  {node.mathContent}
+                                </RichText>
                               </div>
                             </div>
                           )}
@@ -3707,19 +3621,17 @@ IMPORTANT:
                         >
                           <div className="flex items-center gap-2 mb-2">
                             <Sparkles className="w-3.5 h-3.5 text-tertiary shrink-0" />
-                            <span className="text-xs font-headline font-bold text-tertiary"><MathText>{node.label}</MathText></span>
+                            <div className="text-xs font-headline font-bold text-tertiary"><RichText>{node.label}</RichText></div>
                           </div>
                           {node.mathContent && (
                             <div className="space-y-1">
-                              {nodeMathPreviewLines.map((line, idx) => (
-                                <MathText key={`leaf_${node.id}_${idx}`} className="text-[11px] text-on-surface-variant leading-relaxed whitespace-pre-wrap block no-scrollbar">
-                                  {line}
-                                </MathText>
-                              ))}
+                              <RichText className="text-[11px] text-on-surface-variant leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet>
+                                {node.mathContent}
+                              </RichText>
                             </div>
                           )}
                           {node.description && (
-                            <p className="text-[10px] text-on-surface-variant mt-1.5 leading-relaxed"><MathText>{node.description}</MathText></p>
+                            <div className="text-[10px] text-on-surface-variant mt-1.5 leading-relaxed"><RichText>{node.description}</RichText></div>
                           )}
                           {/* Expand button */}
                           {isSelected && (
@@ -3792,8 +3704,8 @@ IMPORTANT:
               nodeInsights={nodeInsights}
               nodeConversations={nodeConversations}
               sessionVisualTable={sessionVisualTable}
-              expressionLines={selectedNodeExpressionLines}
-              keyFormulaLines={selectedNodeKeyFormulaLines}
+              expression={selectedNodeExpression}
+              keyFormula={selectedNodeKeyFormula}
               insightLoading={insightLoading}
               composerLoading={composerLoading}
               composerError={composerError}
@@ -3881,7 +3793,7 @@ IMPORTANT:
         position={branchActionPortal}
         onRequestClose={() => setBranchActionPortal(null)}
         title="Action Portal"
-        subtitle={activeBranchActionNode ? <MathText>{activeBranchActionNode.label}</MathText> : null}
+        subtitle={activeBranchActionNode ? <RichText>{activeBranchActionNode.label}</RichText> : null}
         actions={actionPortalActions}
       />
 

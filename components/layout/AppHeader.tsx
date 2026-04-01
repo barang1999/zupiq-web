@@ -345,7 +345,7 @@ export function AppHeader({
                 </div>
 
                 <div>
-                  <h2 className="font-headline text-2xl font-bold text-on-surface">{displayName}</h2>
+                  <div className="font-headline text-2xl font-bold text-on-surface"><RichText discreet>{displayName}</RichText></div>
                   <p className="text-[10px] uppercase tracking-[0.18em] text-on-surface-variant">Mobile Control Menu</p>
                 </div>
               </div>
