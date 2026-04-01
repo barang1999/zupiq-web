@@ -195,6 +195,7 @@ const NodeCard = memo(({
         openBranchActionPortal(node, e.clientX, e.clientY);
       }}
       onClick={() => {
+        console.log('[Panel] node onClick fired', node.id, { suppress: suppressBranchClickRef.current });
         if (suppressBranchClickRef.current) {
           suppressBranchClickRef.current = false;
           return;
@@ -1336,15 +1337,17 @@ export function StudySpacePage({
   }, []);
 
   const closeInsightPanel = useCallback(() => {
+    console.log('[Panel] closeInsightPanel called');
     setIsInsightPanelOpen(false);
     resetInsightSwipe();
   }, [resetInsightSwipe]);
 
   const selectNode = useCallback((node: BreakdownNode) => {
+    console.log('[Panel] selectNode called', { nodeId: node.id, isMobile });
     setSelectedNode(node);
     setIsInsightPanelOpen(true);
     setBranchActionPortal(null);
-  }, []);
+  }, [isMobile]);
 
   const showActionToast = useCallback((message: string) => {
     setActionToast(message);
@@ -2207,6 +2210,7 @@ export function StudySpacePage({
   const handleBranchTouchStart = useCallback((e: ReactTouchEvent<HTMLDivElement>, node: BreakdownNode) => {
     const touch = e.touches?.[0];
     if (!touch) return;
+    console.log('[Panel] touchStart on node', node.id);
     e.stopPropagation();
     clearBranchLongPressTimer();
     branchTouchGestureRef.current = {
@@ -2239,6 +2243,7 @@ export function StudySpacePage({
   }, [clearBranchLongPressTimer, isLayoutLocked, startTouchDragAt]);
 
   const handleBranchTouchEnd = useCallback((nodeId: string) => {
+    console.log('[Panel] touchEnd on node', nodeId, { suppress: suppressBranchClickRef.current });
     clearBranchLongPressTimer();
     if (branchTouchGestureRef.current?.nodeId === nodeId) {
       branchTouchGestureRef.current = null;
@@ -3801,9 +3806,10 @@ IMPORTANT:
         </section>
 
         {/* ── Right Panel ─────────────────────────────────────────────────── */}
+        {console.log('[Panel] render state', { isMobile, isInsightPanelOpen, selectedNodeId: selectedNode?.id })}
         <motion.aside
           animate={{
-            width: selectedNode && isInsightPanelOpen ? insightPanelWidth : 0,
+            width: isMobile ? '100%' : (selectedNode && isInsightPanelOpen ? insightPanelWidth : 0),
             opacity: selectedNode && isInsightPanelOpen ? 1 : 0,
             x: selectedNode && isInsightPanelOpen ? insightSwipeOffsetX : 24,
           }}
@@ -3814,10 +3820,14 @@ IMPORTANT:
               ? { duration: 0 }
               : { type: 'spring', stiffness: 420, damping: 34, mass: 0.35 },
           }}
-          className="h-full bg-surface-container-low/80 backdrop-blur-md border-l border-outline-variant/10 shrink-0 relative overflow-hidden z-20"
+          className={`bg-surface-container-low/80 backdrop-blur-md border-l border-outline-variant/10 overflow-hidden ${
+            isMobile
+              ? `fixed inset-0 z-50 ${!(selectedNode && isInsightPanelOpen) ? 'pointer-events-none' : ''}`
+              : 'h-full shrink-0 relative z-20'
+          }`}
         >
-          {/* Resize Handle */}
-          {selectedNode && isInsightPanelOpen && (
+          {/* Resize Handle — desktop only */}
+          {!isMobile && selectedNode && isInsightPanelOpen && (
             <div
               onMouseDown={handlePanelResizeMouseDown}
               className="absolute inset-y-0 left-0 w-2 cursor-col-resize z-30 group"
@@ -3912,6 +3922,7 @@ IMPORTANT:
               onTouchStart={handleInsightSwipeStart}
               onTouchMove={handleInsightSwipeMove}
               onTouchEnd={handleInsightSwipeEnd}
+              isMobile={isMobile}
             />
 
           )}

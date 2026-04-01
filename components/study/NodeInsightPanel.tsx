@@ -6,7 +6,7 @@ import {
   X, Loader2, Sparkles, Bookmark, Zap,
   ArrowRight, Archive, ChevronLeft, RefreshCw,
   Paperclip, Camera, Upload, Table, Maximize2, Minimize2,
-  MessageSquare, FileText, Check, Copy, GitFork,
+  MessageSquare, FileText, Check, Copy, GitFork, Plus,
 } from 'lucide-react';
 import { RichText } from '../ui/RichText';
 import { VisualTable, type VisualTableData } from '../ui/VisualTable';
@@ -72,6 +72,7 @@ interface Props {
   onTouchStart: (e: ReactTouchEvent<HTMLDivElement>) => void;
   onTouchMove: (e: ReactTouchEvent<HTMLDivElement>) => void;
   onTouchEnd: () => void;
+  isMobile?: boolean;
 }
 
 // ─── ComposerBox ──────────────────────────────────────────────────────────────
@@ -89,6 +90,7 @@ interface ComposerBoxProps {
   onAttachFile?: (file: File) => void | Promise<void>;
   onClearAttachment?: () => void;
   onImageCropRequest?: (src: string, name: string, onConfirm: (file: File) => Promise<void>) => void;
+  isMobile?: boolean;
 }
 
 function ComposerBox({
@@ -296,7 +298,7 @@ function ComposerBox({
       <input ref={uploadFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
 
-      <div className="absolute inset-x-4 bottom-4 z-30">
+      <div className="absolute inset-x-4 bottom-[72px] sm:bottom-4 z-30">
         <div
           className={`relative bg-surface-container-highest/95 rounded-[24px] p-4 border shadow-2xl backdrop-blur-xl transition-colors ${
             isDragOver ? 'border-primary/60 bg-primary/5' : 'border-outline-variant/20'
@@ -549,6 +551,393 @@ function ComposerBox({
   );
 }
 
+// ─── MobileComposerBox ────────────────────────────────────────────────────────
+
+function MobileComposerBox({
+  isBranchSelected,
+  composerLoading,
+  composerError,
+  imageLoading,
+  hasAttachment,
+  placeholder,
+  selectedNodeId,
+  breakdownSubject,
+  onSend,
+  onAttachFile,
+  onClearAttachment,
+  onImageCropRequest,
+}: ComposerBoxProps) {
+  const [composerInput, setComposerInput] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+  useEffect(() => { setComposerInput(''); }, [selectedNodeId]);
+
+  const uploadFileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // + menu state
+  const plusButtonRef = useRef<HTMLButtonElement>(null);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
+  const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
+
+  // Sub-popovers
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const zapMenuRef = useRef<HTMLDivElement>(null);
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [isZapMenuOpen, setIsZapMenuOpen] = useState(false);
+
+  // Knowledge context
+  const [contextRecords, setContextRecords] = useState<KnowledgeRecord[] | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [selectedContextIds, setSelectedContextIds] = useState<Set<string>>(new Set());
+
+  // Close + menu on outside tap
+  useEffect(() => {
+    if (!isPlusMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (plusMenuRef.current?.contains(t) || plusButtonRef.current?.contains(t)) return;
+      setIsPlusMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [isPlusMenuOpen]);
+
+  // Close context menu on outside tap
+  useEffect(() => {
+    if (!isContextMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (contextMenuRef.current?.contains(e.target as Node)) return;
+      setIsContextMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [isContextMenuOpen]);
+
+  // Close zap menu on outside tap
+  useEffect(() => {
+    if (!isZapMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (zapMenuRef.current?.contains(e.target as Node)) return;
+      setIsZapMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [isZapMenuOpen]);
+
+  // Load knowledge records when context menu opens
+  useEffect(() => {
+    if (!isContextMenuOpen || contextRecords !== null) return;
+    setContextLoading(true);
+    listKnowledgeRecords({ subject: breakdownSubject, limit: 50 })
+      .then(({ records }) => setContextRecords(records))
+      .catch(() => setContextRecords([]))
+      .finally(() => setContextLoading(false));
+  }, [isContextMenuOpen, breakdownSubject, contextRecords]);
+
+  const toggleContextRecord = (id: string) => {
+    setSelectedContextIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const buildContextBlock = (): string | undefined => {
+    if (!contextRecords || selectedContextIds.size === 0) return undefined;
+    const selected = contextRecords.filter(r => selectedContextIds.has(r.id));
+    if (!selected.length) return undefined;
+    const lines = ['[Use the following saved knowledge as reference]:'];
+    for (const rec of selected) {
+      const c = rec.content;
+      switch (rec.content_type) {
+        case 'insight':
+          lines.push(`• ${rec.title}: ${String(c.simpleBreakdown ?? '').slice(0, 250)}`);
+          if (c.keyFormula) lines.push(`  Formula: ${String(c.keyFormula).slice(0, 120)}`);
+          break;
+        case 'visual_table':
+          lines.push(`• ${rec.title}: ${rec.summary ?? ''}`);
+          break;
+        case 'conversation_message':
+          lines.push(`• Q: ${String(c.question ?? '').slice(0, 120)}`);
+          lines.push(`  A: ${String(c.answer ?? '').slice(0, 200)}`);
+          break;
+        case 'node_breakdown':
+          lines.push(`• ${rec.title}: ${String(c.description ?? '').slice(0, 250)}`);
+          if (c.mathContent) lines.push(`  Math: ${String(c.mathContent).slice(0, 120)}`);
+          break;
+      }
+    }
+    return lines.join('\n');
+  };
+
+  const handleSend = () => {
+    if (!composerInput.trim() && !hasAttachment) return;
+    onSend(composerInput, buildContextBlock());
+    setComposerInput('');
+    setSelectedContextIds(new Set());
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onAttachFile) return;
+    e.target.value = '';
+    if (file.type.startsWith('image/') && onImageCropRequest) {
+      const objectUrl = URL.createObjectURL(file);
+      onImageCropRequest(objectUrl, file.name, async (croppedFile) => {
+        URL.revokeObjectURL(objectUrl);
+        await onAttachFile(croppedFile);
+      });
+    } else {
+      onAttachFile(file);
+    }
+  };
+
+  const pickFromCamera = () => {
+    setIsPlusMenuOpen(false);
+    cameraInputRef.current?.click();
+  };
+
+  const pickFromLibrary = () => {
+    setIsPlusMenuOpen(false);
+    uploadFileInputRef.current?.click();
+  };
+
+  const openArchive = () => {
+    setIsPlusMenuOpen(false);
+    setIsZapMenuOpen(false);
+    setIsContextMenuOpen(true);
+  };
+
+  const openQuickActions = () => {
+    setIsPlusMenuOpen(false);
+    setIsContextMenuOpen(false);
+    setIsZapMenuOpen(true);
+  };
+
+  return (
+    <>
+      <input ref={uploadFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+
+      <div className="absolute inset-x-4 bottom-[60px] z-30">
+        {/* Archive sub-popover */}
+        <AnimatePresence>
+          {isContextMenuOpen && (
+            <motion.div
+              ref={contextMenuRef}
+              initial={{ opacity: 0, y: 8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.97 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              className="absolute bottom-full left-0 right-0 mb-2 z-40 rounded-2xl border border-secondary/25 bg-surface-container-highest/97 backdrop-blur-xl shadow-[0_12px_36px_rgba(0,0,0,0.32)] overflow-hidden"
+            >
+              <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-outline-variant/15">
+                <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">Saved Knowledge</span>
+                {selectedContextIds.size > 0 && (
+                  <button type="button" onClick={() => setSelectedContextIds(new Set())} className="text-[10px] text-on-surface-variant/60 hover:text-on-surface transition-colors">
+                    Clear {selectedContextIds.size} selected
+                  </button>
+                )}
+              </div>
+              <div className="max-h-56 overflow-y-auto">
+                {contextLoading ? (
+                  <div className="flex items-center justify-center py-8 gap-2 text-on-surface-variant text-xs">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Loading…</span>
+                  </div>
+                ) : !contextRecords || contextRecords.length === 0 ? (
+                  <p className="text-xs text-on-surface-variant/60 text-center py-8 px-4">
+                    No saved knowledge yet. Save insights or tables to use them as context.
+                  </p>
+                ) : (
+                  contextRecords.map(rec => {
+                    const isSelected = selectedContextIds.has(rec.id);
+                    const Icon = rec.content_type === 'visual_table' ? Table
+                      : rec.content_type === 'conversation_message' ? MessageSquare
+                      : rec.content_type === 'node_breakdown' ? FileText
+                      : Bookmark;
+                    return (
+                      <button
+                        key={rec.id}
+                        type="button"
+                        onClick={() => toggleContextRecord(rec.id)}
+                        className={`w-full flex items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-white/5 ${isSelected ? 'bg-secondary/10' : ''}`}
+                      >
+                        <div className={`mt-0.5 shrink-0 w-4 h-4 rounded border transition-colors flex items-center justify-center ${isSelected ? 'bg-secondary border-secondary' : 'border-outline-variant/40'}`}>
+                          {isSelected && <Check className="w-2.5 h-2.5 text-on-secondary" />}
+                        </div>
+                        <Icon className={`mt-0.5 w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-secondary' : 'text-on-surface-variant/50'}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-medium truncate ${isSelected ? 'text-on-surface' : 'text-on-surface/80'}`}>{rec.title}</p>
+                          {rec.summary && <p className="text-[10px] text-on-surface-variant/60 mt-0.5 line-clamp-2">{rec.summary}</p>}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              {(contextRecords?.length ?? 0) > 0 && (
+                <div className="px-4 py-2 border-t border-outline-variant/15">
+                  <p className="text-[10px] text-on-surface-variant/50">Selected records are sent as reference context with your next message.</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Quick Actions sub-popover */}
+        <AnimatePresence>
+          {isZapMenuOpen && (
+            <motion.div
+              ref={zapMenuRef}
+              initial={{ opacity: 0, y: 8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.97 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              className="absolute bottom-full left-0 right-0 mb-2 z-40 rounded-2xl border border-primary/25 bg-surface-container-highest/97 backdrop-blur-xl shadow-[0_12px_36px_rgba(0,0,0,0.32)] overflow-hidden"
+            >
+              <div className="px-4 pt-3 pb-2 border-b border-outline-variant/15">
+                <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Quick Actions</span>
+              </div>
+              <div className="p-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const suffix = ' Please generate a table for this.';
+                    if (!composerInput.includes(suffix)) setComposerInput(composerInput + suffix);
+                    setIsZapMenuOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-on-surface hover:bg-white/5 transition-colors"
+                >
+                  <Table className="h-4 w-4 text-primary" />
+                  <span>Generate Table</span>
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* + menu popover */}
+        <AnimatePresence>
+          {isPlusMenuOpen && (
+            <motion.div
+              ref={plusMenuRef}
+              initial={{ opacity: 0, y: 8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.97 }}
+              transition={{ duration: 0.14, ease: 'easeOut' }}
+              className="absolute bottom-full left-0 mb-2 z-50 w-52 rounded-2xl border border-outline-variant/25 bg-surface-container-highest/97 backdrop-blur-xl shadow-[0_12px_36px_rgba(0,0,0,0.32)] overflow-hidden"
+            >
+              {onAttachFile && (
+                <>
+                  <button type="button" onClick={pickFromCamera} className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-on-surface hover:bg-white/5 transition-colors">
+                    <Camera className="w-4 h-4 text-primary shrink-0" />
+                    <span>Take Photo</span>
+                  </button>
+                  <button type="button" onClick={pickFromLibrary} className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-on-surface hover:bg-white/5 transition-colors">
+                    <Upload className="w-4 h-4 text-secondary shrink-0" />
+                    <span>Attach Image</span>
+                  </button>
+                  <div className="mx-4 h-[1px] bg-outline-variant/20" />
+                </>
+              )}
+              <button type="button" onClick={openArchive} className={`w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-on-surface hover:bg-white/5 transition-colors ${selectedContextIds.size > 0 ? 'text-secondary' : ''}`}>
+                <Archive className={`w-4 h-4 shrink-0 ${selectedContextIds.size > 0 ? 'text-secondary' : 'text-on-surface-variant'}`} />
+                <span>
+                  Saved Knowledge
+                  {selectedContextIds.size > 0 && <span className="ml-1.5 text-[10px] font-bold bg-secondary text-on-secondary rounded-full px-1.5 py-0.5">{selectedContextIds.size}</span>}
+                </span>
+              </button>
+              <button type="button" onClick={openQuickActions} className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm text-on-surface hover:bg-white/5 transition-colors">
+                <Zap className="w-4 h-4 text-on-surface-variant shrink-0" />
+                <span>Quick Actions</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Attachment badge */}
+        <AnimatePresence>
+          {hasAttachment && (
+            <motion.div
+              initial={{ opacity: 0, y: 4, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 4, scale: 0.95 }}
+              className="flex items-center gap-2 mb-2 px-3 py-1.5 bg-primary/10 rounded-xl border border-primary/20 w-fit"
+            >
+              <Upload className="w-3.5 h-3.5 text-primary" />
+              <span className="text-[10px] font-bold text-primary uppercase tracking-wider">File attached</span>
+              <button onClick={onClearAttachment} className="p-0.5 hover:bg-primary/20 rounded-full transition-colors">
+                <X className="w-3 h-3 text-primary" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Composer pill */}
+        <motion.div
+          animate={{ scale: isFocused ? 1.02 : 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          className="flex items-center gap-2 bg-surface-container-highest/95 rounded-full px-2 py-2 border border-outline-variant/20 shadow-2xl backdrop-blur-xl"
+        >
+          {/* + button */}
+          <button
+            ref={plusButtonRef}
+            type="button"
+            onClick={() => {
+              setIsContextMenuOpen(false);
+              setIsZapMenuOpen(false);
+              setIsPlusMenuOpen(prev => !prev);
+            }}
+            disabled={!isBranchSelected || composerLoading}
+            className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all disabled:opacity-30 ${
+              isPlusMenuOpen
+                ? 'bg-primary/15 text-primary rotate-45'
+                : 'bg-on-surface/8 text-on-surface-variant hover:bg-on-surface/12 hover:text-on-surface'
+            }`}
+          >
+            <Plus className="w-4 h-4 transition-transform" />
+          </button>
+
+          {/* Text input */}
+          <input
+            type="text"
+            value={composerInput}
+            onChange={e => setComposerInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && (composerInput.trim() || hasAttachment)) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            disabled={!isBranchSelected || composerLoading || imageLoading}
+            placeholder={imageLoading ? 'Attaching…' : placeholder}
+            className="flex-1 bg-transparent text-on-surface text-sm placeholder:text-on-surface/40 outline-none min-w-0 px-1"
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+          />
+
+          {/* Send button */}
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={!isBranchSelected || composerLoading || imageLoading || (!composerInput.trim() && !hasAttachment)}
+            className="shrink-0 w-8 h-8 rounded-full bg-on-surface text-surface flex items-center justify-center transition-all disabled:opacity-30 hover:bg-on-surface/80"
+          >
+            {composerLoading
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <ArrowRight className="w-4 h-4 rotate-[-90deg]" />
+            }
+          </button>
+        </motion.div>
+
+        {composerError && (
+          <p className="mt-2 text-[10px] text-error px-3">{composerError}</p>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 function NodeInsightPanelInner({
@@ -563,7 +952,7 @@ function NodeInsightPanelInner({
   composerLoading,
   composerError,
   sessionId,
-  isInsightSwipeDragging,
+  isInsightSwipeDragging: _isInsightSwipeDragging,
   imageLoading = false,
   hasAttachment = false,
   onAskDeepDive,
@@ -584,6 +973,7 @@ function NodeInsightPanelInner({
   onTouchStart,
   onTouchMove,
   onTouchEnd,
+  isMobile = false,
 }: Props) {
   const isBranchSelected = !!selectedNode;
   
@@ -760,7 +1150,16 @@ function NodeInsightPanelInner({
   }
 
   return (
-    <>
+    <div className="relative h-full">
+      {/* Floating close button */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 z-10 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5 transition-all"
+        title="Close"
+      >
+        <X className="w-5 h-5" />
+      </button>
+
       {/* Scrollable content */}
       <div
         className="h-full overflow-y-auto p-8 pb-[200px]"
@@ -784,21 +1183,14 @@ function NodeInsightPanelInner({
               </button>
             )}
           </div>
-          {selectedNode && (
-            <div className="flex items-center gap-1">
-              {onToggleExpand && (
-                <button
-                  onClick={onToggleExpand}
-                  className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5 transition-all"
-                  title={isExpanded ? 'Restore Size' : 'Expand Panel'}
-                >
-                  {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                </button>
-              )}
-              <button onClick={onClose} className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5 transition-all">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+          {selectedNode && onToggleExpand && (
+            <button
+              onClick={onToggleExpand}
+              className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5 transition-all"
+              title={isExpanded ? 'Restore Size' : 'Expand Panel'}
+            >
+              {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
           )}
         </div>
 
@@ -1053,52 +1445,7 @@ function NodeInsightPanelInner({
                         )
                         : (
                           <>
-                            <div className="flex items-start justify-between gap-2">
-                              <RichText className="text-xs leading-relaxed flex-1">{message.content}</RichText>
-                              <div className="shrink-0 flex items-center gap-0.5" data-snapshot-hide>
-                                <button
-                                  type="button"
-                                  onClick={() => snapshotMessage(idx)}
-                                  disabled={copyingIdx === idx}
-                                  className="p-1 rounded-lg text-on-surface-variant/30 hover:text-primary hover:bg-primary/10 transition-all disabled:cursor-wait"
-                                  title="Copy as image"
-                                >
-                                  {copyingIdx === idx
-                                    ? <Loader2 className="w-3 h-3 animate-spin" />
-                                    : copiedIdx === idx
-                                    ? <Check className="w-3 h-3 text-primary" />
-                                    : <Copy className="w-3 h-3" />
-                                  }
-                                </button>
-                                {onSaveConversationMessage && question && (
-                                  <button
-                                    onClick={() => handleSave(saveKey, () => onSaveConversationMessage(question, message.content))}
-                                    className={`p-1 rounded-lg transition-all ${
-                                      savedKeys.has(saveKey)
-                                        ? 'text-amber-400 bg-amber-400/15'
-                                        : 'text-on-surface-variant/40 hover:text-primary hover:bg-primary/10'
-                                    }`}
-                                    title={savedKeys.has(saveKey) ? 'Saved!' : 'Save Q&A to Knowledge'}
-                                  >
-                                    {savingKeys.has(saveKey)
-                                      ? <Loader2 className="w-3 h-3 animate-spin" />
-                                      : savedKeys.has(saveKey)
-                                      ? <Bookmark className="w-3 h-3 fill-amber-400 text-amber-400" />
-                                      : <Bookmark className="w-3 h-3" />
-                                    }
-                                  </button>
-                                )}
-                                {onBreakdownConversation && question && (
-                                  <button
-                                    onClick={() => onBreakdownConversation(question, message.content)}
-                                    className="p-1 rounded-lg text-on-surface-variant/40 hover:text-secondary hover:bg-secondary/10 transition-all"
-                                    title="Create new map from this thread"
-                                  >
-                                    <GitFork className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
+                            <RichText className="text-xs leading-relaxed">{message.content}</RichText>
                             {message.visualTable && (
                               <div className="space-y-1.5">
                                 <div className="flex items-center justify-between">
@@ -1131,6 +1478,49 @@ function NodeInsightPanelInner({
                                 </div>
                               </div>
                             )}
+                            <div className="flex justify-end items-center gap-0.5" data-snapshot-hide>
+                              <button
+                                type="button"
+                                onClick={() => snapshotMessage(idx)}
+                                disabled={copyingIdx === idx}
+                                className="p-1 rounded-lg text-on-surface-variant/30 hover:text-primary hover:bg-primary/10 transition-all disabled:cursor-wait"
+                                title="Copy as image"
+                              >
+                                {copyingIdx === idx
+                                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                                  : copiedIdx === idx
+                                  ? <Check className="w-3 h-3 text-primary" />
+                                  : <Copy className="w-3 h-3" />
+                                }
+                              </button>
+                              {onSaveConversationMessage && question && (
+                                <button
+                                  onClick={() => handleSave(saveKey, () => onSaveConversationMessage(question, message.content))}
+                                  className={`p-1 rounded-lg transition-all ${
+                                    savedKeys.has(saveKey)
+                                      ? 'text-amber-400 bg-amber-400/15'
+                                      : 'text-on-surface-variant/40 hover:text-primary hover:bg-primary/10'
+                                  }`}
+                                  title={savedKeys.has(saveKey) ? 'Saved!' : 'Save Q&A to Knowledge'}
+                                >
+                                  {savingKeys.has(saveKey)
+                                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                                    : savedKeys.has(saveKey)
+                                    ? <Bookmark className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                    : <Bookmark className="w-3 h-3" />
+                                  }
+                                </button>
+                              )}
+                              {onBreakdownConversation && question && (
+                                <button
+                                  onClick={() => onBreakdownConversation(question, message.content)}
+                                  className="p-1 rounded-lg text-on-surface-variant/40 hover:text-secondary hover:bg-secondary/10 transition-all"
+                                  title="Create new map from this thread"
+                                >
+                                  <GitFork className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
                           </>
                         )
                       }
@@ -1157,23 +1547,40 @@ function NodeInsightPanelInner({
         )}
       </div>
 
-      {/* Floating composer — isolated in its own component so typing only re-renders ComposerBox */}
-      <ComposerBox
-        isBranchSelected={isBranchSelected}
-        composerLoading={composerLoading}
-        composerError={composerError}
-        imageLoading={imageLoading}
-        hasAttachment={hasAttachment}
-        placeholder={composerPlaceholder}
-        selectedNodeId={selectedNode?.id}
-        breakdownSubject={breakdown?.subject}
-        onSend={onAskDeepDive}
-        onAttachFile={onAttachFile}
-        onClearAttachment={onClearAttachment}
-        onImageCropRequest={onImageCropRequest}
-      />
+      {/* Floating composer */}
+      {isMobile ? (
+        <MobileComposerBox
+          isBranchSelected={isBranchSelected}
+          composerLoading={composerLoading}
+          composerError={composerError}
+          imageLoading={imageLoading}
+          hasAttachment={hasAttachment}
+          placeholder={composerPlaceholder}
+          selectedNodeId={selectedNode?.id}
+          breakdownSubject={breakdown?.subject}
+          onSend={onAskDeepDive}
+          onAttachFile={onAttachFile}
+          onClearAttachment={onClearAttachment}
+          onImageCropRequest={onImageCropRequest}
+        />
+      ) : (
+        <ComposerBox
+          isBranchSelected={isBranchSelected}
+          composerLoading={composerLoading}
+          composerError={composerError}
+          imageLoading={imageLoading}
+          hasAttachment={hasAttachment}
+          placeholder={composerPlaceholder}
+          selectedNodeId={selectedNode?.id}
+          breakdownSubject={breakdown?.subject}
+          onSend={onAskDeepDive}
+          onAttachFile={onAttachFile}
+          onClearAttachment={onClearAttachment}
+          onImageCropRequest={onImageCropRequest}
+        />
+      )}
 
-    </>
+    </div>
   );
 }
 
