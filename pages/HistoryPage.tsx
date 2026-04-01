@@ -641,7 +641,7 @@ export function HistoryPage({
                           <span className="text-[10px] font-label text-on-surface-variant">{formatRelative(session.created_at)}</span>
                         </div>
                         <h4 className={`text-lg sm:text-xl font-bold mb-2 group-hover:${color} transition-colors relative z-10 line-clamp-2`}>
-                          <RichText>{toSingleLinePreview(session.title)}</RichText>
+                          <RichText mode="preview">{toSingleLinePreview(session.title)}</RichText>
                         </h4>
                         <p className="text-sm text-on-surface-variant mb-2 relative z-10">
                           Subject: {session.subject} • {session.node_count} nodes
@@ -701,10 +701,10 @@ export function HistoryPage({
                               <div className="flex items-start justify-between gap-4">
                                 <div className="min-w-0">
                                   <h4 className="font-bold text-on-surface line-clamp-2">
-                                    <RichText>{toSingleLinePreview(session.title)}</RichText>
+                                    <RichText mode="preview">{toSingleLinePreview(session.title)}</RichText>
                                   </h4>
                                   <p className="mt-1 text-xs text-on-surface-variant line-clamp-1">
-                                    <RichText>{toSingleLinePreview(session.problem)}</RichText>
+                                    <RichText mode="preview">{toSingleLinePreview(session.problem)}</RichText>
                                   </p>
                                 </div>
                                 <span className="shrink-0 text-[10px] text-on-surface-variant">{formatDate(session.created_at)}</span>
@@ -779,10 +779,10 @@ export function HistoryPage({
                               <td className="px-8 py-6 text-sm text-on-surface-variant">{formatDate(session.created_at)}</td>
                               <td className="px-8 py-6 font-bold text-on-surface max-w-xs">
                                 <span className="line-clamp-1 block">
-                                  <RichText>{toSingleLinePreview(session.title)}</RichText>
+                                  <RichText mode="preview">{toSingleLinePreview(session.title)}</RichText>
                                 </span>
                                 <span className="block text-xs text-on-surface-variant font-normal mt-0.5 line-clamp-1">
-                                  <RichText>{toSingleLinePreview(session.problem)}</RichText>
+                                  <RichText mode="preview">{toSingleLinePreview(session.problem)}</RichText>
                                 </span>
                               </td>
                               <td className="px-8 py-6">

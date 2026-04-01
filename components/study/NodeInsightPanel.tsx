@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, type ChangeEvent, type DragEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, memo, type ChangeEvent, type DragEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { toPng } from 'html-to-image';
 import { listKnowledgeRecords, type KnowledgeRecord } from '../../lib/knowledge';
 import { AnimatePresence, motion } from 'motion/react';
@@ -1119,4 +1119,4 @@ function NodeInsightPanelInner({
   );
 }
 
-export const NodeInsightPanel = React.memo(NodeInsightPanelInner);
+export const NodeInsightPanel = memo(NodeInsightPanelInner);

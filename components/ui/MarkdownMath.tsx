@@ -36,6 +36,9 @@ function createMathPreview(content: string): string {
 }
 
 function MarkdownMathInner({ content, className, discreet = false, mode = 'full' }: Props) {
+  if (import.meta.env.DEV) {
+    console.debug('[MarkdownMath render]', { contentLength: content?.length, mode });
+  }
   if (!content?.trim()) return null;
 
   const displayContent = useMemo(() => {

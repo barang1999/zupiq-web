@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import type { TouchEvent as ReactTouchEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -123,6 +123,211 @@ interface RegeneratedBranchNodeResponse {
     mathContent?: string;
   };
 }
+
+// ─── NodeCard ────────────────────────────────────────────────────────────────
+
+interface NodeCardProps {
+  node: BreakdownNode;
+  pos: NodePos;
+  offsetX: number;
+  offsetY: number;
+  isSelected: boolean;
+  isDragging: boolean;
+  isLayoutLocked: boolean;
+  expandingId: string | null;
+  startDrag: (e: React.MouseEvent, id: string) => void;
+  handleBranchTouchStart: (e: ReactTouchEvent<HTMLDivElement>, node: BreakdownNode) => void;
+  handleBranchTouchMove: (e: ReactTouchEvent<HTMLDivElement>, node: BreakdownNode) => void;
+  handleBranchTouchEnd: (id: string) => void;
+  handleBranchTouchCancel: (id: string) => void;
+  openBranchActionPortal: (node: BreakdownNode, x: number, y: number) => void;
+  selectNode: (node: BreakdownNode) => void;
+  handleExpand: (node: BreakdownNode) => void;
+  suppressBranchClickRef: React.RefObject<boolean>;
+}
+
+const NodeCard = memo(({
+  node,
+  pos,
+  offsetX,
+  offsetY,
+  isSelected,
+  isDragging,
+  isLayoutLocked,
+  expandingId,
+  startDrag,
+  handleBranchTouchStart,
+  handleBranchTouchMove,
+  handleBranchTouchEnd,
+  handleBranchTouchCancel,
+  openBranchActionPortal,
+  selectNode,
+  handleExpand,
+  suppressBranchClickRef,
+}: NodeCardProps) => {
+  if (import.meta.env.DEV) {
+    console.debug('[NodeCard render]', node.id, { isSelected, isDragging });
+  }
+  const mode = isSelected ? 'full' : 'preview';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.7 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.05 }}
+      style={{
+        position: 'absolute',
+        left: pos.x + offsetX,
+        top: pos.y + offsetY,
+        transform: 'translate(-50%, -50%)',
+        cursor: isLayoutLocked ? 'default' : (isDragging ? 'grabbing' : 'grab'),
+        zIndex: isSelected ? 20 : isDragging ? 30 : 10,
+        userSelect: 'none',
+      }}
+      onMouseDown={e => startDrag(e, node.id)}
+      onTouchStart={e => handleBranchTouchStart(e, node)}
+      onTouchMove={e => handleBranchTouchMove(e, node)}
+      onTouchEnd={() => handleBranchTouchEnd(node.id)}
+      onTouchCancel={() => handleBranchTouchCancel(node.id)}
+      onContextMenu={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        openBranchActionPortal(node, e.clientX, e.clientY);
+      }}
+      onClick={() => {
+        if (suppressBranchClickRef.current) {
+          suppressBranchClickRef.current = false;
+          return;
+        }
+        selectNode(node);
+      }}
+    >
+      {/* ── Root node ─── */}
+      {node.type === 'root' && (
+        <div
+          className={`backdrop-blur-xl rounded-2xl border transition-all duration-300 ${
+            isSelected
+              ? 'bg-surface-container-highest/80 border-primary shadow-[0_0_35px_rgba(161,250,255,0.35)]'
+              : 'bg-surface-container-highest/60 border-primary/30 hover:border-primary/60'
+          } ${isDragging ? 'shadow-[0_20px_60px_rgba(0,0,0,0.6)]' : ''}`}
+          style={{ minWidth: 280, maxWidth: 360, padding: '20px 24px' }}
+        >
+          <span className="text-[0.6rem] font-bold text-primary tracking-widest uppercase block mb-2">
+            Primary Problem
+          </span>
+          <div className="bg-background/60 rounded-xl px-4 py-3 mb-3">
+            <div className="space-y-1.5">
+              <RichText className="text-base text-on-surface leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet mode={mode}>
+                {node.mathContent || node.label}
+              </RichText>
+            </div>
+          </div>
+          {node.tags && node.tags.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {node.tags.map(tag => (
+                <span key={tag} className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-bold">{tag}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Branch node ─── */}
+      {node.type === 'branch' && (
+        <div
+          className={`backdrop-blur-xl rounded-xl border transition-all duration-300 ${
+            isSelected
+              ? 'bg-surface-container-highest/80 border-secondary/60 shadow-[0_0_25px_rgba(255,81,250,0.25)]'
+              : 'bg-surface-container-highest/60 border-outline-variant/20 hover:border-secondary/40'
+          } ${isDragging ? 'shadow-[0_20px_60px_rgba(0,0,0,0.6)]' : ''}`}
+          style={{ minWidth: 220, maxWidth: 300, padding: '16px 20px' }}
+        >
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center shrink-0 mt-0.5">
+              <GitFork className="w-4 h-4 text-secondary" />
+            </div>
+            <div>
+              <div className="text-sm font-headline font-bold text-on-surface"><RichText mode={mode}>{node.label}</RichText></div>
+              <div className="text-[10px] text-on-surface-variant mt-0.5 leading-relaxed"><RichText mode={mode}>{node.description}</RichText></div>
+            </div>
+          </div>
+          {node.mathContent && (
+            <div className="bg-background/50 rounded-lg px-3 py-2">
+              <div className="space-y-1.5">
+                <RichText className="text-xs text-primary leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet mode={mode}>
+                  {node.mathContent}
+                </RichText>
+              </div>
+            </div>
+          )}
+          {/* Expand button */}
+          {isSelected && (
+            <div
+              className="mt-3 pt-3 border-t border-outline-variant/20"
+              onMouseDown={e => e.stopPropagation()}
+            >
+              <button
+                onClick={e => { e.stopPropagation(); handleExpand(node); }}
+                disabled={!!expandingId}
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-secondary/10 border border-secondary/20 text-secondary text-[10px] font-bold uppercase tracking-wider hover:bg-secondary/20 transition-all disabled:opacity-50"
+              >
+                {expandingId === node.id
+                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Breaking down…</>
+                  : <><GitFork className="w-3 h-3" /> Breakdown further</>
+                }
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Leaf node ─── */}
+      {node.type === 'leaf' && (
+        <div
+          className={`backdrop-blur-xl rounded-xl border transition-all duration-300 ${
+            isSelected
+              ? 'bg-tertiary/8 border-tertiary/50 shadow-[0_0_20px_rgba(243,255,202,0.2)]'
+              : 'bg-surface-container-high/40 border-tertiary/15 hover:border-tertiary/40 hover:bg-tertiary/5'
+          } ${isDragging ? 'shadow-[0_20px_60px_rgba(0,0,0,0.6)]' : ''}`}
+          style={{ minWidth: 180, maxWidth: 240, padding: '12px 16px' }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="w-3.5 h-3.5 text-tertiary shrink-0" />
+            <div className="text-xs font-headline font-bold text-tertiary"><RichText mode={mode}>{node.label}</RichText></div>
+          </div>
+          {node.mathContent && (
+            <div className="space-y-1">
+              <RichText className="text-[11px] text-on-surface-variant leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet mode={mode}>
+                {node.mathContent}
+              </RichText>
+            </div>
+          )}
+          {node.description && (
+            <div className="text-[10px] text-on-surface-variant mt-1.5 leading-relaxed"><RichText mode={mode}>{node.description}</RichText></div>
+          )}
+          {/* Expand button */}
+          {isSelected && (
+            <div
+              className="mt-2 pt-2 border-t border-outline-variant/20"
+              onMouseDown={e => e.stopPropagation()}
+            >
+              <button
+                onClick={e => { e.stopPropagation(); handleExpand(node); }}
+                disabled={!!expandingId}
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-tertiary/10 border border-tertiary/20 text-tertiary text-[10px] font-bold uppercase tracking-wider hover:bg-tertiary/20 transition-all disabled:opacity-50"
+              >
+                {expandingId === node.id
+                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Breaking down…</>
+                  : <><GitFork className="w-3 h-3" /> Breakdown further</>
+                }
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </motion.div>
+  );
+});
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
@@ -2636,7 +2841,7 @@ export function StudySpacePage({
     }
   };
 
-  const handleExpand = async (node: BreakdownNode) => {
+  const handleExpand = useCallback(async (node: BreakdownNode) => {
     if (!breakdown) return;
     setExpandingId(node.id);
     const rootNode = breakdown.nodes.find(n => n.type === 'root');
@@ -2694,7 +2899,7 @@ export function StudySpacePage({
     } finally {
       setExpandingId(null);
     }
-  };
+  }, [breakdown, positions, sessionId]);
 
   const copyToClipboard = useCallback(async (text: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
@@ -3498,162 +3703,26 @@ IMPORTANT:
                   const isDragging  = draggingId === node.id;
 
                   return (
-                    <motion.div
+                    <NodeCard
                       key={node.id}
-                      initial={{ opacity: 0, scale: 0.7 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.05 }}
-                      style={{
-                        position: 'absolute',
-                        left: pos.x + offsetX,
-                        top: pos.y + offsetY,
-                        transform: 'translate(-50%, -50%)',
-                        cursor: isLayoutLocked ? 'default' : (isDragging ? 'grabbing' : 'grab'),
-                        zIndex: isSelected ? 20 : isDragging ? 30 : 10,
-                        userSelect: 'none',
-                      }}
-                      onMouseDown={e => startDrag(e, node.id)}
-                      onTouchStart={e => handleBranchTouchStart(e, node)}
-                      onTouchMove={e => handleBranchTouchMove(e, node)}
-                      onTouchEnd={() => handleBranchTouchEnd(node.id)}
-                      onTouchCancel={() => handleBranchTouchCancel(node.id)}
-                      onContextMenu={e => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        openBranchActionPortal(node, e.clientX, e.clientY);
-                      }}
-                      onClick={() => {
-                        if (suppressBranchClickRef.current) {
-                          suppressBranchClickRef.current = false;
-                          return;
-                        }
-                        selectNode(node);
-                      }}
-                    >
-                      {/* ── Root node ─── */}
-                      {node.type === 'root' && (
-                        <div
-                          className={`backdrop-blur-xl rounded-2xl border transition-all duration-300 ${
-                            isSelected
-                              ? 'bg-surface-container-highest/80 border-primary shadow-[0_0_35px_rgba(161,250,255,0.35)]'
-                              : 'bg-surface-container-highest/60 border-primary/30 hover:border-primary/60'
-                          } ${isDragging ? 'shadow-[0_20px_60px_rgba(0,0,0,0.6)]' : ''}`}
-                          style={{ minWidth: 280, maxWidth: 360, padding: '20px 24px' }}
-                        >
-                          <span className="text-[0.6rem] font-bold text-primary tracking-widest uppercase block mb-2">
-                            Primary Problem
-                          </span>
-                          <div className="bg-background/60 rounded-xl px-4 py-3 mb-3">
-                            <div className="space-y-1.5">
-                              <RichText className="text-base text-on-surface leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet>
-                                {node.mathContent || node.label}
-                              </RichText>
-                            </div>
-                          </div>
-                          {node.tags && node.tags.length > 0 && (
-                            <div className="flex gap-2 flex-wrap">
-                              {node.tags.map(tag => (
-                                <span key={tag} className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-bold">{tag}</span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* ── Branch node ─── */}
-                      {node.type === 'branch' && (
-                        <div
-                          className={`backdrop-blur-xl rounded-xl border transition-all duration-300 ${
-                            isSelected
-                              ? 'bg-surface-container-highest/80 border-secondary/60 shadow-[0_0_25px_rgba(255,81,250,0.25)]'
-                              : 'bg-surface-container-highest/60 border-outline-variant/20 hover:border-secondary/40'
-                          } ${isDragging ? 'shadow-[0_20px_60px_rgba(0,0,0,0.6)]' : ''}`}
-                          style={{ minWidth: 220, maxWidth: 300, padding: '16px 20px' }}
-                        >
-                          <div className="flex items-start gap-3 mb-3">
-                            <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center shrink-0 mt-0.5">
-                              <GitFork className="w-4 h-4 text-secondary" />
-                            </div>
-                            <div>
-                              <div className="text-sm font-headline font-bold text-on-surface"><RichText>{node.label}</RichText></div>
-                              <div className="text-[10px] text-on-surface-variant mt-0.5 leading-relaxed"><RichText>{node.description}</RichText></div>
-                            </div>
-                          </div>
-                          {node.mathContent && (
-                            <div className="bg-background/50 rounded-lg px-3 py-2">
-                              <div className="space-y-1.5">
-                                <RichText className="text-xs text-primary leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet>
-                                  {node.mathContent}
-                                </RichText>
-                              </div>
-                            </div>
-                          )}
-                          {/* Expand button */}
-                          {isSelected && (
-                            <div
-                              className="mt-3 pt-3 border-t border-outline-variant/20"
-                              onMouseDown={e => e.stopPropagation()}
-                            >
-                              <button
-                                onClick={e => { e.stopPropagation(); handleExpand(node); }}
-                                disabled={!!expandingId}
-                                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-secondary/10 border border-secondary/20 text-secondary text-[10px] font-bold uppercase tracking-wider hover:bg-secondary/20 transition-all disabled:opacity-50"
-                              >
-                                {expandingId === node.id
-                                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Breaking down…</>
-                                  : <><GitFork className="w-3 h-3" /> Breakdown further</>
-                                }
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* ── Leaf node ─── */}
-                      {node.type === 'leaf' && (
-                        <div
-                          className={`backdrop-blur-xl rounded-xl border transition-all duration-300 ${
-                            isSelected
-                              ? 'bg-tertiary/8 border-tertiary/50 shadow-[0_0_20px_rgba(243,255,202,0.2)]'
-                              : 'bg-surface-container-high/40 border-tertiary/15 hover:border-tertiary/40 hover:bg-tertiary/5'
-                          } ${isDragging ? 'shadow-[0_20px_60px_rgba(0,0,0,0.6)]' : ''}`}
-                          style={{ minWidth: 180, maxWidth: 240, padding: '12px 16px' }}
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            <Sparkles className="w-3.5 h-3.5 text-tertiary shrink-0" />
-                            <div className="text-xs font-headline font-bold text-tertiary"><RichText>{node.label}</RichText></div>
-                          </div>
-                          {node.mathContent && (
-                            <div className="space-y-1">
-                              <RichText className="text-[11px] text-on-surface-variant leading-relaxed whitespace-pre-wrap block no-scrollbar" discreet>
-                                {node.mathContent}
-                              </RichText>
-                            </div>
-                          )}
-                          {node.description && (
-                            <div className="text-[10px] text-on-surface-variant mt-1.5 leading-relaxed"><RichText>{node.description}</RichText></div>
-                          )}
-                          {/* Expand button */}
-                          {isSelected && (
-                            <div
-                              className="mt-2 pt-2 border-t border-outline-variant/20"
-                              onMouseDown={e => e.stopPropagation()}
-                            >
-                              <button
-                                onClick={e => { e.stopPropagation(); handleExpand(node); }}
-                                disabled={!!expandingId}
-                                className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-tertiary/10 border border-tertiary/20 text-tertiary text-[10px] font-bold uppercase tracking-wider hover:bg-tertiary/20 transition-all disabled:opacity-50"
-                              >
-                                {expandingId === node.id
-                                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Breaking down…</>
-                                  : <><GitFork className="w-3 h-3" /> Breakdown further</>
-                                }
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </motion.div>
+                      node={node}
+                      pos={pos}
+                      offsetX={offsetX}
+                      offsetY={offsetY}
+                      isSelected={isSelected}
+                      isDragging={isDragging}
+                      isLayoutLocked={isLayoutLocked}
+                      expandingId={expandingId}
+                      startDrag={startDrag}
+                      handleBranchTouchStart={handleBranchTouchStart}
+                      handleBranchTouchMove={handleBranchTouchMove}
+                      handleBranchTouchEnd={handleBranchTouchEnd}
+                      handleBranchTouchCancel={handleBranchTouchCancel}
+                      openBranchActionPortal={openBranchActionPortal}
+                      selectNode={selectNode}
+                      handleExpand={handleExpand}
+                      suppressBranchClickRef={suppressBranchClickRef}
+                    />
                   );
                 })}
 
