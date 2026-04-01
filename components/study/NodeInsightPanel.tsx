@@ -122,6 +122,10 @@ function ComposerBox({
   const [contextLoading, setContextLoading] = useState(false);
   const [selectedContextIds, setSelectedContextIds] = useState<Set<string>>(new Set());
 
+  const zapButtonRef = useRef<HTMLButtonElement>(null);
+  const zapMenuRef = useRef<HTMLDivElement>(null);
+  const [isZapMenuOpen, setIsZapMenuOpen] = useState(false);
+
   useEffect(() => {
     if (!isAttachMenuOpen) return;
     const onPointerDown = (e: PointerEvent) => {
@@ -149,6 +153,18 @@ function ComposerBox({
     window.addEventListener('pointerdown', onPointerDown);
     return () => window.removeEventListener('pointerdown', onPointerDown);
   }, [isContextMenuOpen]);
+
+  useEffect(() => {
+    if (!isZapMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (zapMenuRef.current?.contains(target)) return;
+      if (zapButtonRef.current?.contains(target)) return;
+      setIsZapMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [isZapMenuOpen]);
 
   useEffect(() => {
     if (!isContextMenuOpen) return;
@@ -459,21 +475,52 @@ function ComposerBox({
                 </AnimatePresence>
               </div>
 
-              <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
-                <Zap className="w-5 h-5" />
-                <ChevronLeft className="w-3 h-3 rotate-[-90deg]" />
+              <div className="relative">
+                <button
+                  ref={zapButtonRef}
+                  type="button"
+                  onClick={() => setIsZapMenuOpen(prev => !prev)}
+                  disabled={!isBranchSelected || composerLoading}
+                  className={`flex items-center gap-1 transition-colors disabled:opacity-30 ${
+                    isZapMenuOpen ? 'text-primary' : 'hover:text-primary text-on-surface-variant/60'
+                  }`}
+                  aria-expanded={isZapMenuOpen}
+                >
+                  <Zap className="w-5 h-5" />
+                  <ChevronLeft className={`w-3 h-3 transition-transform ${isZapMenuOpen ? 'rotate-90' : 'rotate-[-90deg]'}`} />
+                </button>
+                <AnimatePresence>
+                  {isZapMenuOpen && (
+                    <motion.div
+                      ref={zapMenuRef}
+                      initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.97 }}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
+                      className="absolute bottom-10 left-0 z-40 w-52 rounded-2xl border border-primary/25 bg-surface-container-highest/97 backdrop-blur-xl shadow-[0_12px_36px_rgba(0,0,0,0.32)] overflow-hidden"
+                    >
+                      <div className="px-4 pt-3 pb-2 border-b border-outline-variant/15">
+                        <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Quick Actions</span>
+                      </div>
+                      <div className="p-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const suffix = ' Please generate a table for this.';
+                            if (!composerInput.includes(suffix)) setComposerInput(composerInput + suffix);
+                            setIsZapMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-on-surface hover:bg-white/5 transition-colors"
+                        >
+                          <Table className="h-4 w-4 text-primary" />
+                          <span>Generate Table</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const suffix = ' Please generate a table for this.';
-                  if (!composerInput.includes(suffix)) setComposerInput(composerInput + suffix);
-                }}
-                className="hover:text-primary transition-colors"
-                title="Generate Table"
-              >
-                <Table className="w-5 h-5" />
-              </button>
+
               <div className="w-[1px] h-4 bg-outline-variant/30 mx-1" />
               <button type="button" className="text-primary">
                 <Sparkles className="w-5 h-5" />
