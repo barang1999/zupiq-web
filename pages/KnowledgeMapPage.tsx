@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Brain,
@@ -174,11 +174,38 @@ export default function KnowledgeMapPage({
   const [isMobile, setIsMobile] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 640 : false));
   const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
 
+  // Map Navigation & Transformation
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [mapTransform, setMapTransform] = useState({ x: 0, y: 0, scale: 1 });
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 640);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  const resetMap = () => {
+    setMapTransform({ x: 0, y: 0, scale: 1 });
+  };
+
+  const centerNode = (xPercent: number, yPercent: number) => {
+    if (!containerRef.current) return;
+    const { offsetWidth: width, offsetHeight: height } = containerRef.current;
+    
+    // Zoom in on focus
+    const scale = isMobile ? 1.8 : 1.4;
+    
+    // Convert percentage to pixels relative to the container center
+    const xNode = (xPercent / 100) * width;
+    const yNode = (yPercent / 100) * height;
+    
+    // Calculate translation needed to put node at center of viewport
+    // (Center - NodePos) * Scale
+    const tx = (width / 2 - xNode) * scale;
+    const ty = (height / 2 - yNode) * scale;
+    
+    setMapTransform({ x: tx, y: ty, scale });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -285,11 +312,13 @@ export default function KnowledgeMapPage({
     if (!subjectClusters.length) {
       setSelectedSubjectId("");
       setIsSubjectModalOpen(false);
+      resetMap();
       return;
     }
     if (selectedSubjectId && !subjectClusters.some((cluster) => cluster.id === selectedSubjectId)) {
       setSelectedSubjectId("");
       setIsSubjectModalOpen(false);
+      resetMap();
     }
   }, [selectedSubjectId, subjectClusters]);
 
@@ -482,191 +511,203 @@ export default function KnowledgeMapPage({
           {!loading && !error && subjectClusters.length > 0 ? (
             <section className="mt-6">
               <div
+                ref={containerRef}
                 className="relative min-h-[620px] overflow-hidden p-5"
                 onClick={() => {
-                  if (!selectedSubjectId) return;
+                  if (!selectedSubjectId) {
+                    resetMap();
+                    return;
+                  }
                   if (isSubjectModalOpen) {
                     setIsSubjectModalOpen(false);
                     return;
                   }
                   setSelectedSubjectId("");
+                  resetMap();
                 }}
               >
-                <div className="pointer-events-none absolute inset-0">
-                  <svg className="h-full w-full" viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} preserveAspectRatio="none">
-                    {subjectLinks.map((link, index) => {
-                      const from = subjectPositions[link.from];
-                      const to = subjectPositions[link.to];
-                      if (!from || !to) return null;
-                      const x1 = toMapX(from.x);
-                      const y1 = toMapY(from.y);
-                      const x2 = toMapX(to.x);
-                      const y2 = toMapY(to.y);
-                      return (
-                        <motion.line
-                          key={`${link.from}-${link.to}`}
-                          x1={x1}
-                          y1={y1}
-                          initial={{ x2: x1, y2: y1, opacity: 0 }}
-                          animate={{
-                            x2,
-                            y2,
-                            opacity: 1,
-                            transition: {
-                              duration: 0.6,
-                              delay: index * 0.07,
-                              ease: [0.22, 1, 0.36, 1],
-                            },
-                          }}
-                          stroke="rgba(161, 250, 255, 0.28)"
-                          strokeWidth={0.9}
-                          strokeLinecap="round"
-                        />
-                      );
-                    })}
-                    <AnimatePresence>
-                      {animatedBranchLinks.map((link) => (
-                        <motion.line
-                          key={link.key}
-                          x1={link.x1}
-                          y1={link.y1}
-                          initial={{ x2: link.x1, y2: link.y1, opacity: 0 }}
-                          animate={{
-                            x2: link.x2,
-                            y2: link.y2,
-                            opacity: 1,
-                            transition: {
-                              duration: 0.42,
-                              delay: link.index * 0.055,
-                              ease: [0.22, 1, 0.36, 1],
-                            },
-                          }}
-                          exit={{
-                            x2: link.x1,
-                            y2: link.y1,
-                            opacity: 0,
-                            transition: { duration: 0.2, ease: "easeInOut" },
-                          }}
-                          stroke="rgba(255, 81, 250, 0.42)"
-                          strokeWidth={0.95}
-                          strokeLinecap="round"
-                        />
-                      ))}
-                    </AnimatePresence>
-                  </svg>
-                </div>
+                <motion.div
+                  animate={mapTransform}
+                  transition={{ type: "spring", damping: 25, stiffness: 120 }}
+                  className="absolute inset-0"
+                >
+                  <div className="pointer-events-none absolute inset-0">
+                    <svg className="h-full w-full" viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} preserveAspectRatio="none">
+                      {subjectLinks.map((link, index) => {
+                        const from = subjectPositions[link.from];
+                        const to = subjectPositions[link.to];
+                        if (!from || !to) return null;
+                        const x1 = toMapX(from.x);
+                        const y1 = toMapY(from.y);
+                        const x2 = toMapX(to.x);
+                        const y2 = toMapY(to.y);
+                        return (
+                          <motion.line
+                            key={`${link.from}-${link.to}`}
+                            x1={x1}
+                            y1={y1}
+                            initial={{ x2: x1, y2: y1, opacity: 0 }}
+                            animate={{
+                              x2,
+                              y2,
+                              opacity: 1,
+                              transition: {
+                                duration: 0.6,
+                                delay: index * 0.07,
+                                ease: [0.22, 1, 0.36, 1],
+                              },
+                            }}
+                            stroke="rgba(161, 250, 255, 0.28)"
+                            strokeWidth={0.9}
+                            strokeLinecap="round"
+                          />
+                        );
+                      })}
+                      <AnimatePresence>
+                        {animatedBranchLinks.map((link) => (
+                          <motion.line
+                            key={link.key}
+                            x1={link.x1}
+                            y1={link.y1}
+                            initial={{ x2: link.x1, y2: link.y1, opacity: 0 }}
+                            animate={{
+                              x2: link.x2,
+                              y2: link.y2,
+                              opacity: 1,
+                              transition: {
+                                duration: 0.42,
+                                delay: link.index * 0.055,
+                                ease: [0.22, 1, 0.36, 1],
+                              },
+                            }}
+                            exit={{
+                              x2: link.x1,
+                              y2: link.y1,
+                              opacity: 0,
+                              transition: { duration: 0.2, ease: "easeInOut" },
+                            }}
+                            stroke="rgba(255, 81, 250, 0.42)"
+                            strokeWidth={0.95}
+                            strokeLinecap="round"
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </svg>
+                  </div>
 
-                {subjectClusters.map((cluster) => {
-                  const position = subjectPositions[cluster.id];
-                  if (!position) return null;
-                  const active = selectedSubjectId === cluster.id;
-                  return (
-                    <button
-                      key={cluster.id}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (selectedSubjectId === cluster.id) {
-                          setSelectedSubjectId("");
-                          setIsSubjectModalOpen(false);
-                          return;
-                        }
-                        setSelectedSubjectId(cluster.id);
-                        setIsSubjectModalOpen(true);
-                      }}
-                      className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
-                      style={{ left: `${position.x}%`, top: `${position.y}%` }}
-                    >
-                      <div className="relative">
-                        <div className="relative mx-auto flex items-center justify-center">
-                          <motion.span
-                            aria-hidden
-                            className={[
-                              "absolute rounded-full blur-md",
-                              active ? "h-8 w-8 bg-secondary/28" : "h-6 w-6 bg-primary/22",
-                            ].join(" ")}
-                            animate={active ? { scale: [1, 1.15, 1], opacity: [0.45, 0.62, 0.45] } : { scale: 1, opacity: 0.4 }}
-                            transition={active ? { duration: 1.9, ease: "easeInOut", repeat: Infinity } : { duration: 0.25 }}
-                          />
-                          <motion.span
-                            aria-hidden
-                            className={[
-                              "absolute rounded-full",
-                              active ? "h-7 w-7 bg-secondary/14" : "h-6 w-6 bg-primary/10",
-                            ].join(" ")}
-                            animate={active ? { scale: [1, 1.08, 1], opacity: [0.4, 0.55, 0.4] } : { scale: 1, opacity: 0.35 }}
-                            transition={active ? { duration: 2.1, ease: "easeInOut", repeat: Infinity } : { duration: 0.25 }}
-                          />
+                  {subjectClusters.map((cluster) => {
+                    const position = subjectPositions[cluster.id];
+                    if (!position) return null;
+                    const active = selectedSubjectId === cluster.id;
+                    return (
+                      <button
+                        key={cluster.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (selectedSubjectId === cluster.id) {
+                            setSelectedSubjectId("");
+                            setIsSubjectModalOpen(false);
+                            resetMap();
+                            return;
+                          }
+                          setSelectedSubjectId(cluster.id);
+                          setIsSubjectModalOpen(true);
+                          centerNode(position.x, position.y);
+                        }}
+                        className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
+                        style={{ left: `${position.x}%`, top: `${position.y}%` }}
+                      >
+                        <div className="relative">
+                          <div className="relative mx-auto flex items-center justify-center">
+                            <motion.span
+                              aria-hidden
+                              className={[
+                                "absolute rounded-full blur-md",
+                                active ? "h-8 w-8 bg-secondary/28" : "h-6 w-6 bg-primary/22",
+                              ].join(" ")}
+                              animate={active ? { scale: [1, 1.15, 1], opacity: [0.45, 0.62, 0.45] } : { scale: 1, opacity: 0.4 }}
+                              transition={active ? { duration: 1.9, ease: "easeInOut", repeat: Infinity } : { duration: 0.25 }}
+                            />
+                            <motion.span
+                              aria-hidden
+                              className={[
+                                "absolute rounded-full",
+                                active ? "h-7 w-7 bg-secondary/14" : "h-6 w-6 bg-primary/10",
+                              ].join(" ")}
+                              animate={active ? { scale: [1, 1.08, 1], opacity: [0.4, 0.55, 0.4] } : { scale: 1, opacity: 0.35 }}
+                              transition={active ? { duration: 2.1, ease: "easeInOut", repeat: Infinity } : { duration: 0.25 }}
+                            />
+                            <div
+                              className={[
+                                "relative h-3 w-3 rounded-full transition-all",
+                                active
+                                  ? "bg-secondary shadow-[0_0_18px_rgba(255,81,250,0.8)]"
+                                  : "bg-primary shadow-[0_0_14px_rgba(161,250,255,0.55)]",
+                              ].join(" ")}
+                            />
+                          </div>
                           <div
                             className={[
-                              "relative h-3 w-3 rounded-full transition-all",
-                              active
-                                ? "bg-secondary shadow-[0_0_18px_rgba(255,81,250,0.8)]"
-                                : "bg-primary shadow-[0_0_14px_rgba(161,250,255,0.55)]",
+                              "absolute left-1/2 top-full mt-2 w-[148px] -translate-x-1/2 rounded-2xl px-3 py-2 transition-all",
+                              active ? "text-secondary" : "text-on-surface",
                             ].join(" ")}
-                          />
+                          >
+                            <p className="text-[11px] font-bold uppercase tracking-[0.14em]">{cluster.name}</p>
+                          </div>
                         </div>
-                        <div
-                          className={[
-                            "absolute left-1/2 top-full mt-2 w-[148px] -translate-x-1/2 rounded-2xl px-3 py-2 transition-all",
-                            active ? "text-secondary" : "text-on-surface",
-                          ].join(" ")}
-                        >
-                          <p className="text-[11px] font-bold uppercase tracking-[0.14em]">{cluster.name}</p>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  })}
 
-                <AnimatePresence>
-                  {expandedTitleNodes.map((node, index) => (
-                    <motion.button
-                      type="button"
-                      key={`${selectedSubjectId || "none"}-${node.session.id}`}
-                      className="absolute -translate-x-1/2 -translate-y-1/2"
-                      style={{ left: `${node.x}%`, top: `${node.y}%` }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void handleOpenSessionInStudy(node.session.id);
-                      }}
-                      disabled={openingSessionId === node.session.id}
-                      initial={{ opacity: 0, scale: 0.72, y: 9 }}
-                      animate={{
-                        opacity: 1,
-                        scale: 1,
-                        y: 0,
-                        transition: {
-                          duration: 0.32,
-                          delay: 0.12 + index * 0.06,
-                          ease: [0.22, 1, 0.36, 1],
-                        },
-                      }}
-                      exit={{
-                        opacity: 0,
-                        scale: 0.74,
-                        y: 6,
-                        transition: { duration: 0.2, ease: "easeInOut" },
-                      }}
-                    >
-                      <div className="relative">
-                        <div className="relative mx-auto flex items-center justify-center">
-                          <span
-                            aria-hidden
-                            className="absolute h-5 w-5 rounded-full bg-secondary/14"
-                          />
-                          <div
-                            className="relative h-2.5 w-2.5 rounded-full bg-secondary shadow-[0_0_10px_rgba(255,81,250,0.6)]"
-                          />
-                        </div>
-                        <div className="absolute left-1/2 top-full mt-2 w-[120px] -translate-x-1/2 rounded-xl px-2.5 py-2 text-center shadow-[0_12px_24px_rgba(0,0,0,0.35)]">
-                          <p className="truncate text-[10px] font-semibold text-on-surface" title={node.session.title}>
-                            {node.session.title}
-                          </p>
-                        </div>
-                      </div>
-                    </motion.button>
-                  ))}
-                </AnimatePresence>
+                  <AnimatePresence>
+                    {expandedTitleNodes.map((node, index) => (
+                      <motion.button
+                        type="button"
+                        key={`${selectedSubjectId || "none"}-${node.session.id}`}
+                        className="absolute -translate-x-1/2 -translate-y-1/2"
+                        style={{ left: `${node.x}%`, top: `${node.y}%` }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleOpenSessionInStudy(node.session.id);
+                        }}
+                        disabled={openingSessionId === node.session.id}
+                        initial={{ opacity: 0, scale: 0.72, y: 9 }}
+                        animate={{
+                          opacity: 1,
+                          scale: 1,
+                          y: 0,
+                          transition: {
+                            duration: 0.32,
+                            delay: 0.12 + index * 0.06,
+                            ease: [0.22, 1, 0.36, 1],
+                          },
+                        }}
+                        exit={{
+                          opacity: 0,
+                          scale: 0.74,
+                          y: 6,
+                          transition: { duration: 0.2, ease: "easeInOut" },
+                        }}
+                      >
+                        <div className="relative">
+                          <div className="relative mx-auto flex items-center justify-center">
+                            <span
+                              aria-hidden
+                              className="absolute h-5 w-5 rounded-full bg-secondary/14"
+                            />
+                            <div
+                              className="relative h-2.5 w-2.5 rounded-full bg-secondary shadow-[0_0_10px_rgba(255,81,250,0.6)]"
+                            />
+                          </div>
+                          <div className="absolute left-1/2 top-full mt-2 w-[120px] -translate-x-1/2 rounded-xl px-2.5 py-2 text-center">
+                            <p className="truncate text-[10px] font-semibold text-on-surface" title={node.session.title}>
+                              {node.session.title}
+                            </p>
+                          </div>                        </div>
+                      </motion.button>
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
 
                 <AnimatePresence>
                   {selectedSubject && isSubjectModalOpen ? (
@@ -685,7 +726,10 @@ export default function KnowledgeMapPage({
                           <h2 className="mt-1 font-headline text-2xl font-black">{selectedSubject.name}</h2>
                         </div>
                         <button
-                          onClick={() => setIsSubjectModalOpen(false)}
+                          onClick={() => {
+                            setIsSubjectModalOpen(false);
+                            resetMap();
+                          }}
                           className="rounded-full bg-surface-container p-2 text-on-surface-variant transition-colors hover:text-on-surface"
                           aria-label="Close subject popup"
                         >
