@@ -1218,7 +1218,7 @@ export function StudySpacePage({
     return () => window.removeEventListener('zupiq-study-debug', onDebugEvent);
   }, [showDebugOverlay]);
 
-  const dragState  = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const dragState  = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number; moved: boolean } | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const pendingViewportRestoreRef = useRef<{
     left: number;
@@ -2040,15 +2040,23 @@ export function StudySpacePage({
     const onMove = (e: MouseEvent) => {
       if (!dragState.current) return;
       const { id, startX, startY, origX, origY } = dragState.current;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.hypot(dx, dy) > 4) {
+        dragState.current.moved = true;
+      }
       const s = scaleRef.current;
       setPositions(prev => ({
         ...prev,
-        [id]: { x: origX + (e.clientX - startX) / s, y: origY + (e.clientY - startY) / s },
+        [id]: { x: origX + dx / s, y: origY + dy / s },
       }));
     };
     const onUp = () => {
       if (!dragState.current) return;
-      const id = dragState.current.id;
+      const { id, moved } = dragState.current;
+      if (moved) {
+        suppressBranchClickRef.current = true;
+      }
       dragState.current = null;
       setDraggingId(null);
       setPositions(prev => resolveCollisions(prev, id));
@@ -2058,6 +2066,7 @@ export function StudySpacePage({
       e.preventDefault();
       const touch = e.touches[0];
       const { id, startX, startY, origX, origY } = dragState.current;
+      dragState.current.moved = true;
       const s = scaleRef.current;
       setPositions(prev => ({
         ...prev,
@@ -2066,7 +2075,10 @@ export function StudySpacePage({
     };
     const onTouchEnd = () => {
       if (!dragState.current) return;
-      const id = dragState.current.id;
+      const { id, moved } = dragState.current;
+      if (moved) {
+        suppressBranchClickRef.current = true;
+      }
       dragState.current = null;
       setDraggingId(null);
       setPositions(prev => resolveCollisions(prev, id));
@@ -2208,6 +2220,7 @@ export function StudySpacePage({
       startY: e.clientY,
       origX: positions[id]?.x ?? 0,
       origY: positions[id]?.y ?? 0,
+      moved: false,
     };
     setDraggingId(id);
   }, [isLayoutLocked, positions]);
@@ -2220,6 +2233,7 @@ export function StudySpacePage({
       startY: clientY,
       origX: positions[id]?.x ?? 0,
       origY: positions[id]?.y ?? 0,
+      moved: false,
     };
     setDraggingId(id);
   }, [isLayoutLocked, positions]);

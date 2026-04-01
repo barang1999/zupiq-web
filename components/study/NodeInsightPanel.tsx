@@ -985,13 +985,7 @@ function NodeInsightPanelInner({
     ? `Ask Zupiq about ${selectedNode.label}...`
     : 'Select a node to start deep dive...';
 
-  const expressionLines = useMemo(() => {
-    return (expression || '').split('\n').filter(line => line.trim() !== '');
-  }, [expression]);
-
-  const keyFormulaLines = useMemo(() => {
-    return (keyFormula || '').split('\n').filter(line => line.trim() !== '');
-  }, [keyFormula]);
+  const hasKeyFormula = !!keyFormula?.trim();
 
   // ── Snapshot copy ────────────────────────────────────────────────────────────
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
@@ -1254,17 +1248,12 @@ function NodeInsightPanelInner({
             {selectedNode.mathContent && (
               <div className="bg-background/60 rounded-xl px-4 py-3 border border-outline-variant/20">
                 <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest block mb-2">Expression</span>
-                <div className="space-y-1.5">
-                  {expressionLines.map((line, idx) => (
-                    <RichText
-                      key={`expr_${selectedNode.id}_${idx}`}
-                      className="text-base text-primary leading-relaxed whitespace-pre-wrap block no-scrollbar"
-                      discreet
-                    >
-                      {line}
-                    </RichText>
-                  ))}
-                </div>
+                <RichText
+                  className="text-base text-primary leading-relaxed block no-scrollbar"
+                  discreet
+                >
+                  {expression}
+                </RichText>
               </div>
             )}
 
@@ -1338,19 +1327,14 @@ function NodeInsightPanelInner({
                   </div>
                 ) : (
                   <div className="space-y-3 relative">
-                    {keyFormulaLines.length > 0 && (
+                    {hasKeyFormula && (
                       <div className="bg-background/50 p-3 rounded-xl text-center mb-1">
-                        <div className="space-y-2">
-                          {keyFormulaLines.map((line, idx) => (
-                            <RichText
-                              key={`key_formula_${idx}`}
-                              className="text-sm text-primary whitespace-pre-wrap block no-scrollbar"
-                              discreet
-                            >
-                              {line}
-                            </RichText>
-                          ))}
-                        </div>
+                        <RichText
+                          className="text-sm text-primary block no-scrollbar"
+                          discreet
+                        >
+                          {keyFormula}
+                        </RichText>
                       </div>
                     )}
                     <RichText className="text-on-surface leading-relaxed text-sm break-words [overflow-wrap:anywhere]">

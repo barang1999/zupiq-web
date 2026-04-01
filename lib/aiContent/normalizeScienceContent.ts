@@ -27,8 +27,8 @@ const CHEM_UNITS_RE = /\b(?:mol|g\/mol|mol\^{-?1}|kJ|kJ\/mol|J|atm|M|mL|cm\^3)\b
 const CHEM_KEYWORDS_RE = /\b(?:molecule|atom|reaction|compound|molar mass|stoichiometry|gas law|concentration|empirical formula|molecular formula)\b/i;
 
 // Standard Math signals (from normalizeMathMarkdown)
-// Includes \ce and \pu so bare chemistry expressions get auto-wrapped in $$
-const LATEX_SIGNAL_RE = /\\(?:frac|sqrt|Delta|implies|le|ge|neq|text|left|right|cdot|times|pm|mp|alpha|beta|gamma|theta|pi|sum|int|lim|ce|pu|mathrm|mathbf|mathit)|\^|_/;
+// Includes \ce, \pu, \propto and other math-only commands
+const LATEX_SIGNAL_RE = /\\(?:frac|sqrt|Delta|implies|le|ge|neq|text|left|right|cdot|times|pm|mp|alpha|beta|gamma|theta|pi|sum|int|lim|propto|approx|sim|equiv|infty|partial|nabla|forall|exists|in|notin|subset|supset|cup|cap|wedge|vee|ce|pu|mathrm|mathbf|mathit)|\^|_/;
 const MATH_RELATION_RE = /[=<>±+\-]/;
 
 // ─── Detection ─────────────────────────────────────────────────────────────
@@ -51,7 +51,9 @@ export function isProbablyRawLatexMath(input: string): boolean {
   if (/\$[^$]+\$/.test(s) || /\$\$[\s\S]+\$\$/.test(s)) return false;
   // Bare \ce{} or \pu{} outside any delimiter should be wrapped
   if (/\\(?:ce|pu)\{/.test(s)) return true;
-  return LATEX_SIGNAL_RE.test(s) && MATH_RELATION_RE.test(s);
+  // Strong signal: a LaTeX command is present. No need for a relation symbol —
+  // expressions like F \propto m_1 m_2 are valid math without =/</>
+  return LATEX_SIGNAL_RE.test(s);
 }
 
 // ─── Normalization Utilities ──────────────────────────────────────────────
@@ -103,6 +105,31 @@ export function normalizeScienceContent(input: string): string {
     .replace(/\\\[([\s\S]*?)\\\]/g, (_, m) => `$$\n${m.trim()}\n$$`)
     .replace(/\\\(([\s\S]*?)\\\)/g, (_, m) => `$${m.trim()}$`);
 
+  // 1b. Remove spurious backslash before single uppercase letters that are not
+  // valid KaTeX commands (e.g. \V_{max} → V_{max}, \R^2 → R^2).
+  // Safe: no standard KaTeX command is a lone uppercase letter (multi-letter
+  // commands like \Delta, \Gamma are not affected because [A-Z] must not be
+  // followed by another letter).
+  text = text.replace(/\\([A-Z])(?![a-zA-Z])/g, '$1');
+
+  // 1d. Fix AI-corrupted LaTeX commands — two corruption patterns:
+  //   Type A: backslash dropped entirely  → "frac{" instead of "\frac{"
+  //   Type B: backslash + first letter dropped → "rac{" instead of "\frac{"
+  // Type B first (more specific), then Type A.
+  text = text
+    // Type B: partial commands (first letter also dropped)
+    .replace(/\brac\{/g, '\\frac{')
+    .replace(/\bext\{/g, '\\text{')
+    .replace(/\bqrt\{/g, '\\sqrt{')
+    .replace(/\bathrm\{/g, '\\mathrm{')
+    .replace(/\bopto\b/g, '\\propto')
+    .replace(/\bight(?=[)}\]|])/g, '\\right')
+    // Type A: only backslash dropped — full word present
+    .replace(
+      /(?<!\\)\b(frac|sqrt|propto|approx|times|cdot|sum|int|lim|infty|partial|Delta|alpha|beta|gamma|theta|pi|text|left|right|mathrm|mathbf|ce|pu)\b(?=[{\s^_]|$)/g,
+      '\\$1'
+    );
+
   // 2. Handle chemistry-specific unit fixes globally (common AI errors)
   text = text
     // Convert \mathrm{unit+element} patterns to \pu{unit element}
@@ -120,9 +147,15 @@ export function normalizeScienceContent(input: string): string {
     const trimmed = para.trim();
     if (!trimmed) return para;
 
-    // If it already has delimiters, leave it alone but maybe normalize internals
+    // If it already has delimiters, pass through — but upgrade plain $$ blocks
+    // that contain \\ to use align* (plain display math doesn't support line breaks)
     if (/\$[^$]+\$/.test(trimmed) || /\$\$[\s\S]+\$\$/.test(trimmed)) {
-      return para;
+      return para.replace(/\$\$([\s\S]*?)\$\$/g, (_, inner) => {
+        if (/\\\\/.test(inner) && !/\\begin\{/.test(inner)) {
+          return `$$\n\\begin{align*}\n${inner.trim()}\n\\end{align*}\n$$`;
+        }
+        return `$$${inner}$$`;
+      });
     }
 
     // Is it a standalone reaction?
@@ -133,6 +166,10 @@ export function normalizeScienceContent(input: string): string {
     // Is it probably a math block?
     if (isProbablyRawLatexMath(trimmed)) {
       const normalized = normalizeLatexLineBreaks(trimmed);
+      // \\ inside plain $$ is invalid — use align* so multi-step expressions render
+      if (/\\\\/.test(normalized)) {
+        return `$$\n\\begin{align*}\n${normalized}\n\\end{align*}\n$$`;
+      }
       return `$$\n${normalized}\n$$`;
     }
 
