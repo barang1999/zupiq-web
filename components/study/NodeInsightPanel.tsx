@@ -1157,7 +1157,7 @@ function NodeInsightPanelInner({
       {/* Scrollable content */}
       <div
         className="h-full overflow-y-auto p-8 pb-[200px]"
-        style={{ width: '100%', touchAction: 'pan-y' }}
+        style={{ width: '100%', touchAction: 'pan-y', overscrollBehaviorY: 'contain' }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}

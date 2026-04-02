@@ -35,6 +35,7 @@ import { HowItWorksPage } from "./pages/HowItWorksPage";
 import FlashcardSubjectSelectionPage from "./pages/FlashcardSubjectSelectionPage";
 import FlashcardSessionPage from "./pages/FlashcardSessionPage";
 import QuizPage from "./pages/QuizPage";
+import QuizSetupPage from "./pages/QuizSetupPage";
 import AchievementPage from "./pages/AchievementPage";
 import KnowledgeMapPage from "./pages/KnowledgeMapPage";
 import QuantumPrismPage from "./pages/quantum-prism/QuantumPrismPage";
@@ -51,6 +52,7 @@ type AppShellPage =
   | 'flashcards'
   | 'flashcards-session'
   | 'quiz'
+  | 'quiz-setup'
   | 'knowledge-map'
   | 'achievements'
   | 'quantum-prism'
@@ -516,6 +518,7 @@ export default function App() {
     if (path === '/how-it-works') return 'how-it-works';
     if (path === '/flashcards/session') return 'flashcards-session';
     if (path === '/flashcards') return 'flashcards';
+    if (path === '/quiz/setup') return 'quiz-setup';
     if (path === '/quiz') return 'quiz';
     if (path === '/knowledge-map') return 'knowledge-map';
     if (path === '/achievements') return 'achievements';
@@ -563,6 +566,14 @@ export default function App() {
     } else if (next === "flashcards") {
       url = "/flashcards";
     } else if (next === "quiz") {
+      const params = new URLSearchParams(window.location.search);
+      const quizId = options?.quizSubjectId; // reused as quizId if needed, or we just pass via state
+      const attemptId = options?.quizSubjectName; // reused as attemptId
+      if (quizId) params.set("quizId", quizId);
+      if (attemptId) params.set("attemptId", attemptId);
+      const query = params.toString();
+      url = query ? `/quiz?${query}` : "/quiz";
+    } else if (next === "quiz-setup") {
       const quizParams = new URLSearchParams();
       const quizSubjectId = options?.quizSubjectId?.trim();
       const quizSubjectName = options?.quizSubjectName?.trim();
@@ -574,7 +585,7 @@ export default function App() {
       }
       if (quizArea) quizParams.set("area", quizArea);
       const query = quizParams.toString();
-      url = query ? `/quiz?${query}` : "/quiz";
+      url = query ? `/quiz/setup?${query}` : "/quiz/setup";
     } else if (next === "knowledge-map") {
       url = "/knowledge-map";
     } else if (next === "achievements") {
@@ -892,6 +903,21 @@ export default function App() {
           onStartSession={(subject) => setPage('flashcards-session', { subject })}
         />
       );
+    } else if (page === 'quiz-setup') {
+      authenticatedPage = (
+        <QuizSetupPage
+          user={currentUser}
+          onQuizGenerated={(quizId, attemptId) => setPage('quiz', { quizSubjectId: quizId, quizSubjectName: attemptId })}
+          onNavigateStudy={() => setPage('study')}
+          onNavigateHistory={() => setPage('history')}
+          onNavigateFlashcards={() => setPage('flashcards')}
+          onNavigateKnowledgeMap={() => setPage('knowledge-map')}
+          onNavigateAchievements={() => setPage('achievements')}
+          onNavigateSettings={() => setPage('settings')}
+          showInstallAppButton={showInstallButton}
+          onInstallApp={handleInstallApp}
+        />
+      );
     } else if (page === 'quiz') {
       authenticatedPage = (
         <QuizPage
@@ -902,6 +928,7 @@ export default function App() {
           onNavigateFlashcards={() => setPage('flashcards')}
           onNavigateAchievements={() => setPage('achievements')}
           onNavigateSettings={() => setPage('settings')}
+          onNavigateQuizSetup={() => setPage('quiz-setup')}
           showInstallAppButton={showInstallButton}
           onInstallApp={handleInstallApp}
         />
@@ -943,7 +970,7 @@ export default function App() {
           onNavigateFlashcards={() => setPage('flashcards')}
           onNavigateAchievements={() => setPage('achievements')}
           onNavigateQuantumPrism={() => setPage('quantum-prism')}
-          onNavigateQuiz={(prefill) => setPage('quiz', {
+          onNavigateQuiz={(prefill) => setPage('quiz-setup', {
             quizSubjectId: prefill?.subjectId ?? null,
             quizSubjectName: prefill?.subjectName ?? null,
             quizArea: prefill?.specificArea ?? null,

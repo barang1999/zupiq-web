@@ -142,7 +142,7 @@ export function SpringBottomSheet({ onClose, children, zClass = 'z-[60]' }: Spri
 
   return (
     <animated.div
-      style={{ height }}
+      style={{ height, overscrollBehaviorY: 'none' }}
       className={`fixed bottom-0 left-0 right-0 ${zClass} flex flex-col rounded-t-[2rem] bg-surface-container-highest/95 backdrop-blur-2xl border-t border-x border-outline-variant/20 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] overflow-hidden touch-none`}
     >
       {/* Drag handle */}
@@ -155,7 +155,11 @@ export function SpringBottomSheet({ onClose, children, zClass = 'z-[60]' }: Spri
       </div>
 
       {/* Content — allow internal scroll without interfering with drag */}
-      <div {...bindBody()} className="flex-1 min-h-0 overflow-hidden touch-auto">
+      <div
+        {...bindBody()}
+        className="flex-1 min-h-0 overflow-hidden touch-auto"
+        style={{ overscrollBehaviorY: 'contain' }}
+      >
         {children}
       </div>
     </animated.div>
