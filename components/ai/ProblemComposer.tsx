@@ -319,7 +319,7 @@ export function ProblemComposer({
               className="absolute inset-0 pointer-events-auto cursor-default"
             />
 
-            <div className="absolute inset-0 px-3 sm:px-6 pt-20 sm:pt-24 pb-4 sm:pb-6 flex items-end justify-center pointer-events-none">
+            <div className="absolute inset-0 px-3 sm:px-6 pt-20 sm:pt-24 pb-0 sm:pb-6 flex items-end justify-center pointer-events-none">
               <motion.section
                 initial={{ opacity: 0, y: 18, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}

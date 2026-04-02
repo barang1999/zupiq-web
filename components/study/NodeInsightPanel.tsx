@@ -298,7 +298,7 @@ function ComposerBox({
       <input ref={uploadFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
 
-      <div className="absolute inset-x-4 bottom-[72px] sm:bottom-4 z-30">
+      <div className="absolute inset-x-4 bottom-2 sm:bottom-4 z-30">
         <div
           className={`relative bg-surface-container-highest/95 rounded-[24px] p-4 border shadow-2xl backdrop-blur-xl transition-colors ${
             isDragOver ? 'border-primary/60 bg-primary/5' : 'border-outline-variant/20'
@@ -719,7 +719,7 @@ function MobileComposerBox({
       <input ref={uploadFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
 
-      <div className="absolute inset-x-4 bottom-[60px] z-30">
+      <div className="absolute inset-x-4 bottom-2 z-30">
         {/* Archive sub-popover */}
         <AnimatePresence>
           {isContextMenuOpen && (

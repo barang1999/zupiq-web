@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NEURAL ENGINE - Neural Breakdown</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary-fixed": "#00f4fe",
+              "on-tertiary-container": "#4a5e00",
+              "tertiary-container": "#cafd00",
+              "secondary-fixed-dim": "#ffa6f3",
+              "on-primary": "#006165",
+              "on-tertiary": "#516700",
+              "on-error": "#490006",
+              "inverse-surface": "#faf8ff",
+              "secondary-container": "#a900a9",
+              "on-secondary-container": "#fff5f9",
+              "background": "#060e20",
+              "surface-dim": "#060e20",
+              "surface-container-high": "#141f38",
+              "surface-tint": "#a1faff",
+              "surface-container-low": "#091328",
+              "secondary": "#ff51fa",
+              "on-primary-fixed": "#004346",
+              "inverse-primary": "#006a6e",
+              "surface": "#060e20",
+              "on-error-container": "#ffa8a3",
+              "outline": "#6d758c",
+              "on-secondary-fixed-variant": "#920091",
+              "tertiary-fixed": "#cafd00",
+              "primary-dim": "#00e5ee",
+              "secondary-dim": "#ff51fa",
+              "on-primary-fixed-variant": "#006266",
+              "surface-container-highest": "#192540",
+              "surface-container": "#0f1930",
+              "on-surface": "#dee5ff",
+              "on-tertiary-fixed-variant": "#526900",
+              "on-background": "#dee5ff",
+              "error-dim": "#d7383b",
+              "primary-container": "#00f4fe",
+              "on-surface-variant": "#a3aac4",
+              "secondary-fixed": "#ffbdf3",
+              "on-tertiary-fixed": "#3a4a00",
+              "surface-container-lowest": "#000000",
+              "on-secondary-fixed": "#620061",
+              "on-primary-container": "#00575b",
+              "primary-fixed-dim": "#00e5ee",
+              "surface-variant": "#192540",
+              "primary": "#a1faff",
+              "tertiary-dim": "#beee00",
+              "inverse-on-surface": "#4d556b",
+              "tertiary": "#f3ffca",
+              "on-secondary": "#400040",
+              "outline-variant": "#40485d",
+              "error-container": "#9f0519",
+              "error": "#ff716c",
+              "surface-bright": "#1f2b49",
+              "tertiary-fixed-dim": "#beee00"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { background-color: #060e20; }
+        .glass-panel {
+            background: rgba(25, 37, 64, 0.6);
+            backdrop-filter: blur(20px);
+        }
+        .neural-gradient {
+            background: linear-gradient(45deg, #a1faff, #ff51fa);
+        }
+        .glow-corner::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 40px;
+            height: 40px;
+            background: radial-gradient(circle at top right, rgba(243, 255, 202, 0.15), transparent 70%);
+            pointer-events: none;
+        }
+        .vertical-line {
+            width: 2px;
+            background: linear-gradient(to bottom, #a1faff 0%, #ff51fa 100%);
+            opacity: 0.3;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body text-on-surface overflow-x-hidden pb-32">
+<!-- Top Navigation -->
+<header class="fixed top-0 w-full z-50 bg-slate-950/60 backdrop-blur-xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex items-center justify-between px-6 h-16">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-cyan-400 active:scale-95 duration-200">menu</span>
+<h1 class="text-xl font-bold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-500 font-headline uppercase">NEURAL ENGINE</h1>
+</div>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant/30">
+<img alt="User Profile" data-alt="close-up portrait of a high-tech digital avatar with glowing cyan circuitry lines on dark skin and metallic textures" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCGWX7pERyRyft9dVEBr1YGNWPkhytpkIzwZXJQOZH4h8Q8Dcod-gdEcsfn7_cm7I-BAq2SR4VHe4yqLFTvD7L1T0puCXD1hmQ7XT9QjyBCEZQWDJHQ81FmPathzS2B1KPspDV_P4_waoIRr66yOeCBvv9MUNBm2abU8i_NiHv42QV1eIDA8j5usiPoNuhWYp8mb94Ed6TCZVjyThu0C4LismVvlin2tWXPlgqLeCBnnV7RSW_I5E_wEoZdtpccv9iihkNyrMXrJSE"/>
+</div>
+</header>
+<main class="pt-24 px-6 relative">
+<!-- Background Ambient Blobs -->
+<div class="fixed top-1/4 -right-20 w-64 h-64 bg-secondary-container/10 blur-[100px] rounded-full -z-10"></div>
+<div class="fixed bottom-1/4 -left-20 w-64 h-64 bg-primary-container/10 blur-[100px] rounded-full -z-10"></div>
+<!-- Vertical Problem Map Section -->
+<div class="relative flex flex-col items-center">
+<!-- Header Label -->
+<div class="mb-12 text-center">
+<span class="label-md uppercase tracking-[0.2em] text-on-surface-variant font-medium">Active Processing</span>
+<h2 class="font-headline text-3xl font-bold tracking-tight text-primary-fixed mt-2">Multivariable Optimization</h2>
+</div>
+<!-- Vertical Tree -->
+<div class="relative flex flex-col gap-16 w-full max-w-md items-center">
+<!-- Connectivity Line -->
+<div class="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 vertical-line -z-10"></div>
+<!-- Node 1: Primary Equation -->
+<div class="relative group w-full flex flex-col items-center">
+<div class="glass-panel w-full p-6 rounded-xl border border-outline-variant/10 glow-corner relative">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-primary-fixed">functions</span>
+<div class="px-2 py-0.5 rounded-full bg-primary-container/20 text-[10px] font-bold text-primary-fixed uppercase tracking-wider">Root Level</div>
+</div>
+<h3 class="text-lg font-headline font-bold mb-1">Lagrange Multipliers</h3>
+<p class="text-sm text-on-surface-variant leading-relaxed italic">f(x,y) subject to g(x,y)=c</p>
+</div>
+</div>
+<!-- Node 2: Sub-Process -->
+<div class="relative group w-full flex flex-col items-center">
+<div class="glass-panel w-full p-6 rounded-xl border border-outline-variant/10 glow-corner relative">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-secondary">change_history</span>
+<div class="px-2 py-0.5 rounded-full bg-secondary-container/20 text-[10px] font-bold text-secondary uppercase tracking-wider">Gradient Descent</div>
+</div>
+<h3 class="text-lg font-headline font-bold mb-1">Partial Derivatives</h3>
+<p class="text-sm text-on-surface-variant leading-relaxed">Calculating instantaneous rates of change across vector fields.</p>
+</div>
+<!-- Small Connector Node -->
+<div class="absolute -bottom-8 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-secondary shadow-[0_0_10px_#ff51fa]"></div>
+</div>
+<!-- Node 3: Foundational -->
+<div class="relative group w-full flex flex-col items-center opacity-80 scale-95">
+<div class="glass-panel w-full p-6 rounded-xl border border-outline-variant/10 relative">
+<div class="flex justify-between items-start mb-4">
+<span class="material-symbols-outlined text-tertiary-fixed">bolt</span>
+<div class="px-2 py-0.5 rounded-full bg-tertiary-container/20 text-[10px] font-bold text-tertiary-fixed uppercase tracking-wider">Foundational</div>
+</div>
+<h3 class="text-lg font-headline font-bold mb-1">The Power Rule</h3>
+<p class="text-sm text-on-surface-variant leading-relaxed">d/dx(xⁿ) = nxⁿ⁻¹</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual AI Insight Panel (Fixed Bottom Sheet Style) -->
+<section class="fixed bottom-24 inset-x-4 z-40">
+<div class="glass-panel rounded-[2rem] border border-outline-variant/20 shadow-2xl overflow-hidden flex flex-col">
+<!-- Insight Header -->
+<div class="p-6 pb-4 flex justify-between items-center">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary-container shadow-[0_0_15px_rgba(0,244,254,0.4)] flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container text-xl" style="font-variation-settings: 'FILL' 1;">psychology</span>
+</div>
+<div>
+<p class="text-[10px] font-bold text-primary uppercase tracking-widest leading-none">Neural Insights</p>
+<h4 class="font-headline font-bold text-lg">Visual Logic</h4>
+</div>
+</div>
+<button class="text-on-surface-variant">
+<span class="material-symbols-outlined">expand_less</span>
+</button>
+</div>
+<!-- Insight Content Area -->
+<div class="px-6 pb-6 space-y-4">
+<div class="bg-surface-container-highest/50 rounded-2xl p-4">
+<p class="text-sm leading-relaxed text-on-surface">
+                        Think of the <span class="text-primary-fixed font-medium">Power Rule</span> as a lever. For every unit you move the base, the exponent dictates the steepness of the descent. In the context of <span class="text-secondary font-medium">Optimization</span>, it's the fundamental gear that drives the entire engine.
+                    </p>
+</div>
+<!-- AI Composer / Chat Input -->
+<div class="relative">
+<input class="w-full bg-transparent border-0 border-b-2 border-surface-container-high focus:ring-0 focus:border-primary-fixed py-3 px-1 text-sm placeholder:text-on-surface-variant transition-all" placeholder="Ask for a simpler breakdown..." type="text"/>
+<button class="absolute right-0 bottom-3 text-primary-fixed">
+<span class="material-symbols-outlined">send</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-slate-900/60 backdrop-blur-2xl flex justify-around items-center px-4 pb-6 pt-3 rounded-t-[32px] no-border shadow-[0_-20px_40px_rgba(0,0,0,0.4)]">
+<a class="flex flex-col items-center justify-center bg-slate-800/80 text-cyan-400 rounded-full px-5 py-2 active:scale-90 duration-300 ease-out" href="#">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">account_tree</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Map</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 p-2 hover:text-fuchsia-400 transition-colors active:scale-90 duration-300 ease-out" href="#">
+<span class="material-symbols-outlined text-xl">psychology</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Insights</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 p-2 hover:text-fuchsia-400 transition-colors active:scale-90 duration-300 ease-out" href="#">
+<span class="material-symbols-outlined text-xl">auto_stories</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Library</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 p-2 hover:text-fuchsia-400 transition-colors active:scale-90 duration-300 ease-out" href="#">
+<span class="material-symbols-outlined text-xl">insights</span>
+<span class="font-['Inter'] text-[10px] uppercase tracking-widest mt-1">Growth</span>
+</a>
+</nav>
+</body></html>

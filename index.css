@@ -17,20 +17,36 @@
 
   --color-background: #060e20;
   --color-primary: #a1faff;
+  --color-primary-fixed: #00f4fe;
+  --color-primary-fixed-dim: #00e5ee;
   --color-on-primary: #006165;
   --color-primary-container: #00f4fe;
+  --color-on-primary-container: #00575b;
   --color-secondary: #ff51fa;
+  --color-secondary-dim: #ff51fa;
+  --color-secondary-fixed: #ffbdf3;
   --color-secondary-container: #a900a9;
+  --color-on-secondary: #400040;
+  --color-on-secondary-container: #fff5f9;
   --color-tertiary: #f3ffca;
+  --color-tertiary-dim: #beee00;
+  --color-tertiary-fixed: #cafd00;
+  --color-tertiary-container: #cafd00;
+  --color-on-tertiary: #516700;
+  --color-on-tertiary-container: #4a5e00;
   --color-error: #ff716c;
   --color-surface: #060e20;
   --color-surface-dim: #060e20;
+  --color-surface-bright: #1f2b49;
+  --color-surface-container-lowest: #000000;
   --color-surface-container-low: #091328;
   --color-surface-container: #0f1930;
   --color-surface-container-high: #141f38;
   --color-surface-container-highest: #192540;
+  --color-surface-variant: #192540;
   --color-on-surface: #dee5ff;
   --color-on-surface-variant: #a3aac4;
+  --color-outline: #6d758c;
   --color-outline-variant: #40485d;
 }
 
@@ -48,6 +64,22 @@
 @layer components {
   .glass-card {
     @apply bg-surface-container-highest/40 backdrop-blur-xl border border-white/5;
+  }
+
+  /* Neural Engine glass panel — used in mobile study layout */
+  .glass-panel {
+    @apply bg-surface-container-highest/60 backdrop-blur-xl border border-outline-variant/10;
+  }
+
+  /* Neural Engine vertical connector line */
+  .vertical-line {
+    @apply w-[2px] opacity-30;
+    background: linear-gradient(to bottom, var(--color-primary) 0%, var(--color-secondary) 100%);
+  }
+
+  /* Neural Engine gradient */
+  .neural-gradient {
+    background: linear-gradient(45deg, var(--color-primary), var(--color-secondary));
   }
 
   .glow-corner {

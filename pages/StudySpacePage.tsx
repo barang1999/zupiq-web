@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import type { TouchEvent as ReactTouchEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useSpring, animated, config } from '@react-spring/web';
+import { useDrag } from '@use-gesture/react';
 import {
   Brain,
   GitFork, History, Trophy, Network,
   Plus, X, Loader2, Sparkles,
-  Bookmark, Zap,
+  Bookmark, Zap, ChevronDown,
   ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers, Lock, LockOpen, Users, Activity,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
@@ -1076,6 +1078,111 @@ function parseJsonSafe<T>(input: any): T | null {
   }
 }
 
+// ─── MobileBottomSheet ───────────────────────────────────────────────────────
+
+const SHEET_SNAP_HALF = 0.50;   // collapsed: 50% of viewport height
+const SHEET_SNAP_FULL = 0.98;   // expanded:  98% of viewport height
+const SHEET_DISMISS_VEL = 0.4;  // velocity (px/ms) to dismiss on fast flick
+const SHEET_DISMISS_PX  = 80;   // or dragged this far below collapsed snap
+
+function MobileBottomSheet({
+  isExpanded,
+  onClose,
+  onToggleExpand,
+  children,
+}: {
+  isExpanded: boolean;
+  onClose: () => void;
+  onToggleExpand: () => void;
+  children: React.ReactNode;
+}) {
+  const snapH = useCallback(
+    (expanded: boolean) => window.innerHeight * (expanded ? SHEET_SNAP_FULL : SHEET_SNAP_HALF),
+    []
+  );
+
+  const [{ height }, api] = useSpring(() => ({
+    height: snapH(false),
+    config: { ...config.stiff, clamp: false },
+  }));
+
+  // Sync snap when isExpanded prop changes (e.g. toggle button inside panel)
+  useEffect(() => {
+    api.start({ height: snapH(isExpanded), config: config.stiff });
+  }, [isExpanded, snapH, api]);
+
+  // Mount: slide up from bottom
+  useEffect(() => {
+    api.start({ from: { height: 0 }, to: { height: snapH(isExpanded) }, config: config.stiff });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const bind = useDrag(
+    ({ last, velocity: [, vy], movement: [, my], memo = height.get() }) => {
+      // my > 0 = dragging down, < 0 = dragging up
+      const next = Math.max(80, Math.min(window.innerHeight * 0.97, memo - my));
+
+      if (!last) {
+        // Live drag — no spring, instant follow
+        api.start({ height: next, config: { tension: 0, friction: 0, clamp: true } });
+        return memo;
+      }
+
+      // Released — decide where to snap
+      const halfH = snapH(false);
+      const fullH = snapH(true);
+      const midH  = (halfH + fullH) / 2;
+      const flickingDown = vy > SHEET_DISMISS_VEL;
+      const flickingUp   = vy < -SHEET_DISMISS_VEL;
+
+      if (flickingDown || next < halfH - SHEET_DISMISS_PX) {
+        // Dismiss: spring to 0 then call onClose
+        api.start({
+          height: 0,
+          config: config.stiff,
+          onRest: onClose,
+        });
+      } else if (flickingUp || next >= midH) {
+        // Snap to full
+        api.start({ height: fullH, config: config.stiff });
+        if (!isExpanded) onToggleExpand();
+      } else {
+        // Snap to half
+        api.start({ height: halfH, config: config.stiff });
+        if (isExpanded) onToggleExpand();
+      }
+
+      return memo;
+    },
+    {
+      from: () => [0, height.get()],
+      filterTaps: true,
+      axis: 'y',
+      pointer: { touch: true },
+    }
+  );
+
+  return (
+    <animated.div
+      style={{ height }}
+      className="fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-[2rem] bg-surface-container-highest/95 backdrop-blur-2xl border-t border-x border-outline-variant/20 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] overflow-hidden touch-none"
+    >
+      {/* Drag handle */}
+      <div
+        {...bind()}
+        className="flex justify-center items-center pt-3 pb-2 shrink-0 cursor-grab active:cursor-grabbing select-none"
+      >
+        <div className="w-12 h-1.5 rounded-full bg-outline-variant/60" />
+      </div>
+
+      {/* Content — allow internal scroll, prevent sheet drag interference */}
+      <div className="flex-1 min-h-0 overflow-hidden touch-auto">
+        {children}
+      </div>
+    </animated.div>
+  );
+}
+
 export function StudySpacePage({
   user,
   onNavigateHistory,
@@ -1133,6 +1240,18 @@ export function StudySpacePage({
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [scale,          setScale]          = useState(1);
   const [isMobile,       setIsMobile]       = useState(() => typeof window !== 'undefined' ? window.innerWidth < 640 : false);
+  const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
+
+  // Auto-collapse all branch nodes when breakdown changes
+  useEffect(() => {
+    if (!breakdown) { setCollapsedNodes(new Set()); return; }
+    const parentIds = new Set(breakdown.nodes.filter(n => n.parentId).map(n => n.parentId as string));
+    setCollapsedNodes(new Set([...parentIds].filter(id => {
+      const n = breakdown.nodes.find(x => x.id === id);
+      return n && n.type !== 'root'; // keep root expanded so the tree entry point is visible
+    })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [breakdown]);
   const [isViewportReady, setIsViewportReady] = useState(false);
   const [showDebugOverlay] = useState(
     () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debugStudy') === '1'
@@ -3628,8 +3747,8 @@ IMPORTANT:
         {/* Problem Map */}
         <section className="flex-1 relative flex flex-col overflow-hidden">
 
-          {/* Title bar (when breakdown loaded) */}
-          {breakdown && !loading && (
+          {/* Title bar (when breakdown loaded) — desktop only; mobile shows header in vertical layout */}
+          {breakdown && !loading && !isMobile && (
             <div className="px-2 sm:px-4 md:px-6 pt-1.5 sm:pt-2 md:pt-2.5 pb-0 shrink-0 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <span className="text-tertiary text-[9px] sm:text-[10px] font-bold tracking-[0.1em] sm:tracking-[0.14em] uppercase">Active Analysis</span>
@@ -3675,8 +3794,8 @@ IMPORTANT:
 
           {/* Canvas area */}
           <div className="flex-1 relative overflow-hidden">
-          {/* Zoom controls overlay */}
-          <div className="absolute bottom-6 right-6 z-30 flex flex-col gap-1.5">
+          {/* Zoom controls overlay — desktop only */}
+          <div className="absolute bottom-6 right-6 z-30 hidden sm:flex flex-col gap-1.5">
             <button
               onClick={() => setScale(s => Math.min(2, +(s + 0.1).toFixed(2)))}
               title="Zoom in"
@@ -3760,8 +3879,190 @@ IMPORTANT:
               </motion.div>
             )}
 
-            {/* Neural tree */}
-            {breakdown && !loading && Object.keys(positions).length > 0 && (
+            {/* Neural tree — MOBILE: vertical neural-engine layout */}
+            {isMobile && breakdown && !loading && (() => {
+              // Pre-order traversal to assign animation indices
+              const childrenOf = (id: string) => breakdown.nodes.filter(n => n.parentId === id);
+              const root = breakdown.nodes.find(n => n.type === 'root');
+              const animOrder: string[] = [];
+              const walk = (node: BreakdownNode) => {
+                animOrder.push(node.id);
+                childrenOf(node.id).forEach(walk);
+              };
+              if (root) walk(root);
+
+              const renderNode = (node: BreakdownNode, depth: number): React.ReactNode => {
+                const children = childrenOf(node.id);
+                const isSelected = selectedNode?.id === node.id;
+                const animIdx = animOrder.indexOf(node.id);
+                const isCollapsed = collapsedNodes.has(node.id);
+                const hasChildren = children.length > 0;
+
+                const toggleCollapse = (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  setCollapsedNodes(prev => {
+                    const next = new Set(prev);
+                    next.has(node.id) ? next.delete(node.id) : next.add(node.id);
+                    return next;
+                  });
+                };
+
+                const iconEl = node.type === 'root'
+                  ? <Brain className="w-5 h-5 text-primary-container" />
+                  : node.type === 'branch'
+                    ? <GitFork className="w-5 h-5 text-secondary" />
+                    : <Sparkles className="w-5 h-5 text-tertiary" />;
+
+                const tagLabel = node.type === 'root' ? 'Primary' : node.type === 'branch' ? 'Branch' : 'Concept';
+                const tagClass = node.type === 'root'
+                  ? 'bg-primary-container/20 text-primary-container'
+                  : node.type === 'branch'
+                    ? 'bg-secondary-container/20 text-secondary'
+                    : 'bg-tertiary/20 text-tertiary';
+
+                // Left connector line color based on parent depth
+                const connectorColor = depth === 1 ? '#a1faff' : '#ff51fa';
+
+                return (
+                  <div key={node.id}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ type: 'spring', stiffness: 260, damping: 22, delay: animIdx * 0.05 }}
+                      className="relative mb-3"
+                      onClick={() => selectNode(node)}
+                    >
+                      {/* Horizontal elbow connector */}
+                      {depth > 0 && (
+                        <div
+                          className="absolute top-5 w-3 h-[2px] opacity-40"
+                          style={{ left: -14, background: connectorColor }}
+                        />
+                      )}
+
+                      <div className={`p-4 rounded-xl border relative overflow-hidden transition-all duration-300 backdrop-blur-xl ${
+                        isSelected
+                          ? 'bg-surface-container-highest/80 border-primary/50 shadow-[0_0_24px_rgba(161,250,255,0.2)]'
+                          : 'bg-surface-container-highest/60 border-outline-variant/10'
+                      }`}>
+                        {/* Glow corner */}
+                        <div className="absolute top-0 right-0 w-10 h-10 bg-[radial-gradient(circle_at_top_right,rgba(243,255,202,0.12),transparent_70%)] pointer-events-none" />
+
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-2">
+                            {iconEl}
+                            {hasChildren && (
+                              <button
+                                onClick={toggleCollapse}
+                                className="flex items-center justify-center w-5 h-5 rounded-full bg-outline-variant/20 hover:bg-outline-variant/40 transition-colors"
+                              >
+                                <ChevronDown className={`w-3 h-3 text-on-surface-variant transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+                              </button>
+                            )}
+                          </div>
+                          <div className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${tagClass}`}>
+                            {tagLabel}
+                          </div>
+                        </div>
+
+                        <h3 className="text-base font-headline font-bold mb-1">
+                          <RichText discreet>{node.label}</RichText>
+                        </h3>
+
+                        {node.mathContent ? (
+                          <div className="text-xs text-primary leading-relaxed mt-1">
+                            <RichText discreet mode="full">{node.mathContent}</RichText>
+                          </div>
+                        ) : node.description ? (
+                          <p className="text-xs text-on-surface-variant leading-relaxed">
+                            <RichText discreet>{node.description}</RichText>
+                          </p>
+                        ) : null}
+
+                        {node.tags && node.tags.length > 0 && (
+                          <div className="flex gap-1.5 flex-wrap mt-2">
+                            {node.tags.map(tag => (
+                              <span key={tag} className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[9px] font-bold">{tag}</span>
+                            ))}
+                          </div>
+                        )}
+
+                        {isSelected && node.type !== 'root' && (
+                          <div className="mt-3 pt-2 border-t border-outline-variant/20" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={e => { e.stopPropagation(); handleExpand(node); }}
+                              disabled={!!expandingId}
+                              className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 ${
+                                node.type === 'leaf'
+                                  ? 'bg-tertiary/10 border border-tertiary/20 text-tertiary'
+                                  : 'bg-secondary/10 border border-secondary/20 text-secondary'
+                              }`}
+                            >
+                              {expandingId === node.id
+                                ? <><Loader2 className="w-3 h-3 animate-spin" /> Breaking down…</>
+                                : <><GitFork className="w-3 h-3" /> Breakdown further</>
+                              }
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+
+                    {/* Children group: only the container indents, not the card itself */}
+                    {children.length > 0 && !isCollapsed && (
+                      <AnimatePresence>
+                        <motion.div
+                          key="children"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.22, ease: 'easeInOut' }}
+                          className="relative pl-5 ml-2 overflow-hidden"
+                        >
+                          {/* Vertical line spanning all children */}
+                          <div
+                            className="absolute top-0 bottom-3 w-[2px] opacity-25"
+                            style={{ left: 0, background: `linear-gradient(to bottom, ${connectorColor}, ${depth === 0 ? '#ff51fa' : '#cafd00'})` }}
+                          />
+                          <div>
+                            {children.map(child => renderNode(child, depth + 1))}
+                          </div>
+                        </motion.div>
+                      </AnimatePresence>
+                    )}
+                  </div>
+                );
+              };
+
+              return (
+                <div className="relative px-4 pt-6 pb-56 min-h-full">
+                  {/* Header */}
+                  <div className="mb-8 text-center w-full">
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-medium block">
+                      Active Processing
+                    </span>
+                    <h2 className="font-headline text-2xl font-bold tracking-tight text-primary-container mt-1">
+                      <RichText discreet>{breakdown.title}</RichText>
+                    </h2>
+                  </div>
+
+                  {/* Tree */}
+                  {root && renderNode(root, 0)}
+
+                  {/* AI orb */}
+                  <div className="flex flex-col items-center gap-3 mt-12 pointer-events-none">
+                    <div className="relative w-8 h-8 bg-primary/10 rounded-full shadow-[0_0_24px_rgba(161,250,255,0.25)] flex items-center justify-center">
+                      <div className="absolute inset-0 rounded-full border border-primary/30 animate-ping opacity-25" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
+                    </div>
+                    <span className="text-[9px] font-bold tracking-[0.3em] text-primary uppercase">Neural Pulse Active</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Neural tree — DESKTOP: canvas */}
+            {!isMobile && breakdown && !loading && Object.keys(positions).length > 0 && (
               <div style={{ width: canvasW, height: canvasH, position: 'relative', minWidth: '100%', zoom: scale }}>
 
                 {/* SVG lines */}
@@ -3838,129 +4139,278 @@ IMPORTANT:
           </div>{/* end canvas area */}
         </section>
 
-        {/* ── Right Panel ─────────────────────────────────────────────────── */}
-        {console.log('[Panel] render state', { isMobile, isInsightPanelOpen, selectedNodeId: selectedNode?.id })}
-        <motion.aside
-          animate={{
-            width: isMobile ? '100%' : (selectedNode && isInsightPanelOpen ? insightPanelWidth : 0),
-            opacity: selectedNode && isInsightPanelOpen ? 1 : 0,
-            x: selectedNode && isInsightPanelOpen ? insightSwipeOffsetX : 24,
-          }}
-          transition={{
-            width: isResizing ? { duration: 0 } : { duration: 0.22, ease: 'easeInOut' },
-            opacity: { duration: 0.18, ease: 'easeOut' },
-            x: isInsightSwipeDragging
-              ? { duration: 0 }
-              : { type: 'spring', stiffness: 420, damping: 34, mass: 0.35 },
-          }}
-          className={`bg-surface-container-low/80 backdrop-blur-md border-l border-outline-variant/10 overflow-hidden ${
-            isMobile
-              ? `fixed inset-0 z-50 ${!(selectedNode && isInsightPanelOpen) ? 'pointer-events-none' : ''}`
-              : 'h-full shrink-0 relative z-20'
-          }`}
-        >
-          {/* Resize Handle — desktop only */}
-          {!isMobile && selectedNode && isInsightPanelOpen && (
-            <div
-              onMouseDown={handlePanelResizeMouseDown}
-              className="absolute inset-y-0 left-0 w-2 cursor-col-resize z-30 group"
-            >
-              <div className="absolute inset-y-0 left-0 w-[2px] bg-primary/0 group-hover:bg-primary/30 transition-colors" />
-            </div>
-          )}
+        {/* ── Desktop Right Panel ──────────────────────────────────────────── */}
+        {!isMobile && (
+          <motion.aside
+            animate={{
+              width: selectedNode && isInsightPanelOpen ? insightPanelWidth : 0,
+              opacity: selectedNode && isInsightPanelOpen ? 1 : 0,
+              x: selectedNode && isInsightPanelOpen ? insightSwipeOffsetX : 24,
+            }}
+            transition={{
+              width: isResizing ? { duration: 0 } : { duration: 0.22, ease: 'easeInOut' },
+              opacity: { duration: 0.18, ease: 'easeOut' },
+              x: isInsightSwipeDragging
+                ? { duration: 0 }
+                : { type: 'spring', stiffness: 420, damping: 34, mass: 0.35 },
+            }}
+            className="h-full shrink-0 relative z-20 bg-surface-container-low/80 backdrop-blur-md border-l border-outline-variant/10 overflow-hidden"
+          >
+            {selectedNode && isInsightPanelOpen && (
+              <>
+                <div
+                  onMouseDown={handlePanelResizeMouseDown}
+                  className="absolute inset-y-0 left-0 w-2 cursor-col-resize z-30 group"
+                >
+                  <div className="absolute inset-y-0 left-0 w-[2px] bg-primary/0 group-hover:bg-primary/30 transition-colors" />
+                </div>
+                <NodeInsightPanel
+                  selectedNode={selectedNode}
+                  breakdown={breakdown}
+                  nodeInsights={nodeInsights}
+                  nodeConversations={nodeConversations}
+                  sessionVisualTable={sessionVisualTable}
+                  expression={selectedNodeExpression}
+                  keyFormula={selectedNodeKeyFormula}
+                  insightLoading={insightLoading}
+                  composerLoading={composerLoading}
+                  composerError={composerError}
+                  sessionId={sessionId}
+                  isInsightSwipeDragging={isInsightSwipeDragging}
+                  imageLoading={isDeepDiveImageAnalyzing}
+                  hasAttachment={hasDeepDiveAttachment}
+                  onAskDeepDive={handleAskDeepDive}
+                  onExplainToFiveYearOld={handleExplainToFiveYearOld}
+                  onClose={closeInsightPanel}
+                  onSyncVisualTable={async () => {
+                    if (!sessionId) return;
+                    showActionToast('Syncing from cloud...');
+                    try {
+                      const { session } = await api.get<{ session: any }>(`/api/sessions/${sessionId}`);
+                      if (session?.visual_table_json) {
+                        const vt = parseJsonSafe<VisualTableData>(session.visual_table_json);
+                        setSessionVisualTable(vt);
+                        showActionToast('Table restored!');
+                      } else {
+                        showActionToast('No table found in cloud.');
+                      }
+                    } catch {
+                      showActionToast('Sync failed.');
+                    }
+                  }}
+                  onAttachFile={handleAttachDeepDiveFile}
+                  onImageCropRequest={handleImageCropRequest}
+                  onClearAttachment={() => {
+                    setDeepDiveUploadId(null);
+                    setHasDeepDiveAttachment(false);
+                  }}
+                  onExpandTable={setExpandedTable}
+                  isExpanded={isInsightExpanded}
+                  onToggleExpand={handleToggleInsightExpand}
+                  onSaveInsight={async (node) => {
+                    const insight = nodeInsights[node.id];
+                    if (!insight) return;
+                    await saveInsight({
+                      nodeLabel: node.label,
+                      subject: breakdown?.subject ?? 'General',
+                      simpleBreakdown: insight.simpleBreakdown,
+                      keyFormula: insight.keyFormula,
+                    });
+                    showActionToast('Insight saved to Knowledge.');
+                  }}
+                  onSaveVisualTable={async (table, label) => {
+                    await saveVisualTable({
+                      title: label ?? selectedNode?.label ?? 'Table',
+                      subject: breakdown?.subject ?? 'General',
+                      nodeLabel: selectedNode?.label ?? null,
+                      table,
+                    });
+                    showActionToast('Table saved to Knowledge.');
+                  }}
+                  onSaveConversationMessage={async (question, answer) => {
+                    await saveConversationMessage({
+                      question,
+                      answer,
+                      subject: breakdown?.subject ?? 'General',
+                      nodeLabel: selectedNode?.label ?? '',
+                    });
+                    showActionToast('Q&A saved to Knowledge.');
+                  }}
+                  onBreakdownConversation={handleBreakdownConversation}
+                  onSaveNodeBreakdown={async (node) => {
+                    await saveNodeBreakdown({
+                      label: node.label,
+                      description: node.description,
+                      mathContent: node.mathContent,
+                      subject: breakdown?.subject ?? 'General',
+                    });
+                    showActionToast('Node saved to Knowledge.');
+                  }}
+                  onTouchStart={handleInsightSwipeStart}
+                  onTouchMove={handleInsightSwipeMove}
+                  onTouchEnd={handleInsightSwipeEnd}
+                  isMobile={false}
+                />
+              </>
+            )}
+          </motion.aside>
+        )}
+      </motion.main>
 
-          {selectedNode && isInsightPanelOpen && (
-            <NodeInsightPanel
-              selectedNode={selectedNode}
-              breakdown={breakdown}
-              nodeInsights={nodeInsights}
-              nodeConversations={nodeConversations}
-              sessionVisualTable={sessionVisualTable}
-              expression={selectedNodeExpression}
-              keyFormula={selectedNodeKeyFormula}
-              insightLoading={insightLoading}
-              composerLoading={composerLoading}
-              composerError={composerError}
-              sessionId={sessionId}
-              isInsightSwipeDragging={isInsightSwipeDragging}
-              imageLoading={isDeepDiveImageAnalyzing}
-              hasAttachment={hasDeepDiveAttachment}
-              onAskDeepDive={handleAskDeepDive}
-              onExplainToFiveYearOld={handleExplainToFiveYearOld}
-              onClose={closeInsightPanel}
-              onSyncVisualTable={async () => {
-                if (!sessionId) return;
-                showActionToast('Syncing from cloud...');
-                try {
-                  const { session } = await api.get<{ session: any }>(`/api/sessions/${sessionId}`);
-                  if (session?.visual_table_json) {
-                    const vt = parseJsonSafe<VisualTableData>(session.visual_table_json);
-                    setSessionVisualTable(vt);
-                    showActionToast('Table restored!');
-                  } else {
-                    showActionToast('No table found in cloud.');
-                  }
-                } catch {
-                  showActionToast('Sync failed.');
-                }
-              }}
-              onAttachFile={handleAttachDeepDiveFile}
-              onImageCropRequest={handleImageCropRequest}
-              onClearAttachment={() => {
-                setDeepDiveUploadId(null);
-                setHasDeepDiveAttachment(false);
-              }}
-              onExpandTable={setExpandedTable}
-              isExpanded={isInsightExpanded}
-              onToggleExpand={handleToggleInsightExpand}
-              onSaveInsight={async (node) => {
-                const insight = nodeInsights[node.id];
-                if (!insight) return;
-                await saveInsight({
-                  nodeLabel: node.label,
-                  subject: breakdown?.subject ?? 'General',
-                  simpleBreakdown: insight.simpleBreakdown,
-                  keyFormula: insight.keyFormula,
-                });
-                showActionToast('Insight saved to Knowledge.');
-              }}
-              onSaveVisualTable={async (table, label) => {
-                await saveVisualTable({
-                  title: label ?? selectedNode?.label ?? 'Table',
-                  subject: breakdown?.subject ?? 'General',
-                  nodeLabel: selectedNode?.label ?? null,
-                  table,
-                });
-                showActionToast('Table saved to Knowledge.');
-              }}
-              onSaveConversationMessage={async (question, answer) => {
-                await saveConversationMessage({
-                  question,
-                  answer,
-                  subject: breakdown?.subject ?? 'General',
-                  nodeLabel: selectedNode?.label ?? '',
-                });
-                showActionToast('Q&A saved to Knowledge.');
-              }}
-              onBreakdownConversation={handleBreakdownConversation}
-              onSaveNodeBreakdown={async (node) => {
-                await saveNodeBreakdown({
-                  label: node.label,
-                  description: node.description,
-                  mathContent: node.mathContent,
-                  subject: breakdown?.subject ?? 'General',
-                });
-                showActionToast('Node saved to Knowledge.');
-              }}
-              onTouchStart={handleInsightSwipeStart}
-              onTouchMove={handleInsightSwipeMove}
-              onTouchEnd={handleInsightSwipeEnd}
-              isMobile={isMobile}
+      {/* ── Mobile Bottom Sheet (custom spring) ─────────────────────────── */}
+      <AnimatePresence>
+        {isMobile && selectedNode && isInsightPanelOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              key="sheet-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[59] bg-black/40"
+              onClick={closeInsightPanel}
             />
 
-          )}
-        </motion.aside>
-      </motion.main>
+            {/* Sheet */}
+            <MobileBottomSheet
+              key="sheet-panel"
+              isExpanded={isInsightExpanded}
+              onClose={closeInsightPanel}
+              onToggleExpand={handleToggleInsightExpand}
+            >
+              <NodeInsightPanel
+                selectedNode={selectedNode}
+                breakdown={breakdown}
+                nodeInsights={nodeInsights}
+                nodeConversations={nodeConversations}
+                sessionVisualTable={sessionVisualTable}
+                expression={selectedNodeExpression}
+                keyFormula={selectedNodeKeyFormula}
+                insightLoading={insightLoading}
+                composerLoading={composerLoading}
+                composerError={composerError}
+                sessionId={sessionId}
+                isInsightSwipeDragging={false}
+                imageLoading={isDeepDiveImageAnalyzing}
+                hasAttachment={hasDeepDiveAttachment}
+                onAskDeepDive={handleAskDeepDive}
+                onExplainToFiveYearOld={handleExplainToFiveYearOld}
+                onClose={closeInsightPanel}
+                onSyncVisualTable={async () => {
+                  if (!sessionId) return;
+                  showActionToast('Syncing from cloud...');
+                  try {
+                    const { session } = await api.get<{ session: any }>(`/api/sessions/${sessionId}`);
+                    if (session?.visual_table_json) {
+                      const vt = parseJsonSafe<VisualTableData>(session.visual_table_json);
+                      setSessionVisualTable(vt);
+                      showActionToast('Table restored!');
+                    } else {
+                      showActionToast('No table found in cloud.');
+                    }
+                  } catch {
+                    showActionToast('Sync failed.');
+                  }
+                }}
+                onAttachFile={handleAttachDeepDiveFile}
+                onImageCropRequest={handleImageCropRequest}
+                onClearAttachment={() => {
+                  setDeepDiveUploadId(null);
+                  setHasDeepDiveAttachment(false);
+                }}
+                onExpandTable={setExpandedTable}
+                isExpanded={isInsightExpanded}
+                onToggleExpand={handleToggleInsightExpand}
+                onSaveInsight={async (node) => {
+                  const insight = nodeInsights[node.id];
+                  if (!insight) return;
+                  await saveInsight({
+                    nodeLabel: node.label,
+                    subject: breakdown?.subject ?? 'General',
+                    simpleBreakdown: insight.simpleBreakdown,
+                    keyFormula: insight.keyFormula,
+                  });
+                  showActionToast('Insight saved to Knowledge.');
+                }}
+                onSaveVisualTable={async (table, label) => {
+                  await saveVisualTable({
+                    title: label ?? selectedNode?.label ?? 'Table',
+                    subject: breakdown?.subject ?? 'General',
+                    nodeLabel: selectedNode?.label ?? null,
+                    table,
+                  });
+                  showActionToast('Table saved to Knowledge.');
+                }}
+                onSaveConversationMessage={async (question, answer) => {
+                  await saveConversationMessage({
+                    question,
+                    answer,
+                    subject: breakdown?.subject ?? 'General',
+                    nodeLabel: selectedNode?.label ?? '',
+                  });
+                  showActionToast('Q&A saved to Knowledge.');
+                }}
+                onBreakdownConversation={handleBreakdownConversation}
+                onSaveNodeBreakdown={async (node) => {
+                  await saveNodeBreakdown({
+                    label: node.label,
+                    description: node.description,
+                    mathContent: node.mathContent,
+                    subject: breakdown?.subject ?? 'General',
+                  });
+                  showActionToast('Node saved to Knowledge.');
+                }}
+                onTouchStart={handleInsightSwipeStart}
+                onTouchMove={handleInsightSwipeMove}
+                onTouchEnd={handleInsightSwipeEnd}
+                isMobile={true}
+              />
+            </MobileBottomSheet>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Mobile Bottom Nav (Neural Engine style) ─────────────────────── */}
+      {isMobile && (
+        <nav className="fixed bottom-0 left-0 w-full z-40 bg-slate-900/70 backdrop-blur-2xl flex justify-around items-center px-4 pb-6 pt-3 rounded-t-[32px] shadow-[0_-20px_40px_rgba(0,0,0,0.4)]">
+          {([
+            { id: 'map',        label: 'Map',      Icon: Network,  active: activeTab === 'map' || !breakdown },
+            { id: 'insights',   label: 'Insights', Icon: Brain,    active: isInsightPanelOpen },
+            { id: 'flashcards', label: 'Library',  Icon: Layers,   active: false },
+            { id: 'history',    label: 'Growth',   Icon: Activity, active: false },
+          ]).map(({ id, label, Icon, active }) => (
+            <button
+              key={id}
+              onClick={() => {
+                if (id === 'insights') {
+                  if (selectedNode) {
+                    setIsInsightPanelOpen(p => !p);
+                  } else if (breakdown) {
+                    const root = breakdown.nodes.find(n => n.type === 'root') ?? breakdown.nodes[0];
+                    if (root) selectNode(root);
+                  }
+                } else if (id === 'flashcards') {
+                  onNavigateFlashcards?.();
+                } else if (id === 'history') {
+                  onNavigateHistory?.();
+                } else {
+                  setActiveTab('map');
+                  closeInsightPanel();
+                }
+              }}
+              className={`flex flex-col items-center justify-center transition-all duration-300 ease-out active:scale-90 ${
+                active
+                  ? 'bg-slate-800/80 text-primary-container rounded-full px-5 py-2'
+                  : 'text-slate-500 p-2'
+              }`}
+            >
+              <Icon className="w-5 h-5" />
+              <span className="text-[10px] uppercase tracking-widest mt-1 font-medium">{label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
 
       <ActionPopover
         open={!!(branchActionPortal && activeBranchActionNode)}

@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  --font-headline: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: #060e20;
+  --color-surface: #060e20;
+  --color-surface-dim: #060e20;
+  --color-surface-bright: #1f2b49;
+  --color-surface-container-lowest: #000000;
+  --color-surface-container-low: #091328;
+  --color-surface-container: #0f1930;
+  --color-surface-container-high: #141f38;
+  --color-surface-container-highest: #192540;
+  --color-surface-variant: #192540;
+
+  --color-primary: #a1faff;
+  --color-primary-fixed: #00f4fe;
+  --color-primary-fixed-dim: #00e5ee;
+  --color-primary-container: #00f4fe;
+  --color-on-primary: #006165;
+  --color-on-primary-container: #00575b;
+
+  --color-secondary: #ff51fa;
+  --color-secondary-dim: #ff51fa;
+  --color-secondary-fixed: #ffbdf3;
+  --color-secondary-fixed-dim: #ffa6f3;
+  --color-secondary-container: #a900a9;
+  --color-on-secondary: #400040;
+  --color-on-secondary-container: #fff5f9;
+
+  --color-tertiary: #f3ffca;
+  --color-tertiary-dim: #beee00;
+  --color-tertiary-fixed: #cafd00;
+  --color-tertiary-fixed-dim: #beee00;
+  --color-tertiary-container: #cafd00;
+  --color-on-tertiary: #516700;
+  --color-on-tertiary-container: #4a5e00;
+
+  --color-on-surface: #dee5ff;
+  --color-on-surface-variant: #a3aac4;
+  --color-outline: #6d758c;
+  --color-outline-variant: #40485d;
+
+  --color-error: #ff716c;
+  --color-error-container: #9f0519;
+  --color-on-error: #490006;
+  --color-on-error-container: #ffa8a3;
+}
+
+@layer base {
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  body {
+    @apply bg-background text-on-surface font-body antialiased;
+    min-height: 100dvh;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-surface-container-highest/60 backdrop-blur-xl border border-outline-variant/10;
+  }
+
+  .neural-gradient {
+    background: linear-gradient(45deg, var(--color-primary), var(--color-secondary));
+  }
+
+  .vertical-line {
+    @apply w-[2px] opacity-30;
+    background: linear-gradient(to bottom, var(--color-primary) 0%, var(--color-secondary) 100%);
+  }
+}
