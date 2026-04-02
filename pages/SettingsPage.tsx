@@ -341,11 +341,16 @@ export function SettingsPage({
     onBack();
   };
 
+  const isMobileActiveSection = (id: string) => activeSection === id;
+  const mobileSectionVisibility = (id: string) => (
+    isMobileActiveSection(id) ? 'block lg:block' : 'hidden lg:block'
+  );
+
   return (
-    <div className="min-h-screen bg-background text-on-surface">
+    <div className="min-h-screen bg-background text-on-surface overflow-x-hidden">
       {/* Ambient glows */}
-      <div className="fixed top-1/4 -right-20 w-96 h-96 bg-secondary-container/10 blur-[120px] rounded-full pointer-events-none -z-10" />
-      <div className="fixed bottom-1/4 -left-20 w-96 h-96 bg-primary-container/10 blur-[120px] rounded-full pointer-events-none -z-10" />
+      <div className="fixed top-1/4 -right-20 w-72 h-72 sm:w-96 sm:h-96 bg-secondary-container/10 blur-[120px] rounded-full pointer-events-none -z-10" />
+      <div className="fixed bottom-1/4 -left-20 w-72 h-72 sm:w-96 sm:h-96 bg-primary-container/10 blur-[120px] rounded-full pointer-events-none -z-10" />
 
       <AppHeader
         user={user}
@@ -359,10 +364,10 @@ export function SettingsPage({
       />
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <aside className="fixed left-0 top-14 h-[calc(100vh-56px)] w-64 bg-surface-container-low hidden sm:flex flex-col py-8 px-4 gap-2">
+      <aside className="fixed left-0 top-14 h-[calc(100vh-56px)] w-72 bg-surface-container-low hidden lg:flex flex-col py-8 px-4 gap-2 border-r border-outline-variant/20">
         <div className="mb-6 px-4">
           <h2 className="text-xl font-headline font-bold text-on-surface">Settings</h2>
-          <p className="text-xs text-on-surface-variant opacity-70 mt-1">Manage your AI tutor</p>
+          <p className="text-xs text-on-surface-variant opacity-70 mt-1">Manage your learning profile</p>
         </div>
 
         <nav className="flex-1 flex flex-col gap-1">
@@ -406,52 +411,75 @@ export function SettingsPage({
       </aside>
 
       {/* ── Main Content ────────────────────────────────────────────────── */}
-      <main className="sm:ml-64 pt-24 pb-24 sm:pb-12 px-6 lg:px-12 max-w-7xl mx-auto">
-        <header className="mb-12">
+      <main className="relative z-10 pt-20 sm:pt-24 pb-24 sm:pb-28 lg:pb-14 px-4 sm:px-6 lg:px-10 max-w-7xl mx-auto lg:ml-72">
+        <header className="mb-6 sm:mb-10">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors mb-6 group"
+            className="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors mb-4 sm:mb-6 group"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span className="text-sm font-medium">Back to Dashboard</span>
+            <span className="text-sm font-medium">Back</span>
           </button>
-          <h1 className="font-headline text-5xl font-extrabold tracking-tighter text-on-surface mb-2">
+          <h1 className="font-headline text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter text-on-surface mb-2">
             User Settings
           </h1>
-          <p className="text-on-surface-variant max-w-2xl">
+          <p className="text-sm sm:text-base text-on-surface-variant max-w-2xl">
             Calibrate your neural learning environment. Every change here informs how the Zupiq AI interacts with your cognitive profile.
           </p>
-          <button
-            onClick={onSignOut}
-            className="sm:hidden mt-6 inline-flex items-center gap-2 rounded-full bg-surface-container-highest px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface border border-outline-variant/30 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Log Out
-          </button>
-          <button
-            onClick={onNavigateBillingSubscription}
-            className="sm:hidden mt-3 inline-flex items-center gap-2 rounded-full bg-surface-container-highest px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface border border-outline-variant/30 transition-colors"
-          >
-            <CreditCard className="w-4 h-4" />
-            Billing & Subscription
-          </button>
+          <div className="lg:hidden mt-5 flex flex-wrap gap-2">
+            <button
+              onClick={onNavigateBillingSubscription}
+              className="inline-flex items-center gap-2 rounded-full bg-surface-container-highest px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface border border-outline-variant/30 transition-colors"
+            >
+              <CreditCard className="w-4 h-4" />
+              Billing
+            </button>
+            <button
+              onClick={onSignOut}
+              className="inline-flex items-center gap-2 rounded-full bg-surface-container-highest px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface border border-outline-variant/30 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Log Out
+            </button>
+          </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:hidden mb-5 -mx-1">
+          <div className="flex gap-2 overflow-x-auto px-1 pb-1">
+            {SIDEBAR_ITEMS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveSection(id)}
+                className={[
+                  'shrink-0 inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition-colors',
+                  activeSection === id
+                    ? 'border-primary/60 bg-primary/15 text-primary'
+                    : 'border-outline-variant/30 bg-surface-container-highest/70 text-on-surface-variant',
+                ].join(' ')}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 xl:gap-8">
           {/* ── Left Column ─────────────────────────────────────────────── */}
-          <section className="lg:col-span-8 space-y-8">
+          <section className="xl:col-span-8 space-y-4 sm:space-y-6 xl:space-y-8">
             {/* Account Management */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="glass-card glow-corner p-8 rounded-3xl relative overflow-hidden"
+              className={`glass-card glow-corner p-5 sm:p-7 xl:p-8 rounded-3xl relative overflow-hidden ${mobileSectionVisibility('account')}`}
             >
-              <h3 className="font-headline text-xl font-bold text-primary mb-8 flex items-center gap-2">
+              <h3 className="font-headline text-lg sm:text-xl font-bold text-primary mb-5 sm:mb-8 flex items-center gap-2">
                 <User className="w-5 h-5" />
                 Account Management
               </h3>
 
-              <div className="flex flex-col md:flex-row gap-10 items-start">
+              <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 items-start">
                 {/* Avatar */}
                 <div className="relative group flex-shrink-0">
                   <input
@@ -461,8 +489,8 @@ export function SettingsPage({
                     className="hidden"
                     onChange={handleAvatarChange}
                   />
-                  <div className="w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-primary to-secondary">
-                    <div className="w-full h-full rounded-full bg-surface-container-highest flex items-center justify-center border-4 border-surface-container overflow-hidden">
+                  <div className="w-24 h-24 sm:w-28 sm:h-28 xl:w-32 xl:h-32 rounded-full p-1 bg-gradient-to-tr from-primary to-secondary">
+                    <div className="w-full h-full rounded-full bg-surface-container-highest flex items-center justify-center border-[3px] sm:border-4 border-surface-container overflow-hidden">
                       {(avatarPreview || user?.avatar_url) ? (
                         <img
                           src={avatarPreview ?? user.avatar_url}
@@ -472,7 +500,7 @@ export function SettingsPage({
                         />
                       ) : null}
                       {!(avatarPreview || user?.avatar_url) && (
-                        <span className="text-3xl font-bold text-on-surface">
+                        <span className="text-2xl sm:text-3xl font-bold text-on-surface">
                           {(user?.full_name ?? user?.email ?? 'U').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
                         </span>
                       )}
@@ -496,9 +524,9 @@ export function SettingsPage({
                 </div>
 
                 {/* Fields */}
-                <div className="flex-1 w-full space-y-6">
+                <div className="flex-1 w-full space-y-4 sm:space-y-6">
                   <div>
-                    <label className="block text-xs font-medium text-on-surface-variant mb-2 ml-1 uppercase tracking-widest">
+                    <label className="block text-[11px] sm:text-xs font-medium text-on-surface-variant mb-2 ml-1 uppercase tracking-widest">
                       Display Name
                     </label>
                     <input
@@ -509,7 +537,7 @@ export function SettingsPage({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-on-surface-variant mb-2 ml-1 uppercase tracking-widest">
+                    <label className="block text-[11px] sm:text-xs font-medium text-on-surface-variant mb-2 ml-1 uppercase tracking-widest">
                       Email Address
                     </label>
                     <input
@@ -528,17 +556,17 @@ export function SettingsPage({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="glass-card glow-corner p-8 rounded-3xl"
+              className={`glass-card glow-corner p-5 sm:p-7 xl:p-8 rounded-3xl ${mobileSectionVisibility('preferences')}`}
             >
-              <h3 className="font-headline text-xl font-bold text-secondary mb-8 flex items-center gap-2">
+              <h3 className="font-headline text-lg sm:text-xl font-bold text-secondary mb-5 sm:mb-8 flex items-center gap-2">
                 <SlidersHorizontal className="w-5 h-5" />
                 Learning Preferences
               </h3>
 
               <div className="space-y-4">
                 {/* Deep Dive Mode */}
-                <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl hover:bg-surface-container transition-colors">
-                  <div>
+                <div className="flex items-center justify-between gap-4 p-4 bg-surface-container-low rounded-2xl hover:bg-surface-container transition-colors">
+                  <div className="min-w-0">
                     <h4 className="font-bold text-on-surface">Deep Dive Mode</h4>
                     <p className="text-sm text-on-surface-variant">Prioritize technical depth over general overviews</p>
                   </div>
@@ -546,8 +574,8 @@ export function SettingsPage({
                 </div>
 
                 {/* Visual Map Generation */}
-                <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl hover:bg-surface-container transition-colors">
-                  <div>
+                <div className="flex items-center justify-between gap-4 p-4 bg-surface-container-low rounded-2xl hover:bg-surface-container transition-colors">
+                  <div className="min-w-0">
                     <h4 className="font-bold text-on-surface">Visual Map Generation</h4>
                     <p className="text-sm text-on-surface-variant">Automatically generate 3D knowledge clusters</p>
                   </div>
@@ -555,8 +583,8 @@ export function SettingsPage({
                 </div>
 
                 {/* AI Voice Feedback */}
-                <div className="flex items-center justify-between p-4 bg-surface-container-low rounded-2xl hover:bg-surface-container transition-colors">
-                  <div>
+                <div className="flex items-center justify-between gap-4 p-4 bg-surface-container-low rounded-2xl hover:bg-surface-container transition-colors">
+                  <div className="min-w-0">
                     <h4 className="font-bold text-on-surface">AI Voice Feedback</h4>
                     <p className="text-sm text-on-surface-variant">Enable conversational auditory tutoring sessions</p>
                   </div>
@@ -567,13 +595,13 @@ export function SettingsPage({
           </section>
 
           {/* ── Right Column ────────────────────────────────────────────── */}
-          <section className="lg:col-span-4 space-y-8">
+          <section className="xl:col-span-4 space-y-4 sm:space-y-6 xl:space-y-8">
             {/* Daily Token Usage */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="glass-card p-6 rounded-3xl border border-primary/20"
+              className={`glass-card p-5 sm:p-6 rounded-3xl border border-primary/20 ${mobileSectionVisibility('account')}`}
             >
               <h3 className="font-headline text-lg font-bold text-on-surface mb-2">Daily Token Usage</h3>
               {loadingTokenUsage ? (
@@ -602,7 +630,7 @@ export function SettingsPage({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
-              className="glass-card p-6 rounded-3xl"
+              className={`glass-card p-5 sm:p-6 rounded-3xl ${mobileSectionVisibility('academic-level')}`}
             >
               <h3 className="font-headline text-lg font-bold text-on-surface mb-6">Academic Level</h3>
               <div className="space-y-2">
@@ -634,15 +662,17 @@ export function SettingsPage({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="glass-card p-6 rounded-3xl"
+              className={`relative z-30 glass-card p-5 sm:p-6 rounded-3xl ${mobileSectionVisibility('language')}`}
             >
               <h3 className="font-headline text-lg font-bold text-on-surface mb-6">Interface Language</h3>
-              <CustomSelect
-                variant="card"
-                options={LANGUAGES}
-                value={language}
-                onChange={v => setLanguage(v as Language)}
-              />
+              <div className="relative z-40">
+                <CustomSelect
+                  variant="card"
+                  options={LANGUAGES}
+                  value={language}
+                  onChange={v => setLanguage(v as Language)}
+                />
+              </div>
             </motion.div>
 
             {/* Neural Sync Status */}
@@ -650,7 +680,7 @@ export function SettingsPage({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
-              className="glass-card p-6 rounded-3xl bg-gradient-to-br from-surface-variant to-surface-container overflow-hidden relative"
+              className={`glass-card p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-surface-variant to-surface-container overflow-hidden relative ${mobileSectionVisibility('preferences')}`}
             >
               <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-primary/20 rounded-full blur-2xl" />
               <h3 className="font-headline text-sm font-bold text-tertiary mb-4 uppercase tracking-widest flex items-center gap-2">
@@ -672,27 +702,27 @@ export function SettingsPage({
         </div>
 
         {/* ── Footer Actions ──────────────────────────────────────────────── */}
-        <div className="mt-16 flex items-center justify-between pt-8 border-t border-outline-variant/20">
+        <div className="relative z-0 mt-8 sm:mt-12 xl:mt-16 pt-6 sm:pt-8 border-t border-outline-variant/20 sm:flex sm:items-center sm:justify-between sm:gap-6">
           <button
             onClick={handleRestoreDefaults}
-            className="text-on-surface-variant font-medium hover:text-on-surface px-6 py-3 rounded-full transition-all"
+            className="text-on-surface-variant font-medium hover:text-on-surface px-1 sm:px-6 py-2 sm:py-3 rounded-full transition-all mb-4 sm:mb-0"
           >
             Restore Factory Defaults
           </button>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
             {saveError && (
-              <p className="text-sm text-error">{saveError}</p>
+              <p className="text-sm text-error sm:max-w-[18rem]">{saveError}</p>
             )}
             <button
               onClick={handleCancel}
-              className="px-8 py-3 rounded-full font-medium text-on-surface hover:bg-surface-variant transition-all backdrop-blur-md border border-outline-variant/30"
+              className="w-full sm:w-auto px-6 sm:px-8 py-3 rounded-full font-medium text-on-surface hover:bg-surface-variant transition-all backdrop-blur-md border border-outline-variant/30"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-10 py-3 rounded-full font-bold text-on-primary bg-gradient-to-r from-primary to-secondary shadow-[0_0_30px_rgba(161,250,255,0.3)] hover:shadow-[0_0_50px_rgba(161,250,255,0.5)] active:scale-95 transition-all disabled:opacity-60 flex items-center gap-2"
+              className="w-full sm:w-auto px-8 sm:px-10 py-3 rounded-full font-bold text-on-primary bg-gradient-to-r from-primary to-secondary shadow-[0_0_30px_rgba(161,250,255,0.3)] hover:shadow-[0_0_50px_rgba(161,250,255,0.5)] active:scale-95 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
             >
               {saved ? <><Check className="w-4 h-4" /> Saved!</> : saving ? 'Saving…' : 'Save Changes'}
             </button>
@@ -701,7 +731,7 @@ export function SettingsPage({
       </main>
 
       {/* Floating AI Orb */}
-      <div className="fixed bottom-8 right-8 w-16 h-16 rounded-full bg-primary-container flex items-center justify-center cursor-pointer shadow-[0_0_40px_rgba(0,244,254,0.4)] group z-40">
+      <div className="hidden lg:flex fixed bottom-8 right-8 w-16 h-16 rounded-full bg-primary-container items-center justify-center cursor-pointer shadow-[0_0_40px_rgba(0,244,254,0.4)] group z-40">
         <div className="absolute inset-0 rounded-full border-2 border-primary animate-ping opacity-20" />
         <Zap className="w-6 h-6 text-on-primary-container group-hover:rotate-12 transition-transform" />
       </div>

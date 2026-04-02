@@ -272,12 +272,12 @@ export default function MobileHistoryPage({
                       </span>
                       <span className="text-on-surface-variant text-[10px]">{formatRelative(session.created_at)}</span>
                     </div>
-                    <h4 className="font-headline font-bold mb-1 line-clamp-1">
+                    <div className="font-headline font-bold mb-1 line-clamp-1">
                       <RichText mode="preview">{toSingleLinePreview(session.title)}</RichText>
-                    </h4>
-                    <p className="text-xs text-on-surface-variant mb-4 line-clamp-1">
+                    </div>
+                    <div className="text-xs text-on-surface-variant mb-4 line-clamp-1">
                       <RichText mode="preview">{toSingleLinePreview(session.problem)}</RichText>
-                    </p>
+                    </div>
                     <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-tertiary">
                       <span>{session.node_count} nodes</span>
                       <span>•</span>
@@ -318,9 +318,9 @@ export default function MobileHistoryPage({
                         <Icon className="w-4 h-4 text-primary" />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-bold text-sm truncate">
+                        <div className="font-bold text-sm truncate">
                           <RichText mode="preview">{toSingleLinePreview(session.title)}</RichText>
-                        </p>
+                        </div>
                         <p className="text-[10px] text-on-surface-variant uppercase tracking-widest font-medium">
                           {formatDate(session.created_at)} • {formatDuration(session.duration_seconds)}
                           {session.user_role && session.user_role !== 'owner' && (
