@@ -3963,8 +3963,10 @@ IMPORTANT:
                     ? 'bg-secondary-container/20 text-secondary'
                     : 'bg-tertiary/20 text-tertiary';
 
-                // Left connector line color based on parent depth
-                const connectorColor = depth === 1 ? '#a1faff' : '#ff51fa';
+                // Connector color for children that branch from this node
+                const childrenConnectorColor = depth === 1 ? '#a1faff' : '#ff51fa';
+                // Connector color coming in from this node's parent spine
+                const incomingConnectorColor = depth === 2 ? '#a1faff' : '#ff51fa';
 
                 return (
                   <div key={node.id}>
@@ -3982,12 +3984,27 @@ IMPORTANT:
                         selectNode(node);
                       }}
                     >
-                      {/* Horizontal elbow connector */}
+                      {/* Curved elbow connector */}
                       {depth > 0 && (
                         <div
-                          className="absolute top-5 w-3 h-[2px] opacity-40"
-                          style={{ left: -14, background: connectorColor }}
-                        />
+                          className="absolute top-2 -left-5 w-5 h-5 opacity-40 pointer-events-none"
+                        >
+                          <svg
+                            viewBox="0 0 16 16"
+                            className="w-full h-full"
+                            style={{ overflow: 'visible' }}
+                            aria-hidden="true"
+                          >
+                            <path
+                              d="M1 13 Q1 13 6 13 H16"
+                              fill="none"
+                              stroke={incomingConnectorColor}
+                              strokeWidth="1.25"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </div>
                       )}
 
                       <div style={{ WebkitTouchCallout: 'none' }} className={`p-4 rounded-xl border relative overflow-hidden transition-all duration-300 backdrop-blur-xl select-none ${
@@ -4071,8 +4088,8 @@ IMPORTANT:
                         >
                           {/* Vertical line spanning all children */}
                           <div
-                            className="absolute top-0 bottom-3 w-[2px] opacity-25"
-                            style={{ left: 0, background: `linear-gradient(to bottom, ${connectorColor}, ${depth === 0 ? '#ff51fa' : '#cafd00'})` }}
+                            className="absolute top-0 bottom-0 w-px opacity-20"
+                            style={{ left: 0, background: `linear-gradient(to bottom, ${childrenConnectorColor}, ${depth === 0 ? '#ff51fa' : '#cafd00'})` }}
                           />
                           <div>
                             {children.map(child => renderNode(child, depth + 1))}
