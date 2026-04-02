@@ -1281,6 +1281,18 @@ export function StudySpacePage({
   const branchLongPressTimerRef = useRef<number | null>(null);
   const branchTouchGestureRef = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
   const suppressBranchClickRef = useRef(false);
+  const mobileTreeRef = useRef<HTMLDivElement>(null);
+
+  // Attach a non-passive touchstart listener on the mobile tree so preventDefault()
+  // actually works — React registers touch listeners as passive by default (since v17),
+  // which means calling e.preventDefault() in the React handler is silently ignored.
+  useEffect(() => {
+    const el = mobileTreeRef.current;
+    if (!el) return;
+    const onTouchStart = (e: TouchEvent) => { e.preventDefault(); };
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    return () => el.removeEventListener('touchstart', onTouchStart);
+  }, []);
   // True once this user has manually dragged a node — prevents remote position sync from overriding their layout.
   const hasLocalPositionEditsRef = useRef(false);
 
@@ -3930,7 +3942,14 @@ IMPORTANT:
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ type: 'spring', stiffness: 260, damping: 22, delay: animIdx * 0.05 }}
                       className="relative mb-3"
-                      onClick={() => selectNode(node)}
+                      onTouchStart={e => handleBranchTouchStart(e, node)}
+                      onTouchMove={e => handleBranchTouchMove(e, node)}
+                      onTouchEnd={() => handleBranchTouchEnd(node.id)}
+                      onTouchCancel={() => handleBranchTouchCancel(node.id)}
+                      onClick={() => {
+                        if (suppressBranchClickRef.current) { suppressBranchClickRef.current = false; return; }
+                        selectNode(node);
+                      }}
                     >
                       {/* Horizontal elbow connector */}
                       {depth > 0 && (
@@ -3940,7 +3959,7 @@ IMPORTANT:
                         />
                       )}
 
-                      <div className={`p-4 rounded-xl border relative overflow-hidden transition-all duration-300 backdrop-blur-xl ${
+                      <div style={{ WebkitTouchCallout: 'none' }} className={`p-4 rounded-xl border relative overflow-hidden transition-all duration-300 backdrop-blur-xl select-none ${
                         isSelected
                           ? 'bg-surface-container-highest/80 border-primary/50 shadow-[0_0_24px_rgba(161,250,255,0.2)]'
                           : 'bg-surface-container-highest/60 border-outline-variant/10'
@@ -4035,7 +4054,7 @@ IMPORTANT:
               };
 
               return (
-                <div className="relative px-4 pt-6 pb-56 min-h-full">
+                <div ref={mobileTreeRef} className="relative px-4 pt-6 pb-56 min-h-full">
                   {/* Header */}
                   <div className="mb-8 text-center w-full">
                     <span className="text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-medium block">
