@@ -111,6 +111,7 @@ interface ProblemBreakdown {
 }
 
 interface NodePos { x: number; y: number }
+type MobileStudyLayoutMode = 'vertical' | 'branch';
 interface BranchActionPortalState {
   nodeId: string;
   x: number;
@@ -339,6 +340,7 @@ const NodeCard = memo(({
 const NODE_MIN_DIST = 240; // min px between node centers
 const VIEWPORT_STORAGE_KEY = 'zupiq_study_viewport_v1';
 const WORKSPACE_STORAGE_KEY = 'zupiq_study_workspace_v1';
+const MOBILE_LAYOUT_STORAGE_KEY = 'zupiq_study_mobile_layout_v1';
 const STUDY_DEBUG_PREFIX = '[StudySpaceDebug]';
 const STUDY_DEBUG_TRACE_KEY = 'zupiq_study_debug_trace_v1';
 const INSIGHT_SWIPE_CLOSE_THRESHOLD = 82;
@@ -1135,6 +1137,15 @@ export function StudySpacePage({
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [scale,          setScale]          = useState(1);
   const [isMobile,       setIsMobile]       = useState(() => typeof window !== 'undefined' ? window.innerWidth < 640 : false);
+  const [mobileLayoutMode, setMobileLayoutMode] = useState<MobileStudyLayoutMode>(() => {
+    if (typeof window === 'undefined') return 'vertical';
+    try {
+      const saved = localStorage.getItem(MOBILE_LAYOUT_STORAGE_KEY);
+      return saved === 'branch' ? 'branch' : 'vertical';
+    } catch {
+      return 'vertical';
+    }
+  });
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
 
   // Auto-collapse all branch nodes when breakdown changes
@@ -1221,6 +1232,14 @@ export function StudySpacePage({
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MOBILE_LAYOUT_STORAGE_KEY, mobileLayoutMode);
+    } catch {
+      // Ignore storage failures
+    }
+  }, [mobileLayoutMode]);
 
   useEffect(() => {
     if (!showDebugOverlay) return;
@@ -3589,6 +3608,14 @@ IMPORTANT:
     }
   }, [clearBranchLongPressTimer, isLayoutLocked]);
 
+  const shouldShowMobileLayoutSwitcher = isMobile && !!breakdown && !loading;
+  const shouldShowMobileTopRightControls = isMobile && !!breakdown && !loading;
+  const shouldShowMobileCollabButton = shouldShowMobileTopRightControls && !!sessionId;
+  const shouldShowMobileLockButton = shouldShowMobileTopRightControls && mobileLayoutMode === 'branch';
+  const shouldRenderMobileVerticalTree = shouldShowMobileLayoutSwitcher && mobileLayoutMode === 'vertical';
+  const shouldRenderNodeBranchCanvas = !!breakdown && !loading && Object.keys(positions).length > 0
+    && (!isMobile || mobileLayoutMode === 'branch');
+
   return (
     <div className="min-h-screen bg-background text-on-surface overflow-hidden">
       {/* Ambient glows */}
@@ -3701,6 +3728,72 @@ IMPORTANT:
 
           {/* Canvas area */}
           <div className="flex-1 relative overflow-hidden">
+          {(shouldShowMobileCollabButton || shouldShowMobileLockButton) && (
+            <div className="absolute top-2 right-3 z-30 flex items-center gap-1.5">
+              {shouldShowMobileCollabButton && (
+                <button
+                  onClick={() => setIsCollabModalOpen(true)}
+                  title="Invite collaborators"
+                  aria-label="Invite collaborators"
+                  className="w-9 h-9 rounded-xl backdrop-blur border bg-surface-container-highest/85 border-outline-variant/30 text-on-surface-variant hover:text-secondary hover:border-secondary/40 flex items-center justify-center transition-colors shadow-md relative"
+                >
+                  <Users className="w-4 h-4" />
+                  {collabMembers.length > 1 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-secondary text-on-secondary text-[8px] font-bold flex items-center justify-center">
+                      {collabMembers.length}
+                    </span>
+                  )}
+                </button>
+              )}
+              {shouldShowMobileLockButton && (
+                <button
+                  onClick={toggleLayoutLock}
+                  title={isLayoutLocked ? 'Unlock node layout' : 'Lock node layout'}
+                  aria-label={isLayoutLocked ? 'Unlock node layout' : 'Lock node layout'}
+                  aria-pressed={isLayoutLocked}
+                  className={`w-9 h-9 rounded-xl backdrop-blur border flex items-center justify-center transition-colors shadow-md ${
+                    isLayoutLocked
+                      ? 'bg-surface-container-highest border-primary/50 text-primary'
+                      : 'bg-surface-container-highest/85 border-outline-variant/30 text-on-surface-variant hover:text-primary hover:border-primary/40'
+                  }`}
+                >
+                  {isLayoutLocked ? <Lock className="w-4 h-4" /> : <LockOpen className="w-4 h-4" />}
+                </button>
+              )}
+            </div>
+          )}
+          {shouldShowMobileLayoutSwitcher && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30">
+              <div className="inline-flex items-center gap-1 rounded-2xl border border-outline-variant/35 bg-surface-container-highest/85 backdrop-blur-md p-1 shadow-md">
+                <button
+                  onClick={() => setMobileLayoutMode('vertical')}
+                  title="Vertical layout"
+                  aria-label="Vertical layout"
+                  aria-pressed={mobileLayoutMode === 'vertical'}
+                  className={`px-2.5 py-1.5 rounded-xl transition-colors ${
+                    mobileLayoutMode === 'vertical'
+                      ? 'bg-primary/20 text-primary border border-primary/35'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  <Layers className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setMobileLayoutMode('branch')}
+                  title="Node branch layout"
+                  aria-label="Node branch layout"
+                  aria-pressed={mobileLayoutMode === 'branch'}
+                  className={`px-2.5 py-1.5 rounded-xl transition-colors ${
+                    mobileLayoutMode === 'branch'
+                      ? 'bg-secondary/20 text-secondary border border-secondary/35'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  <GitFork className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
           {/* Zoom controls overlay — desktop only */}
           <div className="absolute bottom-6 right-6 z-30 hidden sm:flex flex-col gap-1.5">
             <button
@@ -3787,7 +3880,7 @@ IMPORTANT:
             )}
 
             {/* Neural tree — MOBILE: vertical neural-engine layout */}
-            {isMobile && breakdown && !loading && (() => {
+            {shouldRenderMobileVerticalTree && breakdown && (() => {
               // Pre-order traversal to assign animation indices
               const childrenOf = (id: string) => breakdown.nodes.filter(n => n.parentId === id);
               const root = breakdown.nodes.find(n => n.type === 'root');
@@ -3949,7 +4042,7 @@ IMPORTANT:
               };
 
               return (
-                <div ref={mobileTreeRef} className="relative px-4 pt-6 pb-56 min-h-full">
+                <div ref={mobileTreeRef} className="relative px-4 pt-16 pb-56 min-h-full">
                   {/* Header */}
                   <div className="mb-8 text-center w-full">
                     <span className="text-[11px] uppercase tracking-[0.2em] text-on-surface-variant font-medium block">
@@ -3975,8 +4068,8 @@ IMPORTANT:
               );
             })()}
 
-            {/* Neural tree — DESKTOP: canvas */}
-            {!isMobile && breakdown && !loading && Object.keys(positions).length > 0 && (
+            {/* Neural tree — desktop + optional mobile node-branch canvas */}
+            {shouldRenderNodeBranchCanvas && (
               <div style={{ width: canvasW, height: canvasH, position: 'relative', minWidth: '100%', zoom: scale }}>
 
                 {/* SVG lines */}
