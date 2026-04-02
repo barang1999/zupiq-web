@@ -1,8 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import type { TouchEvent as ReactTouchEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useSpring, animated, config } from '@react-spring/web';
-import { useDrag } from '@use-gesture/react';
 import {
   Brain,
   GitFork, History, Trophy, Network,
@@ -11,6 +9,7 @@ import {
   ZoomIn, ZoomOut, Maximize2, Copy, RefreshCw, Layers, Lock, LockOpen, Users, Activity,
 } from 'lucide-react';
 import { AppHeader } from '../components/layout/AppHeader';
+import { SpringBottomSheet } from '../components/ui/SpringBottomSheet';
 import { AppSidebar } from '../components/layout/AppSidebar';
 import { ProblemComposer } from '../components/ai/ProblemComposer';
 import SweepText from '../components/ui/SweepText.jsx';
@@ -1078,110 +1077,6 @@ function parseJsonSafe<T>(input: any): T | null {
   }
 }
 
-// ─── MobileBottomSheet ───────────────────────────────────────────────────────
-
-const SHEET_SNAP_HALF = 0.50;   // collapsed: 50% of viewport height
-const SHEET_SNAP_FULL = 0.98;   // expanded:  98% of viewport height
-const SHEET_DISMISS_VEL = 0.4;  // velocity (px/ms) to dismiss on fast flick
-const SHEET_DISMISS_PX  = 80;   // or dragged this far below collapsed snap
-
-function MobileBottomSheet({
-  isExpanded,
-  onClose,
-  onToggleExpand,
-  children,
-}: {
-  isExpanded: boolean;
-  onClose: () => void;
-  onToggleExpand: () => void;
-  children: React.ReactNode;
-}) {
-  const snapH = useCallback(
-    (expanded: boolean) => window.innerHeight * (expanded ? SHEET_SNAP_FULL : SHEET_SNAP_HALF),
-    []
-  );
-
-  const [{ height }, api] = useSpring(() => ({
-    height: snapH(false),
-    config: { ...config.stiff, clamp: false },
-  }));
-
-  // Sync snap when isExpanded prop changes (e.g. toggle button inside panel)
-  useEffect(() => {
-    api.start({ height: snapH(isExpanded), config: config.stiff });
-  }, [isExpanded, snapH, api]);
-
-  // Mount: slide up from bottom
-  useEffect(() => {
-    api.start({ from: { height: 0 }, to: { height: snapH(isExpanded) }, config: config.stiff });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const bind = useDrag(
-    ({ last, velocity: [, vy], movement: [, my], memo = height.get() }) => {
-      // my > 0 = dragging down, < 0 = dragging up
-      const next = Math.max(80, Math.min(window.innerHeight * 0.97, memo - my));
-
-      if (!last) {
-        // Live drag — no spring, instant follow
-        api.start({ height: next, config: { tension: 0, friction: 0, clamp: true } });
-        return memo;
-      }
-
-      // Released — decide where to snap
-      const halfH = snapH(false);
-      const fullH = snapH(true);
-      const midH  = (halfH + fullH) / 2;
-      const flickingDown = vy > SHEET_DISMISS_VEL;
-      const flickingUp   = vy < -SHEET_DISMISS_VEL;
-
-      if (flickingDown || next < halfH - SHEET_DISMISS_PX) {
-        // Dismiss: spring to 0 then call onClose
-        api.start({
-          height: 0,
-          config: config.stiff,
-          onRest: onClose,
-        });
-      } else if (flickingUp || next >= midH) {
-        // Snap to full
-        api.start({ height: fullH, config: config.stiff });
-        if (!isExpanded) onToggleExpand();
-      } else {
-        // Snap to half
-        api.start({ height: halfH, config: config.stiff });
-        if (isExpanded) onToggleExpand();
-      }
-
-      return memo;
-    },
-    {
-      from: () => [0, height.get()],
-      filterTaps: true,
-      axis: 'y',
-      pointer: { touch: true },
-    }
-  );
-
-  return (
-    <animated.div
-      style={{ height }}
-      className="fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-[2rem] bg-surface-container-highest/95 backdrop-blur-2xl border-t border-x border-outline-variant/20 shadow-[0_-20px_60px_rgba(0,0,0,0.5)] overflow-hidden touch-none"
-    >
-      {/* Drag handle */}
-      <div
-        {...bind()}
-        className="flex justify-center items-center pt-3 pb-2 shrink-0 cursor-grab active:cursor-grabbing select-none"
-      >
-        <div className="w-12 h-1.5 rounded-full bg-outline-variant/60" />
-      </div>
-
-      {/* Content — allow internal scroll, prevent sheet drag interference */}
-      <div className="flex-1 min-h-0 overflow-hidden touch-auto">
-        {children}
-      </div>
-    </animated.div>
-  );
-}
 
 export function StudySpacePage({
   user,
@@ -4292,11 +4187,9 @@ IMPORTANT:
             />
 
             {/* Sheet */}
-            <MobileBottomSheet
+            <SpringBottomSheet
               key="sheet-panel"
-              isExpanded={isInsightExpanded}
               onClose={closeInsightPanel}
-              onToggleExpand={handleToggleInsightExpand}
             >
               <NodeInsightPanel
                 selectedNode={selectedNode}
@@ -4385,7 +4278,7 @@ IMPORTANT:
                 onTouchEnd={handleInsightSwipeEnd}
                 isMobile={true}
               />
-            </MobileBottomSheet>
+            </SpringBottomSheet>
           </>
         )}
       </AnimatePresence>
