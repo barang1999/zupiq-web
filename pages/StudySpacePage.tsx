@@ -3629,6 +3629,7 @@ IMPORTANT:
   const shouldShowMobileTopRightControls = isMobile && !!breakdown && !loading;
   const shouldShowMobileCollabButton = shouldShowMobileTopRightControls && !!sessionId;
   const shouldShowMobileLockButton = shouldShowMobileTopRightControls && mobileLayoutMode === 'branch';
+  const shouldShowMobileZoomControls = isMobile && !!breakdown && !loading && mobileLayoutMode === 'branch';
   const shouldRenderMobileVerticalTree = shouldShowMobileLayoutSwitcher && mobileLayoutMode === 'vertical';
   const shouldRenderNodeBranchCanvas = !!breakdown && !loading && Object.keys(positions).length > 0
     && (!isMobile || mobileLayoutMode === 'branch');
@@ -3832,6 +3833,31 @@ IMPORTANT:
               {Math.round(scale * 100)}%
             </div>
           </div>
+          {shouldShowMobileZoomControls && (
+            <div className="absolute bottom-2 right-3 z-30 sm:hidden flex flex-col gap-1.5">
+              <button
+                onClick={() => setScale(s => Math.min(2, +(s + 0.1).toFixed(2)))}
+                title="Zoom in"
+                aria-label="Zoom in"
+                className="w-9 h-9 rounded-xl bg-surface-container-highest/85 backdrop-blur border border-outline-variant/30 flex items-center justify-center text-on-surface-variant active:text-primary active:border-primary/40 transition-colors shadow-md"
+              ><ZoomIn className="w-4 h-4" /></button>
+              <button
+                onClick={() => setScale(1)}
+                title="Reset zoom"
+                aria-label="Reset zoom"
+                className="w-9 h-9 rounded-xl bg-surface-container-highest/85 backdrop-blur border border-outline-variant/30 flex items-center justify-center text-on-surface-variant active:text-primary active:border-primary/40 transition-colors shadow-md"
+              ><Maximize2 className="w-4 h-4" /></button>
+              <button
+                onClick={() => setScale(s => Math.max(0.25, +(s - 0.1).toFixed(2)))}
+                title="Zoom out"
+                aria-label="Zoom out"
+                className="w-9 h-9 rounded-xl bg-surface-container-highest/85 backdrop-blur border border-outline-variant/30 flex items-center justify-center text-on-surface-variant active:text-primary active:border-primary/40 transition-colors shadow-md"
+              ><ZoomOut className="w-4 h-4" /></button>
+              <div className="text-center text-[10px] font-bold text-on-surface-variant tabular-nums">
+                {Math.round(scale * 100)}%
+              </div>
+            </div>
+          )}
 
           <div
             ref={scrollerRef}
