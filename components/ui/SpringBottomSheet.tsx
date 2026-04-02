@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { useSpring, animated, config } from '@react-spring/web';
 import { useDrag } from '@use-gesture/react';
 
-const SNAP_FULL      = 0.98;  // single snap point: 98% of viewport height
+const SNAP_FULL      = 1;     // single snap point: 100% of viewport height
 const DISMISS_VEL    = 0.4;   // px/ms — fast flick down dismisses the sheet
 const DISMISS_PX     = 120;   // or dragged this far below the snap point
 
@@ -103,7 +103,7 @@ export function SpringBottomSheet({ onClose, children, zClass = 'z-[60]' }: Spri
         return nextMemo;
       }
 
-      const next = Math.max(80, Math.min(window.innerHeight * 0.99, nextMemo.startHeight - my));
+      const next = Math.max(80, Math.min(window.innerHeight, nextMemo.startHeight - my));
 
       if (!last) {
         api.start({ height: next, config: { tension: 0, friction: 0, clamp: true } });
