@@ -33,6 +33,7 @@ import {
   saveNodeBreakdown,
 } from '../lib/knowledge';
 import { ImageCropModal } from '../components/ui/ImageCropModal';
+import { STUDY_RECOMMENDED_PROMPT_STORAGE_KEY } from '../lib/studyRecommendation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1847,6 +1848,22 @@ export function StudySpacePage({
       hydrateBreakdown(bd);
       onBreakdownConsumed?.();
       return;
+    }
+
+    try {
+      const recommendedPrompt = localStorage.getItem(STUDY_RECOMMENDED_PROMPT_STORAGE_KEY);
+      if (recommendedPrompt?.trim()) {
+        localStorage.removeItem(STUDY_RECOMMENDED_PROMPT_STORAGE_KEY);
+        setProblemInput(recommendedPrompt.trim());
+        setShowInput(true);
+        debugStudy('boot:usingRecommendedPrompt', {
+          promptLength: recommendedPrompt.trim().length,
+        });
+        return;
+      }
+    } catch {
+      // Ignore malformed storage payload
+      debugStudy('boot:recommendedPrompt:malformed');
     }
 
     try {

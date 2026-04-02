@@ -12,6 +12,10 @@ import { RichText } from '../components/ui/RichText';
 import { getSessionsCached } from '../lib/sessions';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
+import {
+  computeLeastReviewedRecommendation,
+  STUDY_RECOMMENDED_PROMPT_STORAGE_KEY,
+} from '../lib/studyRecommendation';
 
 interface StudySession {
   id: string;
@@ -122,6 +126,10 @@ export default function MobileHistoryPage({
   }, [sessions]);
 
   const recentActivity = sessions.slice(0, 8);
+  const recommendation = useMemo(
+    () => computeLeastReviewedRecommendation(sessions),
+    [sessions]
+  );
   const trendSeries = sessions.slice(0, 5).reverse().map((session) => {
     const normalized = Math.max(18, Math.min(100, Math.round(session.node_count * 9)));
     return { id: session.id, value: normalized, label: formatDate(session.created_at).slice(0, 3).toUpperCase() };
@@ -138,6 +146,27 @@ export default function MobileHistoryPage({
       breakdown.id = session.id;
       onNavigateStudy?.(breakdown);
     } catch {
+      onNavigateStudy?.();
+    }
+  };
+
+  const startRecommendedSession = () => {
+    if (!recommendation) {
+      onNavigateStudy?.();
+      return;
+    }
+
+    try {
+      const breakdown: ProblemBreakdown = JSON.parse(recommendation.focusSession.breakdown_json);
+      breakdown.id = recommendation.focusSession.id;
+      onNavigateStudy?.(breakdown);
+      return;
+    } catch {
+      try {
+        localStorage.setItem(STUDY_RECOMMENDED_PROMPT_STORAGE_KEY, recommendation.recoveryPrompt);
+      } catch {
+        // Ignore storage failures and continue to Study page.
+      }
       onNavigateStudy?.();
     }
   };
@@ -224,10 +253,12 @@ export default function MobileHistoryPage({
               </div>
             </div>
             <p className="text-sm text-on-surface-variant leading-relaxed mb-6">
-              Focus a short recovery round on your least reviewed topic to stabilize retention today.
+              {recommendation
+                ? `Focus a short recovery round on ${recommendation.subject}. Strengthen ${toSingleLinePreview(recommendation.focusSession.title)} to stabilize retention today.`
+                : 'Start a focused recovery round from your least reviewed topic to stabilize retention today.'}
             </p>
             <button
-              onClick={() => onNavigateStudy?.()}
+              onClick={startRecommendedSession}
               className="w-full bg-gradient-to-r from-primary to-secondary text-on-primary font-headline font-bold py-3.5 rounded-full active:scale-95 transition-transform"
             >
               Start Recommended Session

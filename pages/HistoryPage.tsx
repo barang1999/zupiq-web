@@ -11,6 +11,10 @@ import { RichText } from '../components/ui/RichText';
 import { getSessionsCached, deleteSession } from '../lib/sessions';
 import { supabase } from '../lib/supabase';
 import { firebaseSignOut } from '../lib/firebase';
+import {
+  computeLeastReviewedRecommendation,
+  STUDY_RECOMMENDED_PROMPT_STORAGE_KEY,
+} from '../lib/studyRecommendation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -271,6 +275,32 @@ export function HistoryPage({
       dot: 'bg-tertiary',
     },
   ];
+
+  const recommendation = useMemo(
+    () => computeLeastReviewedRecommendation(sessions),
+    [sessions]
+  );
+
+  const startRecommendedSession = () => {
+    if (!recommendation) {
+      onNavigateStudy?.();
+      return;
+    }
+
+    try {
+      const breakdown: ProblemBreakdown = JSON.parse(recommendation.focusSession.breakdown_json);
+      breakdown.id = recommendation.focusSession.id;
+      onNavigateStudy?.(breakdown);
+      return;
+    } catch {
+      try {
+        localStorage.setItem(STUDY_RECOMMENDED_PROMPT_STORAGE_KEY, recommendation.recoveryPrompt);
+      } catch {
+        // Ignore storage failures and continue to Study page.
+      }
+      onNavigateStudy?.();
+    }
+  };
 
   const NAV_ITEMS = [
     { id: 'study',   label: 'Study Space',       Icon: GitFork,  action: () => onNavigateStudy?.() },
@@ -568,8 +598,15 @@ export function HistoryPage({
                     <span className="font-headline font-bold text-lg sm:text-xl">Neural Pulse</span>
                   </div>
                   <p className="text-on-surface mb-6 leading-relaxed">
-                    Based on your recent sessions, explore deeper into{' '}
-                    <span className="text-primary">advanced topics</span> to bridge your knowledge gaps.
+                    {recommendation
+                      ? (
+                        <>
+                          Focus a short recovery round on{' '}
+                          <span className="text-primary">{recommendation.subject}</span>
+                          {' '}to reinforce {toSingleLinePreview(recommendation.focusSession.title)}.
+                        </>
+                      )
+                      : 'Start a focused recovery round from your least reviewed topic to bridge knowledge gaps.'}
                   </p>
                   <div className="bg-surface-container-low p-4 rounded-2xl mb-8">
                     <div className="flex items-center justify-between mb-2">
@@ -582,10 +619,10 @@ export function HistoryPage({
                   </div>
                 </div>
                 <button
-                  onClick={() => onNavigateStudy?.()}
+                  onClick={startRecommendedSession}
                   className="w-full py-3.5 sm:py-4 rounded-full bg-surface-container-highest border border-outline-variant/30 text-on-surface font-bold hover:bg-surface-bright transition-all"
                 >
-                  Start New Session
+                  Start Recommended Session
                 </button>
               </div>
             </aside>
